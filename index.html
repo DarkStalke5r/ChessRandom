@@ -1,0 +1,2129 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Chaos Chess</title>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <style>
+    :root {
+      --bg: var(--tg-theme-bg-color, #121214);
+      --text: var(--tg-theme-text-color, #f2f2f7);
+      --hint: var(--tg-theme-hint-color, #8e8e93);
+      --btn: var(--tg-theme-button-color, #2aabee);
+      --btn-text: var(--tg-theme-button-text-color, #fff);
+      --secondary: var(--tg-theme-secondary-bg-color, #1c1c1e);
+      --accent: #e8b84a;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+    body {
+      background: var(--bg); color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      height: 100vh; height: 100dvh;
+      display: flex; flex-direction: column; overflow: hidden;
+    }
+
+    #ai-zone {
+      flex-shrink: 0; padding: 4px 8px 2px;
+      background: linear-gradient(180deg, #1a1520 0%, var(--bg) 100%);
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+    }
+    #ai-label {
+      font-size: 9px; letter-spacing: 0.06em; text-transform: uppercase;
+      color: var(--hint); text-align: center; margin-bottom: 3px;
+    }
+    #ai-hand {
+      display: flex; align-items: center; justify-content: center; gap: 8px;
+    }
+    #ai-cards { display: flex; gap: 6px; justify-content: center; }
+
+    .card {
+      width: 52px; height: 72px; border-radius: 7px;
+      background: linear-gradient(145deg, #2e2a35 0%, #1e1a24 100%);
+      border: 1.5px solid rgba(255,255,255,0.12);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.06);
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      position: relative; overflow: hidden;
+      transition: transform 0.2s cubic-bezier(0.34,1.2,0.64,1), box-shadow 0.2s;
+    }
+    .card.empty {
+      background: transparent; border: 1.5px dashed rgba(255,255,255,0.12);
+      box-shadow: none; color: var(--hint); font-size: 11px;
+    }
+    .card .icon { font-size: 18px; margin-bottom: 1px; }
+    .card .cname { font-size: 8px; font-weight: 600; text-align: center; line-height: 1.1; padding: 0 2px; }
+    .card .corner {
+      position: absolute; top: 3px; left: 5px;
+      font-size: 9px; font-weight: 700; color: var(--accent); opacity: 0.9;
+    }
+    .card.ai-card { opacity: 0.85; transform: scale(0.92); }
+    .card.player { cursor: pointer; width: 56px; height: 78px; }
+    .card.player.active {
+      transform: translateY(-6px) scale(1.05);
+      border-color: var(--accent);
+      box-shadow: 0 8px 20px rgba(232,184,74,0.25), 0 0 0 2px rgba(232,184,74,0.3);
+    }
+
+    #status-bar {
+      flex-shrink: 0; display: flex; justify-content: space-between; align-items: center;
+      padding: 2px 10px; font-size: 11px; color: var(--hint);
+    }
+    #status-bar b { color: var(--text); }
+
+    #viewport {
+      flex: 1; min-height: 0; position: relative; overflow: hidden;
+      background: #0d0d0f; touch-action: none;
+    }
+    #board-stage {
+      position: absolute; left: 50%; top: 50%;
+      transform-origin: center center; will-change: transform;
+      transition: transform 0.15s ease-out;
+    }
+    #board {
+      display: grid; gap: 0;
+      border: 2px solid rgba(255,255,255,0.2);
+      box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+    }
+    .cell {
+      width: 36px; height: 36px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 24px; cursor: pointer; position: relative;
+    }
+    .cell.light { background: #e8e4d4; }
+    .cell.dark { background: #6b8f5a; }
+    .cell.selected { outline: 3px solid #f0c14b; outline-offset: -3px; z-index: 2; }
+    .cell.possible::after {
+      content: ''; position: absolute; width: 12px; height: 12px;
+      border-radius: 50%; background: rgba(0,0,0,0.28);
+    }
+    .cell.possible.has-enemy::after {
+      width: 34px; height: 34px; border: 3px solid rgba(180,40,40,0.55);
+      background: transparent; border-radius: 50%;
+    }
+    .piece {
+      width: 100%; height: 100%;
+      display: flex; align-items: center; justify-content: center;
+      pointer-events: none; z-index: 3;
+    }
+    .piece.white { color: #f8f8f8; text-shadow: 0 1px 3px #000, 0 0 1px #000; }
+    .piece.black { color: #1a1a1a; text-shadow: 0 0 1px #fff, 0 1px 0 rgba(255,255,255,0.35); font-weight: 700; }
+    .piece.merged::after {
+      content: '✦'; position: absolute; font-size: 11px; top: 0; right: 1px; color: #f0c14b;
+    }
+
+    #fly {
+      position: absolute; pointer-events: none; z-index: 30;
+      font-size: 28px; display: none;
+      transition: transform 0.38s cubic-bezier(0.22, 0.61, 0.36, 1);
+      will-change: transform;
+      filter: drop-shadow(0 4px 8px rgba(0,0,0,0.45));
+    }
+
+    #cam-controls {
+      position: absolute; right: 8px; bottom: 8px;
+      display: flex; flex-direction: column; gap: 6px; z-index: 15;
+    }
+    .cam-btn {
+      width: 30px; height: 30px; border-radius: 50%;
+      background: rgba(30,30,34,0.85); border: 1px solid rgba(255,255,255,0.15);
+      color: var(--text); font-size: 18px; font-weight: 600;
+      display: flex; align-items: center; justify-content: center;
+      backdrop-filter: blur(6px);
+    }
+
+    #player-zone {
+      flex-shrink: 0; padding: 4px 8px 6px;
+      background: linear-gradient(0deg, #151820 0%, var(--bg) 100%);
+      border-top: 1px solid rgba(255,255,255,0.06);
+    }
+    #player-label {
+      font-size: 9px; letter-spacing: 0.06em; text-transform: uppercase;
+      color: var(--hint); text-align: center; margin-bottom: 3px;
+    }
+    #player-hand {
+      display: flex; align-items: center; justify-content: center; gap: 8px;
+    }
+    #player-cards { display: flex; gap: 6px; justify-content: center; }
+
+    #log {
+      flex-shrink: 0; max-height: 22px; overflow: hidden;
+      font-size: 10px; color: var(--hint); padding: 0 10px 4px;
+      line-height: 1.2; text-align: center;
+    }
+
+    #game-over {
+      position: fixed; inset: 0; background: rgba(0,0,0,0.78);
+      display: none; align-items: center; justify-content: center;
+      z-index: 50; flex-direction: column; gap: 14px;
+    }
+    #game-over.show { display: flex; }
+    #game-over h2 { font-size: 30px; }
+    #game-over button {
+      padding: 12px 28px; border-radius: 12px; border: none;
+      background: var(--btn); color: var(--btn-text); font-size: 16px; font-weight: 600;
+    }
+
+    #future-picker {
+      position: fixed; inset: 0; background: rgba(0,0,0,0.65);
+      display: none; align-items: center; justify-content: center; z-index: 40;
+    }
+    #future-picker.show { display: flex; }
+    #future-box {
+      background: var(--secondary); padding: 20px; border-radius: 16px;
+      display: flex; flex-direction: column; gap: 12px; align-items: center; min-width: 240px;
+    }
+    #future-box .title { font-size: 14px; margin-bottom: 4px; }
+    #future-box .row { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
+    #future-box button {
+      padding: 10px 16px; border-radius: 10px; border: none;
+      background: var(--btn); color: var(--btn-text); font-size: 15px; font-weight: 600;
+    }
+    #fp-cancel { background: #444 !important; }
+
+    #dbg-btn {
+      position: fixed; top: 6px; right: 6px; z-index: 60;
+      width: 28px; height: 28px; border-radius: 50%;
+      background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.12);
+      color: var(--hint); font-size: 12px;
+      display: flex; align-items: center; justify-content: center;
+    }
+    #dbg-panel {
+      display: none; position: fixed; top: 40px; right: 8px; z-index: 60;
+      background: var(--secondary); border-radius: 10px; padding: 8px;
+      border: 1px solid rgba(255,255,255,0.12); width: 200px;
+    }
+    #dbg-panel.show { display: block; }
+    #dbg-panel input {
+      width: 100%; padding: 6px 8px; border-radius: 6px;
+      border: 1px solid rgba(255,255,255,0.15);
+      background: var(--bg); color: var(--text); font-size: 12px; margin-bottom: 6px;
+    }
+    #dbg-panel button {
+      width: 100%; padding: 6px; border-radius: 6px; border: none;
+      background: var(--btn); color: var(--btn-text); font-size: 12px;
+    }
+
+    /* ========== TUTORIAL ========== */
+    #tutorial {
+      position: fixed; inset: 0; z-index: 100;
+      background: rgba(0,0,0,0.72);
+      display: none; align-items: flex-end; justify-content: center;
+      padding: 0 14px 24px;
+      opacity: 0; transition: opacity 0.35s ease;
+    }
+    #tutorial.show { display: flex; opacity: 1; }
+    #tutorial.hiding { opacity: 0; }
+
+    #tut-row {
+      display: flex; align-items: flex-end; gap: 10px;
+      max-width: 440px; width: 100%;
+      transform: translateY(24px);
+      transition: transform 0.4s cubic-bezier(0.22, 1, 0.36, 1);
+    }
+    #tutorial.show #tut-row { transform: translateY(0); }
+
+    /* character layered – feet fixed, breathe */
+    #tut-char {
+      flex-shrink: 0;
+      width: 110px;
+      height: 150px;
+      position: relative;
+      display: flex;
+      align-items: flex-end;
+      justify-content: center;
+    }
+    #tut-sprite-wrap {
+      width: 110px;
+      height: 150px;
+      position: relative;
+      transform-origin: center bottom;
+      animation: breathe 2.8s ease-in-out infinite;
+    }
+    @keyframes breathe {
+      0%, 100% { transform: scaleY(1) translateY(0); }
+      50% { transform: scaleY(1.035) translateY(-2.5px); }
+    }
+    .teto-layer {
+      position: absolute;
+      left: 0; top: 0;
+      width: 100%; height: 100%;
+      object-fit: contain;
+      object-position: bottom center;
+      pointer-events: none;
+      user-select: none;
+    }
+    /* z-order via DOM order + explicit z-index */
+    #layer-eyes-bottom { z-index: 1; }
+    #layer-eye-left { z-index: 2; transition: opacity 0.08s ease; }
+    #layer-eye-right { z-index: 2; transition: opacity 0.08s ease; }
+    #layer-brows-bottom { z-index: 3; transition: transform 0.25s ease; }
+    #layer-teto { z-index: 4; }
+    #layer-brows { z-index: 5; transition: transform 0.25s ease, opacity 0.08s ease; }
+
+    /* blink: eyes stay visible; brows dip together */
+    #tut-sprite-wrap.blink #layer-brows,
+    #tut-sprite-wrap.blink #layer-brows-bottom {
+      transform: translateY(12px);
+    }
+
+    #tut-fallback {
+      display: none;
+      width: 72px; height: 96px;
+      align-items: flex-end; justify-content: center;
+      font-size: 48px;
+    }
+    #tut-fallback.show { display: flex; }
+
+
+
+    #tut-bubble {
+      flex: 1; background: #f5f0e6; color: #1a1a1a;
+      border-radius: 16px 16px 16px 4px;
+      padding: 14px 16px 12px;
+      box-shadow: 0 8px 28px rgba(0,0,0,0.35);
+      position: relative;
+      min-height: 100px;
+    }
+    #tut-bubble .text {
+      font-size: 14px; line-height: 1.45; margin-bottom: 12px;
+      padding-right: 28px;
+    }
+    #tut-actions {
+      display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap;
+    }
+    #tut-actions button {
+      padding: 8px 14px; border-radius: 8px; border: none;
+      font-size: 13px; font-weight: 600; cursor: pointer;
+    }
+    #tut-next { background: #2aabee; color: #fff; }
+    #tut-skip {
+      background: transparent; color: #666; border: 1px solid #ccc !important;
+    }
+    #tut-disable {
+      background: transparent; color: #999; font-size: 11px !important;
+      padding: 6px 8px !important; font-weight: 500 !important;
+    }
+    #tut-step {
+      position: absolute; top: 8px; right: 12px;
+      font-size: 11px; color: #999;
+    }
+
+    /* card deal / use animations */
+    .card.deal-in {
+      animation: cardDealIn 0.45s cubic-bezier(0.22,1,0.36,1) both;
+    }
+    @keyframes cardDealIn {
+      from { opacity: 0; transform: translateX(-40px) scale(0.85) rotate(-6deg); }
+      to { opacity: 1; transform: none; }
+    }
+    .card.player.active {
+      transform: translateY(-10px) scale(1.06);
+      border-color: var(--accent);
+      box-shadow: 0 8px 20px rgba(232,184,74,0.25), 0 0 0 2px rgba(232,184,74,0.3);
+      animation: cardPulse 1s ease infinite;
+    }
+    @keyframes cardPulse {
+      0%,100% { box-shadow: 0 8px 20px rgba(232,184,74,0.25), 0 0 0 2px rgba(232,184,74,0.3); }
+      50% { box-shadow: 0 8px 24px rgba(232,184,74,0.45), 0 0 0 3px rgba(232,184,74,0.5); }
+    }
+    .card.using {
+      opacity: 0.35;
+      pointer-events: none;
+    }
+    #fly-card {
+      position: fixed;
+      z-index: 90;
+      width: 56px;
+      height: 78px;
+      border-radius: 10px;
+      background: linear-gradient(145deg, #3a3550 0%, #1e1a28 100%);
+      border: 2px solid var(--accent);
+      box-shadow: 0 12px 40px rgba(0,0,0,0.55), 0 0 20px rgba(232,184,74,0.35);
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      pointer-events: none;
+      transition: left 2.4s cubic-bezier(0.22, 0.61, 0.36, 1),
+                  top 2.4s cubic-bezier(0.22, 0.61, 0.36, 1),
+                  transform 2.4s cubic-bezier(0.22, 0.61, 0.36, 1),
+                  opacity 0.45s ease;
+    }
+    #fly-card .fc-icon { font-size: 28px; margin-bottom: 4px; }
+    #fly-card .fc-name { font-size: 11px; font-weight: 700; text-align: center; padding: 0 4px; color: #fff; }
+    #card-action-label {
+      position: absolute;
+      left: 50%;
+      top: 18%;
+      transform: translateX(-50%);
+      background: rgba(0,0,0,0.82);
+      color: #ffe08a;
+      padding: 10px 18px;
+      border-radius: 12px;
+      font-size: 15px;
+      font-weight: 700;
+      z-index: 35;
+      display: none;
+      text-align: center;
+      border: 1px solid rgba(232,184,74,0.4);
+      box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+      line-height: 1.35;
+      max-width: 85%;
+      pointer-events: none;
+    }
+    #card-action-label.show { display: block; animation: labelIn 0.35s ease; }
+    @keyframes labelIn {
+      from { opacity: 0; transform: translateX(-50%) translateY(-8px); }
+      to { opacity: 1; transform: translateX(-50%) translateY(0); }
+    }
+    .cell.target-hl {
+      outline: 3px solid #ff5a5a !important;
+      outline-offset: -3px;
+      animation: targetPulse 1s ease infinite;
+      z-index: 2;
+    }
+    @keyframes targetPulse {
+      0%, 100% { filter: brightness(1); box-shadow: inset 0 0 0 rgba(255,90,90,0); }
+      50% { filter: brightness(1.4); box-shadow: inset 0 0 16px rgba(255,90,90,0.45); }
+    }
+    .cell.scatter-hl {
+      outline: 3px solid #ffaa33 !important;
+      outline-offset: -3px;
+      animation: targetPulse 1s ease infinite;
+    }
+    .cell.effect-hl {
+      outline: 3px solid #6ad0ff !important;
+      outline-offset: -3px;
+      animation: targetPulse 1s ease infinite;
+    }
+    .piece.shielded::before {
+      content: '';
+      position: absolute;
+      width: 34px; height: 34px;
+      border-radius: 50%;
+      border: 2px solid rgba(100,180,255,0.85);
+      box-shadow: 0 0 10px rgba(80,160,255,0.55), inset 0 0 8px rgba(80,160,255,0.25);
+      pointer-events: none;
+    }
+    .piece.angel::after {
+      content: '🪽';
+      position: absolute;
+      font-size: 11px;
+      top: -2px; left: 0;
+      filter: drop-shadow(0 0 4px gold);
+    }
+    .cell.angel-glow {
+      box-shadow: inset 0 0 12px rgba(255,220,100,0.45);
+      background-image: linear-gradient(rgba(255,230,120,0.2), rgba(255,230,120,0.08));
+    }
+    #fx-layer {
+      position: absolute; inset: 0; pointer-events: none; z-index: 25;
+    }
+    #crosshair {
+      position: absolute; width: 48px; height: 48px;
+      margin-left: -24px; margin-top: -24px;
+      border: 2px solid #ff4444; border-radius: 50%;
+      display: none; z-index: 26;
+      box-shadow: 0 0 12px rgba(255,60,60,0.6);
+      animation: crossIn 0.35s ease;
+    }
+    #crosshair::before, #crosshair::after {
+      content: ''; position: absolute; background: #ff4444;
+    }
+    #crosshair::before { width: 2px; height: 100%; left: 50%; margin-left: -1px; }
+    #crosshair::after { height: 2px; width: 100%; top: 50%; margin-top: -1px; }
+    @keyframes crossIn {
+      from { transform: scale(1.6); opacity: 0; }
+      to { transform: scale(1); opacity: 1; }
+    }
+
+
+    #fly {
+      width: 40px; height: 40px;
+      display: none; align-items: center; justify-content: center;
+      font-size: 28px;
+      margin-left: -20px; margin-top: -20px;
+      left: 0; top: 0;
+    }
+    .scatter-fly {
+      position: absolute;
+      width: 40px; height: 40px;
+      margin-left: -20px; margin-top: -20px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 28px;
+      pointer-events: none;
+      z-index: 28;
+      transition: transform 1.1s cubic-bezier(0.22, 0.7, 0.25, 1), opacity 1.1s ease;
+    }
+    .cell.result-hot {
+      outline: 3px solid #ff4d4d !important;
+      outline-offset: -3px;
+      animation: resultPulse 1s ease infinite;
+    }
+    .cell.result-ok {
+      outline: 3px solid #4dff88 !important;
+      outline-offset: -3px;
+    }
+    #result-banner {
+      position: absolute;
+      left: 50%; top: 12px;
+      transform: translateX(-50%);
+      background: rgba(0,0,0,0.82);
+      color: #fff;
+      padding: 10px 16px;
+      border-radius: 12px;
+      font-size: 13px;
+      max-width: 90%;
+      text-align: center;
+      z-index: 30;
+      display: none;
+      line-height: 1.4;
+      border: 1px solid rgba(255,255,255,0.15);
+    }
+    #result-banner.show { display: block; }
+    @keyframes resultPulse {
+      0%,100% { filter: brightness(1); }
+      50% { filter: brightness(1.25); }
+    }
+    #game-over .go-btns { display: flex; flex-direction: column; gap: 10px; align-items: center; }
+    #game-over button.secondary {
+      background: rgba(255,255,255,0.12);
+      color: #fff;
+    }
+
+
+    .reserve-wrap {
+      display: flex; flex-direction: column; align-items: center;
+      margin-left: 4px;
+    }
+    .reserve-label {
+      font-size: 8px; color: var(--hint); letter-spacing: 0.03em;
+      text-transform: uppercase; margin-bottom: 2px;
+    }
+    .card.reserve {
+      width: 36px; height: 50px;
+      opacity: 0.95;
+    }
+    .card.reserve .icon { font-size: 13px; }
+    .card.reserve .cname { font-size: 7px; }
+    .card.reserve .corner { font-size: 7px; top: 1px; left: 3px; }
+    .card.reserve.locked {
+      filter: grayscale(0.4); opacity: 0.7;
+    }
+    .card.reserve.locked::after {
+      content: attr(data-lock);
+      position: absolute; bottom: 1px; left: 0; right: 0;
+      font-size: 7px; color: #ffcc66; text-align: center;
+    }
+    .card.ai-card { transform: scale(0.9); }
+
+  </style>
+</head>
+<body>
+  <button id="dbg-btn" title="debug">⚙</button>
+  <div id="dbg-panel">
+    <input id="debug-input" placeholder="строка ввода: TUT · D1 · A1 future" />
+    <button id="debug-btn">Run</button>
+  </div>
+
+  <div id="ai-zone">
+    <div id="ai-label">Карты противника</div>
+    <div id="ai-hand">
+      <div id="ai-cards"></div>
+      <div class="reserve-wrap">
+        <div class="reserve-label">Рез.</div>
+        <div id="ai-reserve" class="card reserve empty ai-card">—</div>
+      </div>
+    </div>
+  </div>
+
+  <div id="status-bar">
+    <span id="status">Ход: <b>белые</b></span>
+    <span id="info">8×8</span>
+  </div>
+
+  <div id="viewport">
+    <div id="board-stage">
+      <div id="board"></div>
+    </div>
+    <div id="fly"></div>
+    <div id="fx-layer"><div id="crosshair"></div></div>
+    <div id="result-banner"></div>
+    <div id="card-action-label"></div>
+  <div id="fly-card"><div class="fc-icon"></div><div class="fc-name"></div></div>
+    <div id="cam-controls">
+      <button class="cam-btn" id="zoom-in">+</button>
+      <button class="cam-btn" id="zoom-out">−</button>
+      <button class="cam-btn" id="zoom-reset" style="font-size:13px">⟲</button>
+    </div>
+  </div>
+
+  <div id="player-zone">
+    <div id="player-label">Твои карты</div>
+    <div id="player-hand">
+      <div id="player-cards"></div>
+      <div class="reserve-wrap">
+        <div class="reserve-label">Рез.</div>
+        <div id="player-reserve" class="card reserve empty">+</div>
+      </div>
+    </div>
+  </div>
+  <div id="log"></div>
+
+  <div id="game-over">
+    <h2 id="go-text">Победа!</h2>
+    <p id="go-reason" style="font-size:13px;color:#ccc;max-width:280px;text-align:center;padding:0 12px"></p>
+    <div class="go-btns">
+      <button onclick="setupStartPosition()">Заново</button>
+      <button class="secondary" id="btn-show-result">Показать результат</button>
+    </div>
+  </div>
+
+  <div id="future-picker">
+    <div id="future-box">
+      <div class="title">На сколько пар ходов?</div>
+      <div class="row">
+        <button data-t="1">1</button>
+        <button data-t="2">2</button>
+        <button data-t="3">3</button>
+        <button data-t="4">4</button>
+        <button data-t="5">5</button>
+      </div>
+      <button id="fp-cancel">Отмена</button>
+    </div>
+  </div>
+
+  <!-- TUTORIAL -->
+  <div id="tutorial">
+    <div id="tut-row">
+      <div id="tut-char">
+        <div id="tut-sprite-wrap">
+          <!-- bottom → top -->
+          <img class="teto-layer" id="layer-eyes-bottom" src="teto-layers/EyesBottom.png" alt="" />
+          <img class="teto-layer" id="layer-eye-left" src="teto-layers/EyeLeft.png" alt="" />
+          <img class="teto-layer" id="layer-eye-right" src="teto-layers/EyeRight.png" alt="" />
+          <img class="teto-layer" id="layer-brows-bottom" src="teto-layers/BrowsBottom.png" alt="" />
+          <img class="teto-layer" id="layer-teto" src="teto-layers/Teto.png" alt="" />
+          <img class="teto-layer" id="layer-brows" src="teto-layers/Brows.png" alt="" />
+        </div>
+        <div id="tut-fallback">🧙</div>
+      </div>
+      <div id="tut-bubble">
+        <div id="tut-step"></div>
+        <div class="text" id="tut-text"></div>
+        <div id="tut-actions">
+          <button id="tut-disable">Больше не показывать</button>
+          <button id="tut-skip">Закрыть</button>
+          <button id="tut-next">Понятно</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    /* ============================================================
+       ПОДСКАЗКИ ПО СОБЫТИЯМ (не стартовое обучение)
+       Каждая подсказка показывается ОДИН раз, когда событие случается.
+       emotion: путь к картинке или "" для fallback
+       ============================================================ */
+
+    const EVENT_TIPS = {
+      input_line: {
+        message: "Строка ввода (⚙): TUT — обучение заново, D1 — начать партию сначала. Также A1 future / A2 future.",
+        emotion: ""
+      },
+      first_move: {
+        message: "Нажми на свою фигуру, затем на подсвеченную клетку — так ходят.",
+        emotion: ""
+      },
+      cards: {
+        message: "Внизу твои карты. Выбери карту, потом клетку или фигуру, чтобы применить эффект.",
+        emotion: ""
+      },
+      future: {
+        message: "Карта «Будущее»: фигура исчезает и вернётся через выбранное число пар ходов. Если на клетке кто-то будет — съест или сольётся.",
+        emotion: ""
+      },
+      board_resize: {
+        message: "Поле только что изменило размер! Фигуры за краем заморожены и появятся снова, когда поле до них дорастёт.",
+        emotion: ""
+      },
+      support: {
+        message: "«Поддержка» — случайно даёт 2 пешки тебе или врагу в пустых клетках.",
+        emotion: ""
+      },
+      spawn: {
+        message: "«Спавн» ставит случайную фигуру на выбранную пустую клетку.",
+        emotion: ""
+      },
+      airstrike: {
+        message: "«Авиаудар»: прицел 3×3 — фигуры не умирают, а разлетаются по соседним клеткам.",
+        emotion: ""
+      },
+      shield: {
+        message: "«Щит»: купол на фигуре. При атаке атакующий отлетает назад, щит спадает.",
+        emotion: ""
+      },
+      extra: {
+        message: "«2-й ход»: после хода ты ходишь ещё раз.",
+        emotion: ""
+      },
+      angel: {
+        message: "«Ангел»: крылья и нимб. Свечение 3×4 вперёд — 78% шанс, что атаку отразит щит. Авиаудар работает.",
+        emotion: ""
+      },
+      merge: {
+        message: "Слияние! Две союзные фигуры стали одной и ходят по правилам обеих. Метка ✦ — признак слияния.",
+        emotion: ""
+      },
+      camera: {
+        message: "Доску можно двигать пальцем и масштабировать кнопками + / − справа.",
+        emotion: ""
+      }
+    };
+
+    const tg = window.Telegram?.WebApp;
+    if (tg) {
+      tg.ready(); tg.expand();
+      try { tg.setHeaderColor('secondary_bg_color'); tg.setBackgroundColor('bg_color'); } catch(e){}
+    }
+    const userId = tg?.initDataUnsafe?.user?.id || null;
+
+    function haptic(type='light') {
+      try {
+        if (tg?.HapticFeedback) {
+          if (type==='success') tg.HapticFeedback.notificationOccurred('success');
+          else if (type==='error') tg.HapticFeedback.notificationOccurred('error');
+          else tg.HapticFeedback.impactOccurred(type);
+        }
+      } catch(e){}
+    }
+
+    const SYM = {K:'♚',Q:'♛',R:'♜',B:'♝',N:'♞',P:'♟',k:'♚',q:'♛',r:'♜',b:'♝',n:'♞',p:'♟'};
+    const VAL = {p:10,n:32,b:33,r:50,q:90,k:1000};
+    const CARD_ICON = {future:'⏳',spawn:'✨',airstrike:'✈',support:'🛡',shield:'🔵',extra:'2️⃣',angel:'😇'};
+    const CARD_CORNER = {future:'F',spawn:'S',airstrike:'A',support:'P',shield:'H',extra:'2',angel:'G'};
+
+    function pieceChar(p){ if(!p) return null; return typeof p==='string'?p:p.base; }
+    function pieceOwner(p){ const c=pieceChar(p); return c===c.toLowerCase()?'white':'black'; }
+    function isWhite(p){ return pieceOwner(p)==='white'; }
+    function isMerged(p){ return p && typeof p==='object' && p.merged; }
+
+    let boardW=8, boardH=8, board=[], frozen=[], turn='white';
+    let selected=null, possibleMoves=[], slots=[null,null,null], aiSlots=[null,null,null];
+    let playerReserve=null, aiReserve=null; // {item, readyAt, autoOnly}
+    let selectedSlot=null, futureQueue=[], gameLog=[], gameOver=false;
+    let pendingFuture=null, turnCount=0;
+    let whiteKingMoved=false, blackKingMoved=false;
+    let whiteRookA=false, whiteRookH=false, blackRookA=false, blackRookH=false;
+    let camScale=1, camX=0, camY=0, dragging=false, lastTouch=null;
+    let moving = false;
+    let extraMove = false;
+    let lastEndReason = '';
+    let lastEndWinner = null;
+    let lastEndHighlight = []; // [{x,y,cls}]
+    let pendingHighlights = []; // [{x,y,cls,until}]
+    let angelZones = []; // {x,y,owner} glow cells
+
+    // ===== EVENT TIPS =====
+    let tutActive = false;
+    let currentTipId = null;
+
+    function tipsEnabled() {
+      try { return localStorage.getItem('chaos_chess_tut_off') !== '1'; } catch(e){ return true; }
+    }
+    function tipSeen(id) {
+      try { return localStorage.getItem('chaos_tip_' + id) === '1'; } catch(e){ return false; }
+    }
+    function markTipSeen(id) {
+      try { localStorage.setItem('chaos_tip_' + id, '1'); } catch(e){}
+    }
+    function showTip(id, force) {
+      if (!force) return; // tips only when forced (e.g. TUT)
+      if (tutActive) return;
+      const tip = EVENT_TIPS[id];
+      if (!tip) return;
+      currentTipId = id;
+      tutActive = true;
+      const el = document.getElementById('tutorial');
+      el.classList.remove('hiding');
+      el.classList.add('show');
+      document.getElementById('tut-text').textContent = tip.message;
+      document.getElementById('tut-step').textContent = '';
+      document.getElementById('tut-next').textContent = 'Понятно';
+      setEmotion(tip.emotion || '');
+      startBlinkLoop();
+      haptic('light');
+    }
+    function setEmotion(src) {
+      // Layered Teto is always shown. Optional src can be used later for alt outfits.
+      // Keep fallback hidden while layers load.
+      const fb = document.getElementById('tut-fallback');
+      const wrap = document.getElementById('tut-sprite-wrap');
+      if (fb) fb.classList.remove('show');
+      if (wrap) wrap.style.display = 'block';
+      // if custom full-body emotion provided, could swap Teto layer:
+      if (src) {
+        const teto = document.getElementById('layer-teto');
+        // only replace body if a special emotion path is given; eyes/brows stay
+        // teto.src = src;
+      }
+    }
+
+    function startBlinkLoop() {
+      const wrap = document.getElementById('tut-sprite-wrap');
+      if (!wrap || wrap._blinkStarted) return;
+      wrap._blinkStarted = true;
+      function blink() {
+        if (!document.getElementById('tutorial').classList.contains('show')) {
+          setTimeout(blink, 2000);
+          return;
+        }
+        wrap.classList.add('blink');
+        setTimeout(() => wrap.classList.remove('blink'), 140);
+        setTimeout(blink, 2500 + Math.random() * 3000);
+      }
+      function lookAround() {
+        if (!document.getElementById('tutorial').classList.contains('show')) {
+          setTimeout(lookAround, 3000);
+          return;
+        }
+        const el = document.getElementById('layer-eye-left');
+        const er = document.getElementById('layer-eye-right');
+        if (el && er) {
+          const dir = Math.random() < 0.5 ? 1 : -1;
+          const main = 2 + Math.floor(Math.random() * 2); // 2 or 3 px
+          const other = 1;
+          // one eye shifts more, opposite eye shifts less opposite direction
+          el.style.transition = 'transform 0.35s ease';
+          er.style.transition = 'transform 0.35s ease';
+          el.style.transform = `translateX(${dir * main}px)`;
+          er.style.transform = `translateX(${-dir * other}px)`;
+          setTimeout(() => {
+            el.style.transform = '';
+            er.style.transform = '';
+          }, 1200 + Math.random() * 800);
+        }
+        setTimeout(lookAround, 4000 + Math.random() * 5000);
+      }
+      setTimeout(blink, 1800);
+      setTimeout(lookAround, 2500);
+    }
+
+
+    function closeTip() {
+      tutActive = false;
+      currentTipId = null;
+      const el = document.getElementById('tutorial');
+      el.classList.add('hiding');
+      setTimeout(() => el.classList.remove('show', 'hiding'), 350);
+    }
+    function disableAllTips() {
+      try { localStorage.setItem('chaos_chess_tut_off', '1'); } catch(e){}
+      closeTip();
+      log('Подсказки отключены');
+    }
+    document.getElementById('tut-next').onclick = closeTip;
+    document.getElementById('tut-skip').onclick = closeTip;
+    document.getElementById('tut-disable').onclick = disableAllTips;
+
+    function createEmpty(w,h){ const b=[]; for(let y=0;y<h;y++) b[y]=Array(w).fill(null); return b; }
+    function inBounds(x,y){ return x>=0&&y>=0&&x<boardW&&y<boardH; }
+
+    function findKing(color){
+      for(let y=0;y<boardH;y++) for(let x=0;x<boardW;x++){
+        const p=board[y][x]; if(!p) continue;
+        if(pieceChar(p).toUpperCase()==='K' && pieceOwner(p)===color) return {x,y};
+      }
+      for(const f of frozen) if(pieceChar(f.piece).toUpperCase()==='K' && f.owner===color) return {x:f.x,y:f.y,frozen:true};
+      for(const f of futureQueue) if(pieceChar(f.piece).toUpperCase()==='K' && f.owner===color) return {x:f.x,y:f.y,future:true};
+      return null;
+    }
+    function getMovementTypes(p){
+      if(!p) return [];
+      if(typeof p==='string') return [p.toUpperCase()];
+      const types=[p.base.toUpperCase()];
+      if(p.extra) p.extra.forEach(e=>types.push(e.toUpperCase()));
+      return [...new Set(types)];
+    }
+
+    function getRawMoves(x,y){
+      const p=board[y][x]; if(!p) return [];
+      const color=pieceOwner(p); const types=getMovementTypes(p);
+      const moves=[]; const dir=color==='white'?-1:1;
+      const startRank=color==='white'?boardH-2:1;
+      const add=(nx,ny)=>{
+        if(!inBounds(nx,ny)) return false;
+        const t=board[ny][nx];
+        if(!t){ moves.push({x:nx,y:ny}); return true; }
+        if(pieceOwner(t)!==color) moves.push({x:nx,y:ny});
+        return false;
+      };
+      types.forEach(type=>{
+        if(type==='P'){
+          if(inBounds(x,y+dir)&&!board[y+dir][x]){
+            moves.push({x,y:y+dir});
+            if(y===startRank&&inBounds(x,y+dir*2)&&!board[y+dir*2][x]) moves.push({x,y:y+dir*2});
+          }
+          [[x-1,y+dir],[x+1,y+dir]].forEach(([nx,ny])=>{
+            if(inBounds(nx,ny)&&board[ny][nx]&&pieceOwner(board[ny][nx])!==color) moves.push({x:nx,y:ny});
+          });
+        } else if(type==='N'){
+          [[1,2],[2,1],[-1,2],[-2,1],[1,-2],[2,-1],[-1,-2],[-2,-1]].forEach(([dx,dy])=>add(x+dx,y+dy));
+        } else if(type==='K'){
+          for(let dx=-1;dx<=1;dx++) for(let dy=-1;dy<=1;dy++) if(dx||dy) add(x+dx,y+dy);
+          if(color==='white'&&!whiteKingMoved&&y===boardH-1&&x===4){
+            if(!whiteRookH&&board[y][7]&&pieceChar(board[y][7]).toUpperCase()==='R'&&isWhite(board[y][7])&&!board[y][5]&&!board[y][6])
+              moves.push({x:6,y,castle:'K'});
+            if(!whiteRookA&&board[y][0]&&pieceChar(board[y][0]).toUpperCase()==='R'&&isWhite(board[y][0])&&!board[y][1]&&!board[y][2]&&!board[y][3])
+              moves.push({x:2,y,castle:'Q'});
+          }
+          if(color==='black'&&!blackKingMoved&&y===0&&x===4){
+            if(!blackRookH&&board[y][7]&&pieceChar(board[y][7]).toUpperCase()==='R'&&!isWhite(board[y][7])&&!board[y][5]&&!board[y][6])
+              moves.push({x:6,y,castle:'K'});
+            if(!blackRookA&&board[y][0]&&pieceChar(board[y][0]).toUpperCase()==='R'&&!isWhite(board[y][0])&&!board[y][1]&&!board[y][2]&&!board[y][3])
+              moves.push({x:2,y,castle:'Q'});
+          }
+        } else {
+          const rays=[];
+          if(type==='R'||type==='Q') rays.push([1,0],[-1,0],[0,1],[0,-1]);
+          if(type==='B'||type==='Q') rays.push([1,1],[1,-1],[-1,1],[-1,-1]);
+          rays.forEach(([dx,dy])=>{
+            for(let i=1;i<22;i++){
+              const nx=x+dx*i, ny=y+dy*i;
+              if(!inBounds(nx,ny)) break;
+              const t=board[ny][nx];
+              if(!t){ moves.push({x:nx,y:ny}); continue; }
+              if(pieceOwner(t)!==color) moves.push({x:nx,y:ny});
+              break;
+            }
+          });
+        }
+      });
+      const seen=new Set();
+      return moves.filter(m=>{ const k=m.x+','+m.y+(m.castle||''); if(seen.has(k)) return false; seen.add(k); return true; });
+    }
+
+    function isSquareAttacked(x,y,byColor){
+      for(let yy=0;yy<boardH;yy++) for(let xx=0;xx<boardW;xx++){
+        const p=board[yy][xx];
+        if(!p||pieceOwner(p)!==byColor) continue;
+        if(getRawMoves(xx,yy).some(m=>m.x===x&&m.y===y&&!m.castle)) return true;
+      }
+      return false;
+    }
+    function inCheck(color){
+      const k=findKing(color);
+      if(!k||k.frozen||k.future) return false;
+      return isSquareAttacked(k.x,k.y,color==='white'?'black':'white');
+    }
+    function getLegalMoves(x,y){
+      const p=board[y][x]; if(!p) return [];
+      const color=pieceOwner(p);
+      return getRawMoves(x,y).filter(m=>{
+        const cap=board[m.y][m.x]; const from=board[y][x];
+        board[m.y][m.x]=from; board[y][x]=null;
+        let rf=null,rt=null,rp=null;
+        if(m.castle){ rf=m.castle==='K'?7:0; rt=m.castle==='K'?5:3; rp=board[y][rf]; board[y][rt]=rp; board[y][rf]=null; }
+        const ok=!inCheck(color);
+        board[y][x]=from; board[m.y][m.x]=cap;
+        if(m.castle){ board[y][rf]=rp; board[y][rt]=null; }
+        return ok;
+      });
+    }
+    function hasAnyLegalMove(color){
+      for(let y=0;y<boardH;y++) for(let x=0;x<boardW;x++){
+        const p=board[y][x];
+        if(p&&pieceOwner(p)===color&&getLegalMoves(x,y).length) return true;
+      }
+      return false;
+    }
+
+    function evaluate(){
+      let score=0;
+      for(let y=0;y<boardH;y++) for(let x=0;x<boardW;x++){
+        const p=board[y][x]; if(!p) continue;
+        const v=VAL[pieceChar(p).toLowerCase()]||0;
+        const center=3.5-(Math.abs(x-boardW/2)+Math.abs(y-boardH/2))*0.35;
+        score += (pieceOwner(p)==='black'?1:-1)*(v+center);
+      }
+      if(inCheck('white')) score+=20;
+      if(inCheck('black')) score-=20;
+      return score;
+    }
+    function minimax(depth,maxing,alpha,beta){
+      if(depth===0) return evaluate();
+      const color=maxing?'black':'white';
+      let moves=[];
+      for(let y=0;y<boardH;y++) for(let x=0;x<boardW;x++){
+        const p=board[y][x];
+        if(p&&pieceOwner(p)===color) getLegalMoves(x,y).forEach(m=>moves.push({fx:x,fy:y,tx:m.x,ty:m.y,castle:m.castle}));
+      }
+      if(!moves.length) return maxing?-8000:8000;
+      moves.sort((a,b)=>{
+        const ca=board[a.ty][a.tx]?VAL[pieceChar(board[a.ty][a.tx]).toLowerCase()]||0:0;
+        const cb=board[b.ty][b.tx]?VAL[pieceChar(board[b.ty][b.tx]).toLowerCase()]||0:0;
+        return cb-ca;
+      });
+      if(maxing){
+        let best=-Infinity;
+        for(const m of moves){
+          const piece=board[m.fy][m.fx],cap=board[m.ty][m.tx];
+          board[m.ty][m.tx]=piece; board[m.fy][m.fx]=null;
+          best=Math.max(best,minimax(depth-1,false,alpha,beta));
+          board[m.fy][m.fx]=piece; board[m.ty][m.tx]=cap;
+          alpha=Math.max(alpha,best); if(beta<=alpha) break;
+        }
+        return best;
+      } else {
+        let best=Infinity;
+        for(const m of moves){
+          const piece=board[m.fy][m.fx],cap=board[m.ty][m.tx];
+          board[m.ty][m.tx]=piece; board[m.fy][m.fx]=null;
+          best=Math.min(best,minimax(depth-1,true,alpha,beta));
+          board[m.fy][m.fx]=piece; board[m.ty][m.tx]=cap;
+          beta=Math.min(beta,best); if(beta<=alpha) break;
+        }
+        return best;
+      }
+    }
+
+    function aiTurn(){
+      if(gameOver) return;
+      moving=false;
+
+      const decision = aiChooseCard();
+      if(decision){
+        aiPlayCard(decision, () => {
+          // after card effect, make a normal move
+          setTimeout(aiDoMove, 350);
+        });
+        return;
+      }
+      aiDoMove();
+    }
+
+    function aiDoMove(){
+      if(gameOver) return;
+      const moves=[];
+      for(let y=0;y<boardH;y++) for(let x=0;x<boardW;x++){
+        const p=board[y][x];
+        if(p&&pieceOwner(p)==='black') getLegalMoves(x,y).forEach(m=>moves.push({fx:x,fy:y,tx:m.x,ty:m.y,castle:m.castle}));
+      }
+      if(!moves.length){
+        const k=findKing('black');
+        if(k&&!k.frozen&&!k.future) endGame('white', 'Чёрным нечем ходить.', []);
+        else { log('Чёрным нечем ходить'); turn='white'; render(); }
+        return;
+      }
+      let bestScore=-Infinity, best=[];
+      const depth=boardW*boardH>120?1:2;
+      for(const m of moves){
+        const piece=board[m.fy][m.fx],cap=board[m.ty][m.tx];
+        board[m.ty][m.tx]=piece; board[m.fy][m.fx]=null;
+        let score=minimax(depth-1,false,-Infinity,Infinity);
+        if(cap&&pieceChar(cap).toUpperCase()==='K') score=50000;
+        board[m.fy][m.fx]=piece; board[m.ty][m.tx]=cap;
+        if(score>bestScore){ bestScore=score; best=[m]; }
+        else if(score===bestScore) best.push(m);
+      }
+      const choice=best[Math.floor(Math.random()*best.length)];
+      animateAndMove(choice.fx,choice.fy,choice.tx,choice.ty,choice.castle,()=>log('ИИ походил'));
+    }
+
+    /** Smart card choice for black */
+    function aiChooseCard(){
+      const usable=aiSlots.map((s,i)=>s?{item:s,idx:i}:null).filter(Boolean);
+      if(!usable.length) return null;
+      // base chance ~45% to consider a card
+      if(Math.random()>0.48) return null;
+
+      const scored=[];
+      for(const u of usable){
+        const d = aiScoreCard(u.item, u.idx);
+        if(d && d.score > 12) scored.push(d);
+      }
+      if(!scored.length) return null;
+      scored.sort((a,b)=>b.score-a.score);
+      // pick among top 2
+      return scored[Math.floor(Math.random()*Math.min(2, scored.length))];
+    }
+
+    function aiScoreCard(item, idx){
+      const type=item.type;
+      // helpers
+      const whitePieces=[], blackPieces=[], whiteVals=[], blackVals=[];
+      for(let y=0;y<boardH;y++) for(let x=0;x<boardW;x++){
+        const p=board[y][x]; if(!p) continue;
+        const v=VAL[pieceChar(p).toLowerCase()]||0;
+        if(pieceOwner(p)==='white'){ whitePieces.push({x,y,p,v}); whiteVals.push(v); }
+        else { blackPieces.push({x,y,p,v}); blackVals.push(v); }
+      }
+      const matW=whiteVals.reduce((a,b)=>a+b,0);
+      const matB=blackVals.reduce((a,b)=>a+b,0);
+
+      if(type==='airstrike'){
+        // find 3x3 with most white material (prefer not empty)
+        let best=null, bestS=-1;
+        for(let cy=0;cy<boardH;cy++) for(let cx=0;cx<boardW;cx++){
+          let s=0, zone=[];
+          for(let dy=-1;dy<=1;dy++) for(let dx=-1;dx<=1;dx++){
+            const x=cx+dx,y=cy+dy;
+            if(!inBounds(x,y)) continue;
+            zone.push({x,y});
+            const p=board[y][x];
+            if(p&&pieceOwner(p)==='white') s += (VAL[pieceChar(p).toLowerCase()]||5);
+            if(p&&pieceOwner(p)==='black') s -= 8; // avoid self
+          }
+          if(s>bestS){ bestS=s; best={cx,cy,zone}; }
+        }
+        if(best && bestS>=15){
+          return {item, idx, score: 20+bestS, cells: best.zone, cx:best.cx, cy:best.cy, type};
+        }
+        return null;
+      }
+      if(type==='shield'){
+        // protect valuable black piece under threat or king
+        let target=null, sc=0;
+        for(const bp of blackPieces){
+          if(bp.p.shield) continue;
+          let threat=0;
+          for(const wp of whitePieces){
+            if(getRawMoves(wp.x,wp.y).some(m=>m.x===bp.x&&m.y===bp.y)) threat+=wp.v;
+          }
+          const val = bp.v + threat;
+          if(val>sc){ sc=val; target=bp; }
+        }
+        if(target && sc>=25){
+          return {item, idx, score: 15+sc/2, cells:[{x:target.x,y:target.y}], tx:target.x, ty:target.y, type};
+        }
+        return null;
+      }
+      if(type==='angel'){
+        // angel on advanced or valuable piece without angel
+        let target=null, sc=0;
+        for(const bp of blackPieces){
+          if(bp.p.angel) continue;
+          const advance = bp.y; // lower y is more advanced for black? black starts y=0, advances +y
+          const val = bp.v + advance*2;
+          if(val>sc){ sc=val; target=bp; }
+        }
+        if(target && sc>=20){
+          const glow=[{x:target.x,y:target.y}];
+          for(let dy=1;dy<=4;dy++) for(let dx=-1;dx<=1;dx++){
+            const nx=target.x+dx, ny=target.y+dy;
+            if(inBounds(nx,ny)) glow.push({x:nx,y:ny});
+          }
+          return {item, idx, score: 18+sc/3, cells:glow, tx:target.x, ty:target.y, type};
+        }
+        return null;
+      }
+      if(type==='future'){
+        // hide a hanging valuable piece
+        for(const bp of blackPieces){
+          if(pieceChar(bp.p).toUpperCase()==='K') continue;
+          let threat=0;
+          for(const wp of whitePieces){
+            if(getRawMoves(wp.x,wp.y).some(m=>m.x===bp.x&&m.y===bp.y)) threat+=wp.v;
+          }
+          if(threat>=bp.v && bp.v>=30){
+            return {item, idx, score: 22+threat, cells:[{x:bp.x,y:bp.y}], tx:bp.x, ty:bp.y, type, pairs:2};
+          }
+        }
+        return null;
+      }
+      if(type==='spawn'){
+        // spawn near center or near white king
+        const wk=findKing('white');
+        let tx=Math.floor(boardW/2), ty=Math.floor(boardH/2);
+        if(wk && !wk.frozen){ tx=wk.x; ty=Math.min(boardH-1, wk.y+1); }
+        // find empty near
+        for(let r=0;r<4;r++){
+          for(let dy=-r;dy<=r;dy++) for(let dx=-r;dx<=r;dx++){
+            const x=tx+dx, y=ty+dy;
+            if(inBounds(x,y)&&!board[y][x]){
+              return {item, idx, score: 16, cells:[{x,y}], tx:x, ty:y, type};
+            }
+          }
+        }
+        return null;
+      }
+      if(type==='support'){
+        // if behind in material
+        if(matB < matW - 15){
+          return {item, idx, score: 18, cells:[{x:Math.floor(boardW/2),y:Math.floor(boardH/2)}], type};
+        }
+        return null;
+      }
+      return null;
+    }
+
+    function aiPlayCard(decision, done){
+      const {item, idx, cells, type} = decision;
+      // Use same flight animation from AI slot
+      playCardUseAnim(item, cells||[], ()=>{
+        if(type==='airstrike'){
+          showCrosshairOnCell(decision.cx, decision.cy, HL_MS);
+          scatterArea(decision.cx, decision.cy);
+          log('ИИ: авиаудар');
+        } else if(type==='shield'){
+          const p=board[decision.ty][decision.tx];
+          if(p) board[decision.ty][decision.tx]=withFlags(p,{shield:true});
+          log('ИИ: щит');
+        } else if(type==='angel'){
+          const p=board[decision.ty][decision.tx];
+          if(p) board[decision.ty][decision.tx]=withFlags(p,{angel:true});
+          rebuildAngelZones();
+          log('ИИ: ангел');
+        } else if(type==='future'){
+          const p=board[decision.ty][decision.tx];
+          if(p){
+            board[decision.ty][decision.tx]=null;
+            futureQueue.push({turnsLeft:(decision.pairs||2)*2, x:decision.tx, y:decision.ty, piece:p, owner:'black'});
+          }
+          log('ИИ: будущее');
+        } else if(type==='spawn'){
+          if(!board[decision.ty][decision.tx])
+            board[decision.ty][decision.tx]=['N','B','R','P'][Math.floor(Math.random()*4)];
+          log('ИИ: спавн');
+        } else if(type==='support'){
+          let placed=0;
+          for(let i=0;i<50&&placed<2;i++){
+            const rx=Math.floor(Math.random()*boardW), ry=Math.floor(Math.random()*boardH);
+            if(!board[ry][rx]){ board[ry][rx]='P'; placed++; }
+          }
+          log('ИИ: поддержка +'+placed);
+        }
+        aiSlots[idx]=null;
+        haptic('medium');
+        render();
+        if(done) done();
+      }, { fromAI: true, slotIndex: idx });
+    }
+
+
+    function animateAndMove(fx,fy,tx,ty,castle,cb){
+      if(moving){ setTimeout(()=>{ moving=false; animateAndMove(fx,fy,tx,ty,castle,cb); }, 50); return; }
+      const piece=board[fy][fx];
+      if(!piece){ doMove(fx,fy,tx,ty,castle); if(cb)cb(); return; }
+      const boardEl=document.getElementById('board');
+      const cells=boardEl.children;
+      const fromCell=cells[fy*boardW+fx], toCell=cells[ty*boardW+tx];
+      if(!fromCell||!toCell){ doMove(fx,fy,tx,ty,castle); if(cb)cb(); return; }
+      moving = true;
+      const fr=fromCell.getBoundingClientRect();
+      const tr=toCell.getBoundingClientRect();
+      const wrap=document.getElementById('viewport').getBoundingClientRect();
+      // centers
+      const x0 = fr.left - wrap.left + fr.width/2;
+      const y0 = fr.top - wrap.top + fr.height/2;
+      const x1 = tr.left - wrap.left + tr.width/2;
+      const y1 = tr.top - wrap.top + tr.height/2;
+      const fly=document.getElementById('fly');
+      fly.textContent=SYM[pieceChar(piece)]||'?';
+      fly.className='piece '+(isWhite(piece)?'white':'black');
+      fly.style.transition = 'none';
+      fly.style.display='flex';
+      fly.style.left = x0 + 'px';
+      fly.style.top  = y0 + 'px';
+      fly.style.transform = 'translate(0,0) scale(1)';
+      const orig=fromCell.querySelector('.piece');
+      if(orig) orig.style.opacity='0';
+      void fly.offsetWidth;
+      const dur = 0.28 + Math.min(0.35, (Math.abs(tx-fx)+Math.abs(ty-fy))*0.06);
+      fly.style.transition = `transform ${dur}s cubic-bezier(0.22, 0.61, 0.36, 1)`;
+      requestAnimationFrame(()=>{
+        fly.style.transform = `translate(${x1-x0}px, ${y1-y0}px) scale(1.04)`;
+      });
+      setTimeout(()=>{
+        fly.style.display='none';
+        fly.style.transition = 'none';
+        moving = false;
+        try {
+          doMove(fx,fy,tx,ty,castle);
+          if(cb) cb();
+        } catch(e) {
+          console.error(e);
+          moving=false;
+          turn = turn==='white'?'black':'white';
+          render();
+          if(turn==='black') setTimeout(aiTurn, 300);
+        }
+      }, dur*1000 + 40);
+    }
+
+function applyCam(){
+      const stage=document.getElementById('board-stage');
+      stage.style.transform=`translate(calc(-50% + ${camX}px), calc(-50% + ${camY}px)) scale(${camScale})`;
+    }
+    function zoom(delta){
+      camScale=Math.max(0.45, Math.min(2.2, camScale+delta));
+      applyCam(); haptic('light');
+    }
+    document.getElementById('zoom-in').onclick=()=>zoom(0.15);
+    document.getElementById('zoom-out').onclick=()=>zoom(-0.15);
+    document.getElementById('zoom-reset').onclick=()=>{ camScale=1; camX=0; camY=0; applyCam(); };
+
+    const vp=document.getElementById('viewport');
+    vp.addEventListener('pointerdown', e=>{
+      if(e.target.closest('.cam-btn') || tutActive) return;
+      dragging=true; lastTouch={x:e.clientX,y:e.clientY}; vp.setPointerCapture(e.pointerId);
+    });
+    vp.addEventListener('pointermove', e=>{
+      if(!dragging||!lastTouch) return;
+      camX+=(e.clientX-lastTouch.x); camY+=(e.clientY-lastTouch.y);
+      lastTouch={x:e.clientX,y:e.clientY}; applyCam();
+    });
+    vp.addEventListener('pointerup', ()=>{ dragging=false; lastTouch=null; });
+    vp.addEventListener('pointercancel', ()=>{ dragging=false; lastTouch=null; });
+    vp.addEventListener('wheel', e=>{ e.preventDefault(); zoom(e.deltaY>0?-0.08:0.08); }, {passive:false});
+
+    function renderCards(){
+      const aiEl=document.getElementById('ai-cards');
+      aiEl.innerHTML='';
+      for(let i=0;i<3;i++){
+        const item=aiSlots[i];
+        const div=document.createElement('div');
+        if(!item){ div.className='card empty ai-card'; div.textContent='—'; }
+        else {
+          div.className='card ai-card';
+          div.innerHTML=`<div class="corner">${CARD_CORNER[item.type]||'?'}</div>
+            <div class="icon">${CARD_ICON[item.type]||'?'}</div>
+            <div class="cname">${item.name}</div>`;
+        }
+        aiEl.appendChild(div);
+      }
+      // AI reserve
+      const aiResEl=document.getElementById('ai-reserve');
+      if(aiResEl){
+        if(!aiReserve){ aiResEl.className='card reserve empty ai-card'; aiResEl.textContent='—'; aiResEl.removeAttribute('data-lock'); }
+        else {
+          const it=aiReserve.item;
+          const locked = aiReserve.autoOnly || (aiReserve.readyAt > turnCount);
+          aiResEl.className='card reserve ai-card'+(locked?' locked':'');
+          aiResEl.innerHTML=`<div class="corner">${CARD_CORNER[it.type]||'?'}</div>
+            <div class="icon">${CARD_ICON[it.type]||'?'}</div>
+            <div class="cname">${it.name}</div>`;
+          if(locked && !aiReserve.autoOnly) aiResEl.setAttribute('data-lock', 'через '+(aiReserve.readyAt-turnCount));
+          else if(aiReserve.autoOnly) aiResEl.setAttribute('data-lock', 'авто');
+          else aiResEl.removeAttribute('data-lock');
+        }
+      }
+
+      const plEl=document.getElementById('player-cards');
+      plEl.innerHTML='';
+      for(let i=0;i<3;i++){
+        const item=slots[i];
+        const div=document.createElement('div');
+        if(!item){ div.className='card empty player'; div.textContent='Пусто'; }
+        else {
+          div.className='card player'+(selectedSlot===i?' active':'')+(item.deal?' deal-in':'');
+          if(item.deal) setTimeout(()=>{ item.deal=false; }, 500);
+          div.innerHTML=`<div class="corner">${CARD_CORNER[item.type]||'?'}</div>
+            <div class="icon">${CARD_ICON[item.type]||'?'}</div>
+            <div class="cname">${item.name}</div>`;
+          div.onclick=()=>{
+            if(gameOver||turn!=='white'||tutActive) return;
+            selectedSlot=selectedSlot===i?null:i;
+            selected=null; possibleMoves=[];
+            haptic('light'); render();
+          };
+        }
+        plEl.appendChild(div);
+      }
+
+      // Player reserve
+      const resEl=document.getElementById('player-reserve');
+      if(resEl){
+        resEl.onclick = onPlayerReserveClick;
+        if(!playerReserve){
+          resEl.className='card reserve empty player';
+          resEl.textContent='+';
+          resEl.removeAttribute('data-lock');
+        } else {
+          const it=playerReserve.item;
+          const locked = playerReserve.autoOnly || (playerReserve.readyAt > turnCount);
+          resEl.className='card reserve player'+(locked?' locked':'')+(selectedSlot==='reserve'?' active':'');
+          resEl.innerHTML=`<div class="corner">${CARD_CORNER[it.type]||'?'}</div>
+            <div class="icon">${CARD_ICON[it.type]||'?'}</div>
+            <div class="cname">${it.name}</div>`;
+          if(playerReserve.autoOnly) resEl.setAttribute('data-lock', 'авто·король');
+          else if(locked) resEl.setAttribute('data-lock', '⏳'+(playerReserve.readyAt-turnCount));
+          else resEl.removeAttribute('data-lock');
+        }
+      }
+    }
+    function onPlayerReserveClick(){
+      if(gameOver||turn!=='white'||tutActive) return;
+      // If a hand card selected -> move to reserve (if empty)
+      if(selectedSlot!==null && selectedSlot!=='reserve' && typeof selectedSlot==='number'){
+        const item = slots[selectedSlot];
+        if(!item) return;
+        if(playerReserve){ log('Резерв занят'); return; }
+        const autoOnly = item.type==='future';
+        playerReserve = {
+          item: {...item},
+          readyAt: autoOnly ? 999999 : (turnCount + 6),
+          autoOnly
+        };
+        slots[selectedSlot]=null;
+        selectedSlot=null;
+        log(autoOnly ? '«Будущее» в резерве — сработает при угрозе королю' : 'Карта в резерве (через 6 ходов)');
+        haptic('medium'); render();
+        return;
+      }
+      // Select reserve card to use (if unlocked and not autoOnly)
+      if(playerReserve){
+        if(playerReserve.autoOnly){
+          log('«Будущее» из резерва только спасает короля автоматически');
+          return;
+        }
+        if(playerReserve.readyAt > turnCount){
+          log('Резерв ещё не готов: через '+(playerReserve.readyAt-turnCount)+' ход.');
+          return;
+        }
+        selectedSlot = selectedSlot==='reserve' ? null : 'reserve';
+        selected=null; possibleMoves=[];
+        haptic('light'); render();
+      }
+    }
+
+
+    function render(){
+      const boardEl=document.getElementById('board');
+      boardEl.style.gridTemplateColumns=`repeat(${boardW},40px)`;
+      boardEl.innerHTML='';
+      for(let y=0;y<boardH;y++) for(let x=0;x<boardW;x++){
+        const cell=document.createElement('div');
+        cell.className='cell '+((x+y)%2===0?'light':'dark');
+        if(angelZones.some(z=>z.x===x&&z.y===y)) cell.classList.add('angel-glow');
+        if(gameOver){
+          const hl=lastEndHighlight.find(h=>h.x===x&&h.y===y);
+          if(hl) cell.classList.add(hl.cls||'result-hot');
+        }
+        if(selected&&selected.x===x&&selected.y===y) cell.classList.add('selected');
+        const isPos=possibleMoves.find(m=>m.x===x&&m.y===y);
+        if(isPos){ cell.classList.add('possible'); if(board[y][x]) cell.classList.add('has-enemy'); }
+        const p=board[y][x];
+        if(p){
+          const span=document.createElement('div');
+          let cls='piece '+(isWhite(p)?'white':'black');
+          if(isMerged(p)) cls+=' merged';
+          if(p&&p.shield) cls+=' shielded';
+          if(p&&p.angel) cls+=' angel';
+          span.className=cls;
+          span.textContent=SYM[pieceChar(p)]||'?';
+          cell.appendChild(span);
+        }
+        cell.onclick=e=>{ e.stopPropagation(); if(!tutActive) onCellClick(x,y); };
+        boardEl.appendChild(cell);
+      }
+      applyPendingHighlights();
+      renderCards();
+      document.getElementById('status').innerHTML=
+        gameOver?'Игра окончена':`Ход: <b>${turn==='white'?'белые':'чёрные'}</b>`;
+      document.getElementById('info').textContent=`${boardW}×${boardH} · #${turnCount}`;
+    }
+
+    function log(msg){
+      gameLog.unshift(msg);
+      if(gameLog.length>6) gameLog.pop();
+      document.getElementById('log').textContent=gameLog[0]||'';
+    }
+
+    function maybeRandomResize(){
+      if(turnCount>0 && turnCount%2===0 && Math.random()<0.20){
+        const newW=Math.max(4, Math.min(20, 4+Math.floor(Math.random()*17)));
+        const newH=Math.max(8, Math.min(20, 8+Math.floor(Math.random()*13)));
+        if(newW===boardW && newH===boardH) return;
+        const nb=createEmpty(newW,newH);
+        for(let y=0;y<boardH;y++) for(let x=0;x<boardW;x++){
+          if(!board[y][x]) continue;
+          if(x<newW&&y<newH) nb[y][x]=board[y][x];
+          else frozen.push({x,y,piece:board[y][x],owner:pieceOwner(board[y][x])});
+        }
+        const still=[];
+        frozen.forEach(f=>{
+          if(f.x<newW&&f.y<newH){ if(!nb[f.y][f.x]) nb[f.y][f.x]=f.piece; else still.push(f); }
+          else still.push(f);
+        });
+        frozen=still; boardW=newW; boardH=newH; board=nb;
+        log(`Поле → ${boardW}×${boardH}`);
+        showTip('board_resize');
+        haptic('medium');
+        camScale=Math.min(camScale, 1.1); applyCam();
+      }
+    }
+
+
+    function ensureObj(p){
+      if(!p) return null;
+      if(typeof p==='string') return {base:p, extra:[], merged:false, shield:false, angel:false};
+      return p;
+    }
+    function withFlags(p, flags){
+      const o = ensureObj(p);
+      return Object.assign({}, o, flags);
+    }
+    function rebuildAngelZones(){
+      angelZones = [];
+      for(let y=0;y<boardH;y++) for(let x=0;x<boardW;x++){
+        const p=board[y][x];
+        if(!p || !p.angel) continue;
+        const owner=pieceOwner(p);
+        const dir = owner==='white' ? -1 : 1;
+        // 3 wide x 4 forward
+        for(let dy=1; dy<=4; dy++){
+          for(let dx=-1; dx<=1; dx++){
+            const nx=x+dx, ny=y+dir*dy;
+            if(inBounds(nx,ny)) angelZones.push({x:nx,y:ny,owner});
+          }
+        }
+      }
+    }
+    function inAngelGlow(x,y, forOwner){
+      return angelZones.some(z => z.x===x && z.y===y && z.owner===forOwner);
+    }
+    const HL_MS = 4500; // highlight duration
+    const FLY_MS = 2500; // card flight duration
+
+    function highlightCell(x,y, cls, ms){
+      const until = Date.now() + (ms||HL_MS);
+      pendingHighlights.push({x,y,cls: cls||'effect-hl', until});
+      applyPendingHighlights();
+    }
+    function highlightCells(list, cls, ms){
+      (list||[]).forEach(c => highlightCell(c.x, c.y, cls||'effect-hl', ms||HL_MS));
+    }
+    function applyPendingHighlights(){
+      const now=Date.now();
+      pendingHighlights = pendingHighlights.filter(h => h.until > now);
+      const boardEl=document.getElementById('board');
+      if(!boardEl) return;
+      pendingHighlights.forEach(h=>{
+        const cell=boardEl.children[h.y*boardW+h.x];
+        if(cell) cell.classList.add(h.cls);
+      });
+    }
+    setInterval(()=>{
+      if(!pendingHighlights.length) return;
+      const before=pendingHighlights.length;
+      const now=Date.now();
+      pendingHighlights = pendingHighlights.filter(h => h.until > now);
+      if(pendingHighlights.length !== before) render();
+    }, 400);
+    /** Fly card from hand (player or AI) to board. 1s pause after vanish, then effect. */
+    function playCardUseAnim(item, targetCells, then, opts){
+      opts = opts || {};
+      if(window._cardBusy) return;
+      window._cardBusy = true;
+      moving = true;
+
+      let slotEl = null;
+      if(opts.fromAI){
+        const aiCards = document.querySelectorAll('#ai-cards .card.ai-card');
+        if(opts.slotIndex!=null && aiCards[opts.slotIndex]) slotEl = aiCards[opts.slotIndex];
+        else slotEl = document.querySelector('#ai-cards .card.ai-card:not(.empty)');
+      } else {
+        slotEl = document.querySelector('.card.player.active') || document.querySelector('.card.player:not(.empty)');
+      }
+      const fly = document.getElementById('fly-card');
+      const boardEl = document.getElementById('board');
+
+      if(slotEl) slotEl.classList.add('using');
+
+      let sr;
+      if(slotEl) sr = slotEl.getBoundingClientRect();
+      else sr = { left: window.innerWidth/2-36, top: opts.fromAI ? 40 : window.innerHeight-120, width:72, height:100 };
+
+      let er;
+      if(targetCells && targetCells.length && boardEl){
+        const t = targetCells[0];
+        const cell = boardEl.children[t.y*boardW + t.x];
+        if(cell){
+          const r = cell.getBoundingClientRect();
+          er = { left: r.left + r.width/2 - 36, top: r.top + r.height/2 - 50, width:72, height:100 };
+        }
+      }
+      if(!er && boardEl){
+        const br = boardEl.getBoundingClientRect();
+        er = { left: br.left + br.width/2 - 36, top: br.top + br.height/2 - 50, width:72, height:100 };
+      }
+      if(!er) er = { left: window.innerWidth/2-36, top: window.innerHeight/2-50, width:72, height:100 };
+
+      const icon = (CARD_ICON[item.type]||'?');
+      const name = item.name || item.type;
+      fly.querySelector('.fc-icon').textContent = icon;
+      fly.querySelector('.fc-name').textContent = name;
+      fly.style.transition = 'none';
+      fly.style.display = 'flex';
+      fly.style.opacity = '1';
+      fly.style.left = sr.left + 'px';
+      fly.style.top = sr.top + 'px';
+      fly.style.transform = 'scale(1) rotate(0deg)';
+      void fly.offsetWidth;
+      fly.style.transition = `left ${FLY_MS/1000}s cubic-bezier(0.22, 0.61, 0.36, 1), top ${FLY_MS/1000}s cubic-bezier(0.22, 0.61, 0.36, 1), transform ${FLY_MS/1000}s cubic-bezier(0.22, 0.61, 0.36, 1), opacity 0.4s ease`;
+      requestAnimationFrame(()=>{
+        fly.style.left = er.left + 'px';
+        fly.style.top = er.top + 'px';
+        fly.style.transform = 'scale(1.25) rotate(-8deg)';
+      });
+
+      setTimeout(()=>{
+        fly.style.opacity = '0';
+        fly.style.transform = 'scale(0.55) rotate(10deg)';
+        setTimeout(()=>{
+          fly.style.display = 'none';
+          fly.style.opacity = '1';
+          // 1 second pause after card vanishes, before effect
+          setTimeout(()=>{
+            if(targetCells && targetCells.length){
+              highlightCells(targetCells, targetCells.length>1 ? 'scatter-hl' : 'target-hl', HL_MS);
+            }
+            try { then && then(); } catch(e){ console.error(e); }
+            window._cardBusy = false;
+            moving = false;
+            render();
+          }, 1000);
+        }, 400);
+      }, FLY_MS);
+    }
+    function showCrosshairOnCell(x,y, ms){
+      const boardEl=document.getElementById('board');
+      const cell=boardEl && boardEl.children[y*boardW+x];
+      const ch=document.getElementById('crosshair');
+      if(!cell||!ch) return;
+      const r=cell.getBoundingClientRect();
+      const vp=document.getElementById('viewport').getBoundingClientRect();
+      ch.style.display='block';
+      ch.style.left=(r.left-vp.left+r.width/2)+'px';
+      ch.style.top=(r.top-vp.top+r.height/2)+'px';
+      setTimeout(()=>{ ch.style.display='none'; }, ms||HL_MS);
+    }
+    function scatterArea(cx,cy){
+      const victims=[];
+      for(let dy=-1;dy<=1;dy++) for(let dx=-1;dx<=1;dx++){
+        const x=cx+dx, y=cy+dy;
+        if(!inBounds(x,y) || !board[y][x]) continue;
+        victims.push({x,y,p:board[y][x]});
+        board[y][x]=null;
+      }
+      const placements=[];
+      victims.forEach(v=>{
+        highlightCell(v.x,v.y,'scatter-hl',HL_MS);
+        const spots=[];
+        for(let r=1;r<=3;r++){
+          for(let dy=-r;dy<=r;dy++) for(let dx=-r;dx<=r;dx++){
+            if(Math.abs(dx)!==r && Math.abs(dy)!==r) continue;
+            const nx=v.x+dx, ny=v.y+dy;
+            if(inBounds(nx,ny) && !board[ny][nx] && !placements.some(p=>p.x===nx&&p.y===ny))
+              spots.push({x:nx,y:ny});
+          }
+        }
+        let dest;
+        if(spots.length){
+          dest=spots[Math.floor(Math.random()*spots.length)];
+          board[dest.y][dest.x]=v.p;
+          placements.push(dest);
+        } else {
+          dest={x:v.x,y:v.y};
+          board[v.y][v.x]=v.p;
+        }
+        animateScatterPiece(v.x, v.y, dest.x, dest.y, v.p);
+      });
+    }
+    function animateScatterPiece(fx,fy,tx,ty,piece){
+      const boardEl=document.getElementById('board');
+      if(!boardEl) return;
+      const fromCell=boardEl.children[fy*boardW+fx];
+      const toCell=boardEl.children[ty*boardW+tx];
+      if(!fromCell||!toCell) return;
+      const fr=fromCell.getBoundingClientRect();
+      const tr=toCell.getBoundingClientRect();
+      const wrap=document.getElementById('viewport').getBoundingClientRect();
+      const x0=fr.left-wrap.left+fr.width/2;
+      const y0=fr.top-wrap.top+fr.height/2;
+      const x1=tr.left-wrap.left+tr.width/2;
+      const y1=tr.top-wrap.top+tr.height/2;
+      const el=document.createElement('div');
+      el.className='scatter-fly piece '+(isWhite(piece)?'white':'black');
+      el.textContent=SYM[pieceChar(piece)]||'?';
+      el.style.left=x0+'px';
+      el.style.top=y0+'px';
+      el.style.transform='translate(0,0) scale(1)';
+      document.getElementById('viewport').appendChild(el);
+      void el.offsetWidth;
+      el.style.transform=`translate(${x1-x0}px, ${y1-y0}px) scale(1.05)`;
+      setTimeout(()=>{ el.remove(); }, 1150);
+    }
+
+
+    const ITEM_DEFS={
+      future:{name:'Будущее',type:'future'},
+      spawn:{name:'Спавн',type:'spawn'},
+      airstrike:{name:'Авиаудар',type:'airstrike'},
+      support:{name:'Поддержка',type:'support'},
+      shield:{name:'Щит',type:'shield'},
+      extra:{name:'2-й ход',type:'extra'},
+      angel:{name:'Ангел',type:'angel'}
+    };
+    function giveItem(id,toAI=false){
+      const def=ITEM_DEFS[id]; if(!def) return false;
+      const arr=toAI?aiSlots:slots;
+      const empty=arr.findIndex(s=>!s); if(empty===-1) return false;
+      arr[empty]={...def,id, deal:true};
+      if(!toAI) log('Карта: '+def.name);
+      haptic('success'); return true;
+    }
+    function clearSlot(item, fromReserve){
+      if(fromReserve || selectedSlot==='reserve'){
+        playerReserve=null;
+      } else {
+        const i=slots.findIndex(s=>s===item); if(i!==-1) slots[i]=null;
+      }
+      selectedSlot=null;
+    }
+
+    function useItem(item,x,y,fromReserve){
+      if(window._cardBusy) return false;
+      if(item.type==='future'){
+        if(!inBounds(x,y)||!board[y][x]||pieceOwner(board[y][x])!=='white'){ log('Выбери свою фигуру'); return false; }
+        pendingFuture={x,y,piece:board[y][x],item, fromReserve:!!fromReserve};
+        document.getElementById('future-picker').classList.add('show');
+        return true;
+      }
+      if(item.type==='spawn'){
+        if(!inBounds(x,y)||board[y][x]){ log('Нужна пустая клетка'); return false; }
+        playCardUseAnim(item, [{x,y}], ()=>{
+          board[y][x]=['n','b','r','p','q'][Math.floor(Math.random()*5)];
+          clearSlot(item, fromReserve); log('Спавн!'); haptic('medium'); showTip('spawn');
+        });
+        return true;
+      }
+      if(item.type==='airstrike'){
+        if(!inBounds(x,y)){ log('Укажи клетку'); return false; }
+        const zone=[];
+        for(let dy=-1;dy<=1;dy++) for(let dx=-1;dx<=1;dx++){
+          const nx=x+dx, ny=y+dy;
+          if(inBounds(nx,ny)) zone.push({x:nx,y:ny});
+        }
+        playCardUseAnim(item, zone, ()=>{
+          showCrosshairOnCell(x,y, HL_MS);
+          scatterArea(x,y);
+          clearSlot(item, fromReserve);
+          log('Авиаудар! Фигуры разлетелись');
+          haptic('medium'); showTip('airstrike');
+          rebuildAngelZones();
+        });
+        return true;
+      }
+      if(item.type==='support'){
+        const boardEl=document.getElementById('board');
+        const mid = boardEl ? [{x:Math.floor(boardW/2), y:Math.floor(boardH/2)}] : [];
+        playCardUseAnim(item, mid, ()=>{
+          const forWhite=Math.random()<0.6; const pawn=forWhite?'p':'P';
+          let placed=0; const cells=[];
+          for(let i=0;i<50&&placed<2;i++){
+            const rx=Math.floor(Math.random()*boardW), ry=Math.floor(Math.random()*boardH);
+            if(!board[ry][rx]){ board[ry][rx]=pawn; cells.push({x:rx,y:ry}); placed++; }
+          }
+          highlightCells(cells, 'effect-hl', HL_MS);
+          clearSlot(item, fromReserve);
+          log(forWhite?`+${placed} твоих пешек`:`Врагу +${placed}`);
+          haptic(forWhite?'success':'error'); showTip('support');
+        });
+        return true;
+      }
+      if(item.type==='shield'){
+        if(!inBounds(x,y)||!board[y][x]||pieceOwner(board[y][x])!=='white'){ log('Выбери свою фигуру'); return false; }
+        playCardUseAnim(item, [{x,y}], ()=>{
+          board[y][x]=withFlags(board[y][x], {shield:true});
+          clearSlot(item, fromReserve); log('Щит наложен'); haptic('success'); showTip('shield');
+        });
+        return true;
+      }
+      if(item.type==='extra'){
+        const mid=[{x:Math.floor(boardW/2), y:Math.floor(boardH/2)}];
+        playCardUseAnim(item, mid, ()=>{
+          extraMove=true;
+          clearSlot(item, fromReserve); log('2-й ход активен — походи ещё раз после хода');
+          haptic('success'); showTip('extra');
+        });
+        return true;
+      }
+      if(item.type==='angel'){
+        if(!inBounds(x,y)||!board[y][x]||pieceOwner(board[y][x])!=='white'){ log('Выбери свою фигуру'); return false; }
+        // preview glow cells
+        const glow=[{x,y}];
+        for(let dy=1; dy<=4; dy++) for(let dx=-1; dx<=1; dx++){
+          const nx=x+dx, ny=y-dy;
+          if(inBounds(nx,ny)) glow.push({x:nx,y:ny});
+        }
+        playCardUseAnim(item, glow, ()=>{
+          board[y][x]=withFlags(board[y][x], {angel:true});
+          clearSlot(item, fromReserve); log('Ангел! Крылья и нимб');
+          haptic('success'); showTip('angel'); rebuildAngelZones();
+        });
+        return true;
+      }
+      return false;
+    }
+
+    document.querySelectorAll('#future-box button[data-t]').forEach(btn=>{
+      btn.onclick=()=>{
+        const pairs=parseInt(btn.dataset.t);
+        if(!pendingFuture) return;
+        const {x,y,piece,item,fromReserve:fr}=pendingFuture;
+        document.getElementById('future-picker').classList.remove('show');
+        const cells=[{x,y}];
+        playCardUseAnim(item, cells, ()=>{
+          board[y][x]=null;
+          futureQueue.push({turnsLeft:pairs*2, x,y,piece,owner:'white'});
+          clearSlot(item, fr); pendingFuture=null;
+          log(`В будущее на ${pairs} пар`);
+          showTip('future');
+          haptic('medium'); afterMove();
+        });
+      };
+    });
+    document.getElementById('fp-cancel').onclick=()=>{
+      pendingFuture=null;
+      document.getElementById('future-picker').classList.remove('show');
+    };
+
+    function onCellClick(x,y){
+      if(gameOver||turn!=='white'||moving||tutActive||window._cardBusy) return;
+      if(selectedSlot!==null){
+        let item=null;
+        if(selectedSlot==='reserve'){
+          if(playerReserve && !playerReserve.autoOnly && playerReserve.readyAt<=turnCount)
+            item=playerReserve.item;
+        } else {
+          item=slots[selectedSlot];
+        }
+        if(item) useItem(item,x,y, selectedSlot==='reserve');
+        return;
+      }
+      if(selected){
+        const m=possibleMoves.find(mm=>mm.x===x&&mm.y===y);
+        if(m){ animateAndMove(selected.x,selected.y,x,y,m.castle); return; }
+      }
+      const p=board[y][x];
+      if(p&&pieceOwner(p)==='white'){
+        selected={x,y}; possibleMoves=getLegalMoves(x,y); haptic('light');
+      } else { selected=null; possibleMoves=[]; }
+      render();
+    }
+
+
+    function findFutureCard(owner){
+      // hand slots
+      const arr = owner==='white' ? slots : aiSlots;
+      for(let i=0;i<arr.length;i++){
+        if(arr[i] && arr[i].type==='future') return {where:'hand', idx:i, arr};
+      }
+      // reserve (future always usable for king save)
+      const res = owner==='white' ? playerReserve : aiReserve;
+      if(res && res.item && res.item.type==='future') return {where:'reserve', owner};
+      return null;
+    }
+    function consumeFutureCard(ref){
+      if(ref.where==='hand'){
+        ref.arr[ref.idx]=null;
+      } else {
+        if(ref.owner==='white') playerReserve=null;
+        else aiReserve=null;
+      }
+    }
+    /** Auto-save king with Future card for 8 pairs. Returns true if saved. */
+    function tryKingFutureSave(owner, kx, ky, kingPiece){
+      const ref = findFutureCard(owner);
+      if(!ref) return false;
+      consumeFutureCard(ref);
+      // remove king from board and send to future 8 pairs
+      // (caller places attacker on square)
+      futureQueue.push({
+        turnsLeft: 8*2,
+        x: kx, y: ky,
+        piece: kingPiece,
+        owner: owner
+      });
+      log(owner==='white'
+        ? 'Король спасён картой «Будущее» на 8 пар ходов!'
+        : 'Король ИИ спасён «Будущим» на 8 пар!');
+      haptic('success');
+      return true;
+    }
+
+    function doMove(fx,fy,tx,ty,castle){
+      const piece=board[fy][fx];
+      let captured=board[ty][tx];
+      if(castle){
+        if(castle==='K'){ board[fy][5]=board[fy][7]; board[fy][7]=null; }
+        else { board[fy][3]=board[fy][0]; board[fy][0]=null; }
+      }
+      if(piece && pieceChar(piece).toUpperCase()==='K'){ if(isWhite(piece)) whiteKingMoved=true; else blackKingMoved=true; }
+      if(piece && pieceChar(piece).toUpperCase()==='R'){
+        if(isWhite(piece)){ if(fx===0) whiteRookA=true; if(fx===7) whiteRookH=true; }
+        else { if(fx===0) blackRookA=true; if(fx===7) blackRookH=true; }
+      }
+
+      // Shield on target: bounce attacker back, drop shield
+      if(captured && (captured.shield || (typeof captured==='object' && captured.shield))){
+        if(pieceOwner(captured)!==pieceOwner(piece)){
+          log('Щит отразил удар!');
+          haptic('medium');
+          // attacker stays/returns to from; shield drops
+          board[ty][tx]=withFlags(captured, {shield:false});
+          board[fy][fx]=piece;
+          selected=null; possibleMoves=[];
+          afterMove();
+          return;
+        }
+      }
+
+      // Angel glow protection for defender's side: 78% reflect like shield
+      if(captured && pieceOwner(captured)!==pieceOwner(piece)){
+        const defOwner=pieceOwner(captured);
+        if(inAngelGlow(tx,ty, defOwner) && Math.random()<0.78){
+          log('Свет Ангела отразил атаку!');
+          haptic('medium');
+          board[fy][fx]=piece; // stay
+          selected=null; possibleMoves=[];
+          afterMove();
+          return;
+        }
+      }
+
+      if(captured&&pieceOwner(captured)===pieceOwner(piece)){
+        const base=pieceChar(piece);
+        const extra=getMovementTypes(captured).map(t=>t.toLowerCase());
+        const existing=(typeof piece==='object'&&piece.extra)?piece.extra:[];
+        const merged={base, extra:[...new Set([...existing,...extra.filter(e=>e!==base.toLowerCase())])], merged:true,
+          shield:!!(piece&&piece.shield)||!!(captured&&captured.shield),
+          angel:!!(piece&&piece.angel)||!!(captured&&captured.angel)};
+        board[ty][tx]=merged;
+        log('Слияние!'); haptic('success'); showTip('merge');
+      } else {
+        // preserve flags on moving piece
+        board[ty][tx]=piece;
+        if(captured&&pieceChar(captured).toUpperCase()==='K'){
+          const defOwner=pieceOwner(captured);
+          if(tryKingFutureSave(defOwner, tx, ty, captured)){
+            board[ty][tx]=piece;
+            board[fy][fx]=null;
+            selected=null; possibleMoves=[];
+            afterMove();
+            return;
+          }
+          board[fy][fx]=null;
+          endGame(pieceOwner(piece), 'Король взят на клетке '+(String.fromCharCode(97+tx))+(boardH-ty)+'.', [{x:tx,y:ty,cls:'result-hot'}]);
+          return;
+        }
+      }
+      board[fy][fx]=null; selected=null; possibleMoves=[];
+      rebuildAngelZones();
+      afterMove();
+    }
+
+
+    function processFuture(){
+      const next=[];
+      futureQueue.forEach(f=>{
+        f.turnsLeft--;
+        if(f.turnsLeft>0){ next.push(f); return; }
+        if(!inBounds(f.x,f.y)){ frozen.push({x:f.x,y:f.y,piece:f.piece,owner:f.owner}); return; }
+        const existing=board[f.y][f.x];
+        if(!existing){ board[f.y][f.x]=f.piece; log('Вернулась из будущего'); }
+        else if(pieceOwner(existing)!==f.owner){
+          board[f.y][f.x]=f.piece; log('Вернулась и съела');
+          if(pieceChar(existing).toUpperCase()==='K'){
+            const defOwner=pieceOwner(existing);
+            if(tryKingFutureSave(defOwner, f.x, f.y, existing)){
+              board[f.y][f.x]=f.piece;
+            } else {
+              endGame(f.owner, 'Король съеден фигурой из будущего.', [{x:f.x,y:f.y,cls:'result-hot'}]);
+            }
+          }
+        } else {
+          const base=pieceChar(f.piece);
+          const extra=getMovementTypes(existing).map(t=>t.toLowerCase());
+          board[f.y][f.x]={base,extra:[...new Set(extra.filter(e=>e!==base.toLowerCase()))],merged:true};
+          log('Слияние при возврате');
+        }
+        haptic('medium');
+      });
+      futureQueue=next;
+    }
+
+    function checkEnd(){
+      const wk=findKing('white'), bk=findKing('black');
+      if(!wk){
+        endGame('black', 'Белый король уничтожен или исчез с доски.', []);
+        return true;
+      }
+      if(!bk){
+        endGame('white', 'Чёрный король уничтожен или исчез с доски.', []);
+        return true;
+      }
+      if(!hasAnyLegalMove(turn)){
+        const loser=turn;
+        const winner=loser==='white'?'black':'white';
+        const k = loser==='white' ? wk : bk;
+        const reason = inCheck(loser)
+          ? (loser==='white' ? 'Мат белым: королю некуда уйти.' : 'Мат чёрным: королю некуда уйти.')
+          : (loser==='white' ? 'Белым нечем ходить (пат/нет ходов).' : 'Чёрным нечем ходить (пат/нет ходов).');
+        const hl = (k && !k.frozen && !k.future) ? [{x:k.x,y:k.y,cls:'result-hot'}] : [];
+        endGame(winner, reason, hl);
+        return true;
+      }
+      return false;
+    }
+    function endGame(winner, reason, highlights){
+      gameOver=true;
+      lastEndWinner=winner;
+      lastEndReason=reason||'';
+      lastEndHighlight=highlights||[];
+      // also highlight remaining kings
+      const wk=findKing('white'), bk=findKing('black');
+      if(wk && !wk.frozen && !wk.future && !lastEndHighlight.some(h=>h.x===wk.x&&h.y===wk.y))
+        lastEndHighlight.push({x:wk.x,y:wk.y,cls: winner==='white'?'result-ok':'result-hot'});
+      if(bk && !bk.frozen && !bk.future && !lastEndHighlight.some(h=>h.x===bk.x&&h.y===bk.y))
+        lastEndHighlight.push({x:bk.x,y:bk.y,cls: winner==='black'?'result-ok':'result-hot'});
+
+      document.getElementById('go-text').textContent=winner==='white'?'Победа!':'Поражение...';
+      const gr=document.getElementById('go-reason');
+      if(gr) gr.textContent=lastEndReason;
+      document.getElementById('game-over').classList.add('show');
+      log(winner==='white'?'Победа!':'Поражение...');
+      haptic(winner==='white'?'success':'error'); render();
+    }
+    function showResultOnBoard(){
+      document.getElementById('game-over').classList.remove('show');
+      const rb=document.getElementById('result-banner'); if(rb) rb.classList.remove('show');
+      lastEndReason=''; lastEndHighlight=[];
+      const ban=document.getElementById('result-banner');
+      if(ban){
+        ban.innerHTML = (lastEndWinner==='white'?'<b>Победа</b>':'<b>Поражение</b>') + '<br>' + (lastEndReason||'');
+        ban.classList.add('show');
+      }
+      // re-render with highlights
+      render();
+      lastEndHighlight.forEach(h=>{
+        const boardEl=document.getElementById('board');
+        if(!boardEl) return;
+        const cell=boardEl.children[h.y*boardW+h.x];
+        if(cell) cell.classList.add(h.cls||'result-hot');
+      });
+    }
+    document.getElementById('btn-show-result').onclick = showResultOnBoard;
+
+
+    function afterMove(){
+      processFuture(); turnCount++;
+      if(turnCount===1){ showTip('first_move'); setTimeout(()=>showTip('camera'), 600); }
+      maybeRandomResize();
+      if(checkEnd()) return;
+
+      // every 3 half-moves give a random card to current player about to play? after move -> give to next
+      if(turnCount>0 && turnCount%3===0){
+        const pool=Object.keys(ITEM_DEFS);
+        const id=pool[Math.floor(Math.random()*pool.length)];
+        // give to the side who just moved (reward) and sometimes AI
+        if(turn==='white') giveItem(id, false);
+        else giveItem(id, true);
+      }
+
+      if(extraMove && turn==='white'){
+        extraMove=false;
+        log('Доп. ход!');
+        turn='white';
+        selected=null; possibleMoves=[];
+        rebuildAngelZones();
+        render();
+        return;
+      }
+
+      turn=turn==='white'?'black':'white';
+      selected=null; possibleMoves=[];
+      rebuildAngelZones();
+      render();
+      if(turn==='black'&&!gameOver){
+        // always schedule AI; clear stuck moving
+        moving=false;
+        setTimeout(()=>{ try{ aiTurn(); }catch(e){ console.error(e); turn='white'; moving=false; render(); } }, 420);
+      }
+    }
+
+
+    document.getElementById('dbg-btn').onclick=()=>{
+      document.getElementById('dbg-panel').classList.toggle('show');
+    };
+    function runDebug(code){
+      const parts=code.trim().split(/\s+/); if(!parts[0]) return;
+      // allow "TUT D1" together
+      if(parts.length>=2 && parts[0].toUpperCase()==='TUT' && parts[1].toUpperCase()==='D1'){
+        try{ localStorage.removeItem('chaos_chess_tut_off'); Object.keys(EVENT_TIPS).forEach(k=>localStorage.removeItem('chaos_tip_'+k)); }catch(e){}
+        showTip('input_line', true);
+        setupStartPosition();
+        log('TUT + D1');
+        return;
+      }
+      const cmd=parts[0].toUpperCase();
+      if(cmd==='A1'){ giveItem(parts[1]||'future'); render(); return; }
+      if(cmd==='RES'){
+        const id=parts[1]||'future';
+        const def=ITEM_DEFS[id]; if(!def){log('нет карты');return;}
+        playerReserve={item:{...def,id}, readyAt: id==='future'?999999:turnCount+6, autoOnly:id==='future'};
+        log('Резерв: '+def.name); render(); return;
+      }
+      if(cmd==='A2'){ giveItem(parts[1]||'future',true); render(); return; }
+      if(cmd==='D1'){ setupStartPosition(); return; }
+      if(cmd==='TUT'){
+        try{ localStorage.removeItem('chaos_chess_tut_off'); Object.keys(EVENT_TIPS).forEach(k=>localStorage.removeItem('chaos_tip_'+k)); }catch(e){}
+        log('Обучение: строка ввода — TUT и D1');
+        showTip('input_line', true);
+        return;
+      }
+      if(cmd==='TUT' && parts[1] && parts[1].toUpperCase()==='D1'){ /* handled below if needed */ }
+      log('Строка ввода: TUT · D1 · A1 · A2 · RES');
+    }
+    document.getElementById('debug-btn').onclick=()=>{
+      runDebug(document.getElementById('debug-input').value);
+      document.getElementById('debug-input').value='';
+      document.getElementById('dbg-panel').classList.remove('show');
+    };
+
+    function setupStartPosition(){
+      document.getElementById('game-over').classList.remove('show');
+      const rb=document.getElementById('result-banner'); if(rb) rb.classList.remove('show');
+      lastEndReason=''; lastEndHighlight=[];
+      document.getElementById('future-picker').classList.remove('show');
+      gameOver=false; boardW=8; boardH=8; turnCount=0; moving=false;
+      board=createEmpty(8,8);
+      const back=['R','N','B','Q','K','B','N','R'];
+      for(let x=0;x<8;x++){ board[0][x]=back[x]; board[1][x]='P'; board[6][x]='p'; board[7][x]=back[x].toLowerCase(); }
+      frozen=[]; futureQueue=[]; turn='white';
+      selected=null; possibleMoves=[]; selectedSlot=null; pendingFuture=null;
+      slots=[null,null,null]; aiSlots=[null,null,null];
+      playerReserve=null; aiReserve=null;
+      whiteKingMoved=blackKingMoved=false;
+      whiteRookA=whiteRookH=blackRookA=blackRookH=false;
+      camScale=1; camX=0; camY=0; applyCam();
+      giveItem('airstrike'); giveItem('shield'); giveItem('spawn');
+      giveItem('support',true); giveItem('airstrike',true);
+      // player starts without free future in hand; can put future in reserve later
+      // AI: 70% future already in reserve (auto king-save)
+      if(Math.random() < 0.70){
+        aiReserve = { item: {...ITEM_DEFS.future, id:'future'}, readyAt: 999999, autoOnly: true };
+      }
+      // player can receive future in normal rotation
+      gameLog=[]; log('Игра началась');
+      render();
+      // tips are event-based
+    }
+
+    setupStartPosition();
+  </script>
+</body>
+</html>
