@@ -20,11 +20,13 @@
       background: var(--bg); color: var(--text);
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
       height: 100vh; height: 100dvh;
+      max-height: 100dvh;
       display: flex; flex-direction: column; overflow: hidden;
+      padding-bottom: env(safe-area-inset-bottom, 0);
     }
 
     #ai-zone {
-      flex-shrink: 0; padding: 4px 8px 2px;
+      flex-shrink: 0; padding: 2px 8px 2px;
       background: linear-gradient(180deg, #1a1520 0%, var(--bg) 100%);
       border-bottom: 1px solid rgba(255,255,255,0.06);
     }
@@ -57,7 +59,7 @@
       font-size: 9px; font-weight: 700; color: var(--accent); opacity: 0.9;
     }
     .card.ai-card { opacity: 0.85; transform: scale(0.92); }
-    .card.player { cursor: pointer; width: 56px; height: 78px; }
+    .card.player { cursor: pointer; width: 56px; height: 78px; flex-shrink: 0; visibility: visible; opacity: 1; }
     .card.player.active {
       transform: translateY(-6px) scale(1.05);
       border-color: var(--accent);
@@ -66,12 +68,14 @@
 
     #status-bar {
       flex-shrink: 0; display: flex; justify-content: space-between; align-items: center;
-      padding: 2px 10px; font-size: 11px; color: var(--hint);
+      padding: 4px 10px; font-size: 11px; color: var(--hint);
+      position: relative; z-index: 20;
     }
     #status-bar b { color: var(--text); }
 
     #viewport {
-      flex: 1; min-height: 0; position: relative; overflow: hidden;
+      flex: 1 1 auto; min-height: 0; max-height: 100%;
+      position: relative; overflow: hidden;
       background: #0d0d0f; touch-action: none;
     }
     #board-stage {
@@ -80,14 +84,26 @@
       transition: transform 0.15s ease-out;
     }
     #board {
-      display: grid; gap: 0;
+      display: grid;
+      gap: 0;
+      column-gap: 0;
+      row-gap: 0;
       border: 2px solid rgba(255,255,255,0.2);
       box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+      background: #6b8f5a;
+      line-height: 0;
+      font-size: 0;
+      -webkit-backface-visibility: hidden;
+      backface-visibility: hidden;
     }
     .cell {
       width: 36px; height: 36px;
       display: flex; align-items: center; justify-content: center;
       font-size: 24px; cursor: pointer; position: relative;
+      margin: 0; padding: 0; border: 0;
+      box-sizing: border-box;
+      -webkit-backface-visibility: hidden;
+      transform: translateZ(0);
     }
     .cell.light { background: #e8e4d4; }
     .cell.dark { background: #6b8f5a; }
@@ -131,10 +147,18 @@
       backdrop-filter: blur(6px);
     }
 
+    #bottom-ui {
+      flex-shrink: 0;
+      flex-grow: 0;
+      z-index: 25;
+      background: #121214;
+      border-top: 1px solid rgba(255,255,255,0.12);
+      padding-bottom: max(4px, env(safe-area-inset-bottom, 0px));
+    }
     #player-zone {
-      flex-shrink: 0; padding: 4px 8px 6px;
-      background: linear-gradient(0deg, #151820 0%, var(--bg) 100%);
-      border-top: 1px solid rgba(255,255,255,0.06);
+      padding: 4px 8px 4px;
+      min-height: 96px;
+      position: relative;
     }
     #player-label {
       font-size: 9px; letter-spacing: 0.06em; text-transform: uppercase;
@@ -142,13 +166,18 @@
     }
     #player-hand {
       display: flex; align-items: center; justify-content: center; gap: 8px;
+      min-height: 82px;
     }
-    #player-cards { display: flex; gap: 6px; justify-content: center; }
+    #player-cards {
+      display: flex; gap: 6px; justify-content: center; align-items: center;
+      min-height: 82px; min-width: 180px;
+    }
 
     #log {
-      flex-shrink: 0; max-height: 22px; overflow: hidden;
-      font-size: 10px; color: var(--hint); padding: 0 10px 4px;
+      flex-shrink: 0; max-height: 18px; overflow: hidden;
+      font-size: 10px; color: var(--hint); padding: 0 10px 6px;
       line-height: 1.2; text-align: center;
+      z-index: 25;
     }
 
     #game-over {
@@ -181,16 +210,43 @@
     #fp-cancel { background: #444 !important; }
 
     #dbg-btn {
-      position: fixed; top: 6px; right: 6px; z-index: 60;
-      width: 28px; height: 28px; border-radius: 50%;
-      background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.12);
-      color: var(--hint); font-size: 12px;
-      display: flex; align-items: center; justify-content: center;
+      position: fixed;
+      top: 6px;
+      right: 8px;
+      z-index: 55;
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      border: 1px solid rgba(255,255,255,0.18);
+      background: rgba(30,30,34,0.88);
+      color: var(--text);
+      font-size: 14px;
+      line-height: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      backdrop-filter: blur(6px);
+      cursor: pointer;
+      padding: 0;
     }
+    #skip-btn {
+      padding: 6px 12px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.22);
+      background: rgba(255,255,255,0.12); color: var(--text);
+      font-size: 12px; font-weight: 600;
+      cursor: pointer;
+      -webkit-tap-highlight-color: rgba(255,255,255,0.15);
+      touch-action: manipulation;
+      position: relative; z-index: 21;
+      min-height: 28px;
+    }
+    #skip-btn:disabled { opacity: 0.35; cursor: default; }
+    #skip-btn:active:not(:disabled) { background: rgba(255,255,255,0.22); }
+
     #dbg-panel {
-      display: none; position: fixed; top: 40px; right: 8px; z-index: 60;
+      display: none; position: fixed; top: 8px; left: 50%; transform: translateX(-50%);
+      z-index: 60;
       background: var(--secondary); border-radius: 10px; padding: 8px;
-      border: 1px solid rgba(255,255,255,0.12); width: 200px;
+      border: 1px solid rgba(255,255,255,0.12); width: min(260px, 90vw);
     }
     #dbg-panel.show { display: block; }
     #dbg-panel input {
@@ -522,7 +578,7 @@
 <body>
   <button id="dbg-btn" title="debug">⚙</button>
   <div id="dbg-panel">
-    <input id="debug-input" placeholder="строка ввода: TUT · D1 · A1 future" />
+    <input id="debug-input" placeholder="" />
     <button id="debug-btn">Run</button>
   </div>
 
@@ -539,6 +595,7 @@
 
   <div id="status-bar">
     <span id="status">Ход: <b>белые</b></span>
+    <button type="button" id="skip-btn">Пропуск хода</button>
     <span id="info">8×8</span>
   </div>
 
@@ -558,6 +615,7 @@
     </div>
   </div>
 
+  <div id="bottom-ui">
   <div id="player-zone">
     <div id="player-label">Твои карты</div>
     <div id="player-hand">
@@ -569,6 +627,7 @@
     </div>
   </div>
   <div id="log"></div>
+  </div>
 
   <div id="game-over">
     <h2 id="go-text">Победа!</h2>
@@ -629,7 +688,7 @@
 
     const EVENT_TIPS = {
       input_line: {
-        message: "Строка ввода (⚙): TUT — обучение заново, D1 — начать партию сначала. Также A1 future / A2 future.",
+        message: "Кнопка «Заново» начинает партию сначала. «Пропуск хода» — если ходить нечем (король в будущем и т.п.).",
         emotion: ""
       },
       first_move: {
@@ -672,6 +731,10 @@
         message: "«Ангел»: крылья и нимб. Свечение 3×4 вперёд — 78% шанс, что атаку отразит щит. Авиаудар работает.",
         emotion: ""
       },
+      reset: {
+        message: "сброс =)  Живые фигуры возвращаются на старт. Лишние исчезают и дают случайные бафы «настоящим» копиям (щит, ангел…).",
+        emotion: ""
+      },
       merge: {
         message: "Слияние! Две союзные фигуры стали одной и ходят по правилам обеих. Метка ✦ — признак слияния.",
         emotion: ""
@@ -701,8 +764,8 @@
 
     const SYM = {K:'♚',Q:'♛',R:'♜',B:'♝',N:'♞',P:'♟',k:'♚',q:'♛',r:'♜',b:'♝',n:'♞',p:'♟'};
     const VAL = {p:10,n:32,b:33,r:50,q:90,k:1000};
-    const CARD_ICON = {future:'⏳',spawn:'✨',airstrike:'✈',support:'🛡',shield:'🔵',extra:'2️⃣',angel:'😇'};
-    const CARD_CORNER = {future:'F',spawn:'S',airstrike:'A',support:'P',shield:'H',extra:'2',angel:'G'};
+    const CARD_ICON = {future:'⏳',spawn:'✨',airstrike:'✈',support:'🛡',shield:'🔵',extra:'2️⃣',angel:'😇',reset:'↺'};
+    const CARD_CORNER = {future:'F',spawn:'S',airstrike:'A',support:'P',shield:'H',extra:'2',angel:'G',reset:'Z'};
 
     function pieceChar(p){ if(!p) return null; return typeof p==='string'?p:p.base; }
     function pieceOwner(p){ const c=pieceChar(p); return c===c.toLowerCase()?'white':'black'; }
@@ -739,12 +802,14 @@
       try { localStorage.setItem('chaos_tip_' + id, '1'); } catch(e){}
     }
     function showTip(id, force) {
-      if (!force) return; // tips only when forced (e.g. TUT)
       if (tutActive) return;
+      // card/event tips show once; force always shows
+      if (!force && tipSeen(id)) return;
       const tip = EVENT_TIPS[id];
       if (!tip) return;
       currentTipId = id;
       tutActive = true;
+      markTipSeen(id);
       const el = document.getElementById('tutorial');
       el.classList.remove('hiding');
       el.classList.add('show');
@@ -1012,8 +1077,16 @@
       }
       if(!moves.length){
         const k=findKing('black');
-        if(k&&!k.frozen&&!k.future) endGame('white', 'Чёрным нечем ходить.', []);
-        else { log('Чёрным нечем ходить'); turn='white'; render(); }
+        window._cardBusy=false; moving=false;
+        if(k && (k.frozen || k.future)){
+          passTurn('ИИ: король вне поля — пропуск');
+          return;
+        }
+        if(k && !hasAnyLegalMove('black')){
+          endGame('white', 'Чёрным нечем ходить.', []);
+          return;
+        }
+        passTurn('ИИ не может ходить — пропуск');
         return;
       }
       let bestScore=-Infinity, best=[];
@@ -1160,7 +1233,7 @@
 
     function aiPlayCard(decision, done){
       const {item, idx, cells, type} = decision;
-      // Use same flight animation from AI slot
+      if(item && item.type) showTip(item.type);
       playCardUseAnim(item, cells||[], ()=>{
         if(type==='airstrike'){
           showCrosshairOnCell(decision.cx, decision.cy, HL_MS);
@@ -1323,7 +1396,9 @@ function applyCam(){
             <div class="icon">${CARD_ICON[item.type]||'?'}</div>
             <div class="cname">${item.name}</div>`;
           div.onclick=()=>{
-            if(gameOver||turn!=='white'||tutActive) return;
+            if(gameOver||tutActive||window._cardBusy) return;
+            // tip BEFORE using
+            if(item && item.type) showTip(item.type);
             selectedSlot=selectedSlot===i?null:i;
             selected=null; possibleMoves=[];
             haptic('light'); render();
@@ -1354,9 +1429,9 @@ function applyCam(){
       }
     }
     function onPlayerReserveClick(){
-      if(gameOver||turn!=='white'||tutActive) return;
-      // If a hand card selected -> move to reserve (if empty)
-      if(selectedSlot!==null && selectedSlot!=='reserve' && typeof selectedSlot==='number'){
+      if(gameOver||tutActive||window._cardBusy) return;
+      // Put hand card into reserve only on your turn
+      if(turn==='white' && selectedSlot!==null && selectedSlot!=='reserve' && typeof selectedSlot==='number'){
         const item = slots[selectedSlot];
         if(!item) return;
         if(playerReserve){ log('Резерв занят'); return; }
@@ -1372,7 +1447,6 @@ function applyCam(){
         haptic('medium'); render();
         return;
       }
-      // Select reserve card to use (if unlocked and not autoOnly)
       if(playerReserve){
         if(playerReserve.autoOnly){
           log('«Будущее» из резерва только спасает короля автоматически');
@@ -1382,6 +1456,8 @@ function applyCam(){
           log('Резерв ещё не готов: через '+(playerReserve.readyAt-turnCount)+' ход.');
           return;
         }
+        // ready: can select anytime (even opponent turn)
+        if(playerReserve.item && playerReserve.item.type) showTip(playerReserve.item.type);
         selectedSlot = selectedSlot==='reserve' ? null : 'reserve';
         selected=null; possibleMoves=[];
         haptic('light'); render();
@@ -1420,6 +1496,7 @@ function applyCam(){
       }
       applyPendingHighlights();
       renderCards();
+      updateSkipBtn();
       document.getElementById('status').innerHTML=
         gameOver?'Игра окончена':`Ход: <b>${turn==='white'?'белые':'чёрные'}</b>`;
       document.getElementById('info').textContent=`${boardW}×${boardH} · #${turnCount}`;
@@ -1436,17 +1513,25 @@ function applyCam(){
         const newW=Math.max(4, Math.min(20, 4+Math.floor(Math.random()*17)));
         const newH=Math.max(8, Math.min(20, 8+Math.floor(Math.random()*13)));
         if(newW===boardW && newH===boardH) return;
+        // expand/shrink from center: insert/remove space evenly on both sides
+        const offX = Math.floor((newW - boardW) / 2);
+        const offY = Math.floor((newH - boardH) / 2);
         const nb=createEmpty(newW,newH);
         for(let y=0;y<boardH;y++) for(let x=0;x<boardW;x++){
           if(!board[y][x]) continue;
-          if(x<newW&&y<newH) nb[y][x]=board[y][x];
-          else frozen.push({x,y,piece:board[y][x],owner:pieceOwner(board[y][x])});
+          const nx=x+offX, ny=y+offY;
+          if(nx>=0&&ny>=0&&nx<newW&&ny<newH) nb[ny][nx]=board[y][x];
+          else frozen.push({x:nx,y:ny,piece:board[y][x],owner:pieceOwner(board[y][x])});
         }
         const still=[];
         frozen.forEach(f=>{
-          if(f.x<newW&&f.y<newH){ if(!nb[f.y][f.x]) nb[f.y][f.x]=f.piece; else still.push(f); }
-          else still.push(f);
+          // shift frozen coords by same offset relative to old system — already absolute
+          if(f.x>=0&&f.y>=0&&f.x<newW&&f.y<newH){
+            if(!nb[f.y][f.x]) nb[f.y][f.x]=f.piece; else still.push(f);
+          } else still.push(f);
         });
+        // also shift future queue positions
+        futureQueue.forEach(f=>{ f.x+=offX; f.y+=offY; });
         frozen=still; boardW=newW; boardH=newH; board=nb;
         log(`Поле → ${boardW}×${boardH}`);
         showTip('board_resize');
@@ -1459,11 +1544,64 @@ function applyCam(){
     function ensureObj(p){
       if(!p) return null;
       if(typeof p==='string') return {base:p, extra:[], merged:false, shield:false, angel:false};
-      return p;
+      // clone so callers can safely mutate result
+      return {
+        base: p.base,
+        extra: Array.isArray(p.extra) ? p.extra.slice() : [],
+        merged: !!p.merged,
+        shield: !!p.shield,
+        angel: !!p.angel
+      };
     }
     function withFlags(p, flags){
       const o = ensureObj(p);
-      return Object.assign({}, o, flags);
+      if(!o) return null;
+      // stack flags: true wins if either side has it (unless explicitly set false)
+      const out = Object.assign({}, o);
+      if(flags){
+        Object.keys(flags).forEach(k=>{
+          if(k==='shield' || k==='angel'){
+            if(flags[k]===false) out[k]=false;
+            else if(flags[k]) out[k]=true;
+          } else if(flags[k]!==undefined){
+            out[k]=flags[k];
+          }
+        });
+      }
+      return out;
+    }
+    /** Merge two friendly pieces: movement types + buffs all stack. */
+    function mergePieces(a, b){
+      const base = pieceChar(a);
+      const types = [...getMovementTypes(a), ...getMovementTypes(b)].map(t=>t.toLowerCase());
+      const extra = [...new Set(types.filter(t => t !== base.toLowerCase()))];
+      return {
+        base,
+        extra,
+        merged: true,
+        shield: !!(a && a.shield) || !!(b && b.shield),
+        angel: !!(a && a.angel) || !!(b && b.angel)
+      };
+    }
+    /** Promote pawn at last rank; keep extras and buffs. */
+    function maybePromote(piece, x, y){
+      if(!piece) return piece;
+      if(pieceChar(piece).toUpperCase()!=='P') return piece;
+      const color = pieceOwner(piece);
+      const last = color==='white' ? 0 : boardH-1;
+      if(y!==last) return piece;
+      const q = color==='white' ? 'q' : 'Q';
+      const o = ensureObj(piece);
+      const extra = (o.extra||[]).filter(e=>e!=='q' && e!=='p');
+      log('Пешка превратилась в ферзя!');
+      haptic('success');
+      return {
+        base: q,
+        extra,
+        merged: !!(o.merged || extra.length),
+        shield: !!o.shield,
+        angel: !!o.angel
+      };
     }
     function rebuildAngelZones(){
       angelZones = [];
@@ -1665,8 +1803,131 @@ function applyCam(){
       support:{name:'Поддержка',type:'support'},
       shield:{name:'Щит',type:'shield'},
       extra:{name:'2-й ход',type:'extra'},
-      angel:{name:'Ангел',type:'angel'}
+      angel:{name:'Ангел',type:'angel'},
+      reset:{name:'Сброс',type:'reset', rare:true}
     };
+    // weighted card drops (reset is rare)
+    const CARD_WEIGHTS = {
+      future:12, spawn:14, airstrike:12, support:14, shield:12, extra:10, angel:10, reset:3
+    };
+    function pickRandomCardId(){
+      const entries=Object.entries(CARD_WEIGHTS);
+      let total=entries.reduce((s,[,w])=>s+w,0);
+      let r=Math.random()*total;
+      for(const [id,w] of entries){ r-=w; if(r<=0) return id; }
+      return 'spawn';
+    }
+    function pickWeightedBuff(){
+      // more common -> shield; rarer -> angel; rarest -> both
+      const r=Math.random();
+      if(r<0.55) return {shield:true};
+      if(r<0.85) return {angel:true};
+      return {shield:true, angel:true};
+    }
+    function softResetBoard(){
+      // collect all living pieces (board + frozen + future)
+      const pool={white:{K:[],Q:[],R:[],B:[],N:[],P:[]}, black:{K:[],Q:[],R:[],B:[],N:[],P:[]}};
+      function addP(p){
+        if(!p) return;
+        const o=pieceOwner(p);
+        const t=pieceChar(p).toUpperCase();
+        if(!pool[o][t]) pool[o][t]=[];
+        pool[o][t].push(p);
+      }
+      for(let y=0;y<boardH;y++) for(let x=0;x<boardW;x++) addP(board[y][x]);
+      frozen.forEach(f=>addP(f.piece));
+      futureQueue.forEach(f=>addP(f.piece));
+      frozen=[]; futureQueue=[];
+
+      const nb=createEmpty(boardW,boardH);
+      const file0 = Math.max(0, Math.floor((boardW-8)/2));
+      const files = [];
+      for(let i=0;i<8;i++) if(file0+i<boardW) files.push(file0+i);
+      const backB=0, pawnB=1, pawnW=boardH-2, backW=boardH-1;
+      // standard order on back rank
+      const backOrder=['R','N','B','Q','K','B','N','R'];
+
+      function placeSide(color, isWhite){
+        const placed=[]; // pieces we put down
+        const extras=[];
+        const take=(t)=>{
+          const arr=pool[color][t]||[];
+          if(!arr.length) return null;
+          return arr.shift();
+        };
+        // Keep merge extras + buffs from the actual piece taken from the pool
+        const toHomePiece=(p, needType)=>{
+          const homeBase = isWhite ? needType.toLowerCase() : needType;
+          const src = ensureObj(p) || {base:homeBase, extra:[], merged:false, shield:false, angel:false};
+          const extra = (src.extra||[])
+            .map(e=>String(e).toLowerCase())
+            .filter(e=>e && e!==homeBase.toLowerCase());
+          // if original base type differed (e.g. merged queen placed on rook home), keep that movement too
+          const origBase = String(pieceChar(p)||'').toLowerCase();
+          if(origBase && origBase!==homeBase.toLowerCase() && !extra.includes(origBase)){
+            extra.push(origBase);
+          }
+          return {
+            base: homeBase,
+            extra: [...new Set(extra)],
+            merged: !!(src.merged || extra.length),
+            shield: !!src.shield,
+            angel: !!src.angel
+          };
+        };
+        // place back rank
+        if(isWhite ? backW>=0 && backW<boardH : backB>=0 && backB<boardH){
+          const ry = isWhite ? backW : backB;
+          for(let i=0;i<files.length && i<8;i++){
+            const need=backOrder[i];
+            let p=take(need);
+            if(!p) continue;
+            const obj = toHomePiece(p, need);
+            nb[ry][files[i]]=obj;
+            placed.push({x:files[i],y:ry,p:obj,t:need});
+          }
+        }
+        // pawns
+        const py = isWhite ? pawnW : pawnB;
+        if(py>=0 && py<boardH){
+          for(let i=0;i<files.length && i<8;i++){
+            let p=take('P');
+            if(!p) continue;
+            const obj = toHomePiece(p, 'P');
+            nb[py][files[i]]=obj;
+            placed.push({x:files[i],y:py,p:obj,t:'P'});
+          }
+        }
+        // remaining in pool = extras → random buffs stacked onto placed pieces
+        for(const t of Object.keys(pool[color])){
+          while(pool[color][t].length){
+            extras.push({t, p:pool[color][t].shift()});
+          }
+        }
+        extras.forEach(ex=>{
+          if(!placed.length) return;
+          const target=placed[Math.floor(Math.random()*placed.length)];
+          const buff=pickWeightedBuff();
+          // also transfer buffs from the sacrificed extra piece itself
+          const src = ensureObj(ex.p);
+          const cur=nb[target.y][target.x];
+          nb[target.y][target.x]=withFlags(cur, {
+            shield: !!(cur.shield||buff.shield||(src&&src.shield)),
+            angel: !!(cur.angel||buff.angel||(src&&src.angel))
+          });
+        });
+        return extras.length;
+      }
+      const exW=placeSide('white', true);
+      const exB=placeSide('black', false);
+      board=nb;
+      // reset castling rights lightly
+      whiteKingMoved=false; blackKingMoved=false;
+      whiteRookA=false; whiteRookH=false; blackRookA=false; blackRookH=false;
+      rebuildAngelZones();
+      return {exW, exB};
+    }
+
     function giveItem(id,toAI=false){
       const def=ITEM_DEFS[id]; if(!def) return false;
       const arr=toAI?aiSlots:slots;
@@ -1751,6 +2012,20 @@ function applyCam(){
         });
         return true;
       }
+      if(item.type==='reset'){
+        const mid=[{x:Math.floor(boardW/2), y:Math.floor(boardH/2)}];
+        // all cells flash lightly
+        const all=[];
+        for(let yy=0;yy<boardH;yy++) for(let xx=0;xx<boardW;xx++) all.push({x:xx,y:yy});
+        playCardUseAnim(item, mid, ()=>{
+          const r=softResetBoard();
+          highlightCells(all.slice(0, Math.min(all.length, 32)), 'effect-hl', HL_MS);
+          clearSlot(item, fromReserve);
+          log('Сброс =) лишние → бафы ('+((r.exW||0)+(r.exB||0))+')');
+          haptic('success'); showTip('reset');
+        });
+        return true;
+      }
       if(item.type==='angel'){
         if(!inBounds(x,y)||!board[y][x]||pieceOwner(board[y][x])!=='white'){ log('Выбери свою фигуру'); return false; }
         // preview glow cells
@@ -1782,7 +2057,9 @@ function applyCam(){
           clearSlot(item, fr); pendingFuture=null;
           log(`В будущее на ${pairs} пар`);
           showTip('future');
-          haptic('medium'); afterMove();
+          haptic('medium');
+          if(turn==='white') afterMove();
+          else { render(); }
         });
       };
     });
@@ -1792,18 +2069,21 @@ function applyCam(){
     };
 
     function onCellClick(x,y){
-      if(gameOver||turn!=='white'||moving||tutActive||window._cardBusy) return;
+      if(gameOver||moving||tutActive||window._cardBusy) return;
       if(selectedSlot!==null){
         let item=null;
-        if(selectedSlot==='reserve'){
+        const fromRes = selectedSlot==='reserve';
+        if(fromRes){
           if(playerReserve && !playerReserve.autoOnly && playerReserve.readyAt<=turnCount)
             item=playerReserve.item;
         } else {
+          if(turn!=='white') return; // hand only on your turn
           item=slots[selectedSlot];
         }
-        if(item) useItem(item,x,y, selectedSlot==='reserve');
+        if(item) useItem(item,x,y, fromRes);
         return;
       }
+      if(turn!=='white') return;
       if(selected){
         const m=possibleMoves.find(mm=>mm.x===x&&mm.y===y);
         if(m){ animateAndMove(selected.x,selected.y,x,y,m.castle); return; }
@@ -1816,32 +2096,29 @@ function applyCam(){
     }
 
 
+    /** Auto king-save uses ONLY reserve future (one-shot). Hand futures must be played manually. */
     function findFutureCard(owner){
-      // hand slots
-      const arr = owner==='white' ? slots : aiSlots;
-      for(let i=0;i<arr.length;i++){
-        if(arr[i] && arr[i].type==='future') return {where:'hand', idx:i, arr};
-      }
-      // reserve (future always usable for king save)
       const res = owner==='white' ? playerReserve : aiReserve;
       if(res && res.item && res.item.type==='future') return {where:'reserve', owner};
       return null;
     }
     function consumeFutureCard(ref){
-      if(ref.where==='hand'){
+      if(!ref) return;
+      if(ref.where==='hand' && ref.arr){
         ref.arr[ref.idx]=null;
       } else {
         if(ref.owner==='white') playerReserve=null;
         else aiReserve=null;
       }
+      // hard-clear so king cannot be saved again by the same card
+      if(ref.owner==='black') aiReserve=null;
+      if(ref.owner==='white') playerReserve=null;
     }
-    /** Auto-save king with Future card for 8 pairs. Returns true if saved. */
+    /** Auto-save king with reserve «Будущее» for 8 pairs. Card is always spent. */
     function tryKingFutureSave(owner, kx, ky, kingPiece){
       const ref = findFutureCard(owner);
       if(!ref) return false;
       consumeFutureCard(ref);
-      // remove king from board and send to future 8 pairs
-      // (caller places attacker on square)
       futureQueue.push({
         turnsLeft: 8*2,
         x: kx, y: ky,
@@ -1849,14 +2126,15 @@ function applyCam(){
         owner: owner
       });
       log(owner==='white'
-        ? 'Король спасён картой «Будущее» на 8 пар ходов!'
-        : 'Король ИИ спасён «Будущим» на 8 пар!');
+        ? 'Король спасён резервом «Будущее» на 8 пар — карта потрачена!'
+        : 'Король ИИ спасён «Будущим» на 8 пар — резерв потрачен!');
       haptic('success');
+      renderCards();
       return true;
     }
 
     function doMove(fx,fy,tx,ty,castle){
-      const piece=board[fy][fx];
+      let piece=board[fy][fx];
       let captured=board[ty][tx];
       if(castle){
         if(castle==='K'){ board[fy][5]=board[fy][7]; board[fy][7]=null; }
@@ -1868,12 +2146,11 @@ function applyCam(){
         else { if(fx===0) blackRookA=true; if(fx===7) blackRookH=true; }
       }
 
-      // Shield on target: bounce attacker back, drop shield
+      // Shield on target: bounce attacker back, drop shield (other states stay)
       if(captured && (captured.shield || (typeof captured==='object' && captured.shield))){
         if(pieceOwner(captured)!==pieceOwner(piece)){
           log('Щит отразил удар!');
           haptic('medium');
-          // attacker stays/returns to from; shield drops
           board[ty][tx]=withFlags(captured, {shield:false});
           board[fy][fx]=piece;
           selected=null; possibleMoves=[];
@@ -1896,23 +2173,17 @@ function applyCam(){
       }
 
       if(captured&&pieceOwner(captured)===pieceOwner(piece)){
-        const base=pieceChar(piece);
-        const extra=getMovementTypes(captured).map(t=>t.toLowerCase());
-        const existing=(typeof piece==='object'&&piece.extra)?piece.extra:[];
-        const merged={base, extra:[...new Set([...existing,...extra.filter(e=>e!==base.toLowerCase())])], merged:true,
-          shield:!!(piece&&piece.shield)||!!(captured&&captured.shield),
-          angel:!!(piece&&piece.angel)||!!(captured&&captured.angel)};
-        board[ty][tx]=merged;
+        board[ty][tx]=mergePieces(piece, captured);
         log('Слияние!'); haptic('success'); showTip('merge');
       } else {
-        // preserve flags on moving piece
-        board[ty][tx]=piece;
         if(captured&&pieceChar(captured).toUpperCase()==='K'){
           const defOwner=pieceOwner(captured);
           if(tryKingFutureSave(defOwner, tx, ty, captured)){
+            piece = maybePromote(piece, tx, ty);
             board[ty][tx]=piece;
             board[fy][fx]=null;
             selected=null; possibleMoves=[];
+            rebuildAngelZones();
             afterMove();
             return;
           }
@@ -1920,7 +2191,11 @@ function applyCam(){
           endGame(pieceOwner(piece), 'Король взят на клетке '+(String.fromCharCode(97+tx))+(boardH-ty)+'.', [{x:tx,y:ty,cls:'result-hot'}]);
           return;
         }
+        piece = maybePromote(piece, tx, ty);
+        board[ty][tx]=piece;
       }
+      // promote after friendly merge too (pawn-base merges)
+      if(board[ty][tx]) board[ty][tx]=maybePromote(board[ty][tx], tx, ty);
       board[fy][fx]=null; selected=null; possibleMoves=[];
       rebuildAngelZones();
       afterMove();
@@ -1934,9 +2209,12 @@ function applyCam(){
         if(f.turnsLeft>0){ next.push(f); return; }
         if(!inBounds(f.x,f.y)){ frozen.push({x:f.x,y:f.y,piece:f.piece,owner:f.owner}); return; }
         const existing=board[f.y][f.x];
-        if(!existing){ board[f.y][f.x]=f.piece; log('Вернулась из будущего'); }
-        else if(pieceOwner(existing)!==f.owner){
-          board[f.y][f.x]=f.piece; log('Вернулась и съела');
+        if(!existing){
+          board[f.y][f.x]=maybePromote(f.piece, f.x, f.y);
+          log('Вернулась из будущего');
+        } else if(pieceOwner(existing)!==f.owner){
+          board[f.y][f.x]=f.piece;
+          log('Вернулась и съела');
           if(pieceChar(existing).toUpperCase()==='K'){
             const defOwner=pieceOwner(existing);
             if(tryKingFutureSave(defOwner, f.x, f.y, existing)){
@@ -1945,10 +2223,11 @@ function applyCam(){
               endGame(f.owner, 'Король съеден фигурой из будущего.', [{x:f.x,y:f.y,cls:'result-hot'}]);
             }
           }
+          if(board[f.y][f.x]) board[f.y][f.x]=maybePromote(board[f.y][f.x], f.x, f.y);
         } else {
-          const base=pieceChar(f.piece);
-          const extra=getMovementTypes(existing).map(t=>t.toLowerCase());
-          board[f.y][f.x]={base,extra:[...new Set(extra.filter(e=>e!==base.toLowerCase()))],merged:true};
+          // ally merge: stack movement + buffs
+          board[f.y][f.x]=mergePieces(f.piece, existing);
+          board[f.y][f.x]=maybePromote(board[f.y][f.x], f.x, f.y);
           log('Слияние при возврате');
         }
         haptic('medium');
@@ -1967,9 +2246,14 @@ function applyCam(){
         return true;
       }
       if(!hasAnyLegalMove(turn)){
+        const k = turn==='white' ? wk : bk;
+        // King away (future/frozen) or pieces blocked — do NOT softlock: skip turn
+        if(k && (k.frozen || k.future)){
+          return false; // caller / skip handles pass
+        }
+        // true stalemate/mate with king on board
         const loser=turn;
         const winner=loser==='white'?'black':'white';
-        const k = loser==='white' ? wk : bk;
         const reason = inCheck(loser)
           ? (loser==='white' ? 'Мат белым: королю некуда уйти.' : 'Мат чёрным: королю некуда уйти.')
           : (loser==='white' ? 'Белым нечем ходить (пат/нет ходов).' : 'Чёрным нечем ходить (пат/нет ходов).');
@@ -1979,6 +2263,61 @@ function applyCam(){
       }
       return false;
     }
+
+    function canSkipWhite(){
+      // Always allow skip on your turn (except game over)
+      return !gameOver && turn==='white';
+    }
+    /** @param alreadyAdvanced if true — processFuture/turnCount уже сделаны в afterMove */
+    function passTurn(reason, alreadyAdvanced){
+      if(gameOver) return;
+      window._cardBusy=false; moving=false;
+      log(reason||'Ход пропущен');
+      selected=null; possibleMoves=[]; selectedSlot=null;
+      // cancel pending card UI
+      try { document.getElementById('future-picker').classList.remove('show'); } catch(e){}
+      pendingFuture=null;
+      if(!alreadyAdvanced){
+        processFuture();
+        turnCount++;
+        maybeRandomResize();
+        if(checkEnd()) return;
+        if(turnCount>0 && turnCount%3===0){
+          const id=pickRandomCardId();
+          // карта стороне, которая будет ходить следующей
+          if(turn==='white') giveItem(id, true);
+          else giveItem(id, false);
+        }
+      }
+      turn = turn==='white' ? 'black' : 'white';
+      rebuildAngelZones();
+      window._cardBusy=false; moving=false;
+      render();
+      if(gameOver) return;
+      if(!hasAnyLegalMove(turn)){
+        const k=findKing(turn);
+        if(k && (k.frozen || k.future)){
+          setTimeout(()=>passTurn(turn==='white'?'Белый король вне поля — пропуск':'Король ИИ вне поля — пропуск', false), 500);
+          return;
+        }
+        if(checkEnd()) return;
+      }
+      if(turn==='black' && !gameOver){
+        setTimeout(()=>{ try{ aiTurn(); }catch(e){ turn='white'; moving=false; window._cardBusy=false; render(); } }, 400);
+      } else {
+        updateSkipBtn();
+      }
+    }
+    function updateSkipBtn(){
+      const btn=document.getElementById('skip-btn');
+      if(!btn) return;
+      const can = canSkipWhite();
+      btn.disabled = !can;
+      btn.style.pointerEvents = can ? 'auto' : 'none';
+      btn.style.opacity = can ? '1' : '0.35';
+      btn.textContent = 'Пропуск хода';
+    }
+
     function endGame(winner, reason, highlights){
       gameOver=true;
       lastEndWinner=winner;
@@ -2027,9 +2366,7 @@ function applyCam(){
 
       // every 3 half-moves give a random card to current player about to play? after move -> give to next
       if(turnCount>0 && turnCount%3===0){
-        const pool=Object.keys(ITEM_DEFS);
-        const id=pool[Math.floor(Math.random()*pool.length)];
-        // give to the side who just moved (reward) and sometimes AI
+        const id=pickRandomCardId();
         if(turn==='white') giveItem(id, false);
         else giveItem(id, true);
       }
@@ -2047,18 +2384,58 @@ function applyCam(){
       turn=turn==='white'?'black':'white';
       selected=null; possibleMoves=[];
       rebuildAngelZones();
+      window._cardBusy=false; moving=false;
       render();
-      if(turn==='black'&&!gameOver){
-        // always schedule AI; clear stuck moving
-        moving=false;
-        setTimeout(()=>{ try{ aiTurn(); }catch(e){ console.error(e); turn='white'; moving=false; render(); } }, 420);
+      if(gameOver) return;
+      if(!hasAnyLegalMove(turn)){
+        const k=findKing(turn);
+        if(k && (k.frozen || k.future)){
+          // alreadyAdvanced: processFuture/turnCount уже в afterMove
+          setTimeout(()=>passTurn(turn==='white'?'Белый король вне поля — пропуск':'Король ИИ вне поля — пропуск', true), 500);
+          return;
+        }
+        if(checkEnd()) return;
+      }
+      if(turn==='black'){
+        setTimeout(()=>{ try{ aiTurn(); }catch(e){ console.error(e); turn='white'; moving=false; window._cardBusy=false; render(); } }, 420);
+      } else {
+        updateSkipBtn();
       }
     }
 
 
-    document.getElementById('dbg-btn').onclick=()=>{
+    document.getElementById('dbg-btn').onclick = () => {
       document.getElementById('dbg-panel').classList.toggle('show');
     };
+    (function bindSkipBtn(){
+      const btn=document.getElementById('skip-btn');
+      if(!btn) return;
+      const doSkip=(e)=>{
+        if(e){ e.preventDefault(); e.stopPropagation(); }
+        // force-unlock stuck animation flags so skip always works on your turn
+        window._cardBusy=false;
+        moving=false;
+        if(gameOver){ log('Игра уже окончена'); return; }
+        if(turn!=='white'){ log('Сейчас ход противника'); return; }
+        selected=null; possibleMoves=[]; selectedSlot=null;
+        passTurn('Ход пропущен');
+      };
+      btn.onclick = doSkip;
+      btn.addEventListener('pointerup', (e)=>{
+        // mobile: prefer pointerup so tap isn't swallowed
+        if(e.pointerType==='touch' || e.pointerType==='pen') doSkip(e);
+      });
+    })();
+    // failsafe: unstick UI locks and refresh skip button
+    setInterval(()=>{
+      const fly=document.getElementById('fly-card');
+      const flyHidden = !fly || fly.style.display==='none' || fly.style.display==='';
+      if(window._cardBusy && flyHidden){
+        window._cardBusy=false;
+        moving=false;
+      }
+      updateSkipBtn();
+    }, 800);
     function runDebug(code){
       const parts=code.trim().split(/\s+/); if(!parts[0]) return;
       // allow "TUT D1" together
@@ -2070,23 +2447,22 @@ function applyCam(){
         return;
       }
       const cmd=parts[0].toUpperCase();
-      if(cmd==='A1'){ giveItem(parts[1]||'future'); render(); return; }
-      if(cmd==='RES'){
-        const id=parts[1]||'future';
-        const def=ITEM_DEFS[id]; if(!def){log('нет карты');return;}
-        playerReserve={item:{...def,id}, readyAt: id==='future'?999999:turnCount+6, autoOnly:id==='future'};
-        log('Резерв: '+def.name); render(); return;
-      }
-      if(cmd==='A2'){ giveItem(parts[1]||'future',true); render(); return; }
       if(cmd==='D1'){ setupStartPosition(); return; }
       if(cmd==='TUT'){
         try{ localStorage.removeItem('chaos_chess_tut_off'); Object.keys(EVENT_TIPS).forEach(k=>localStorage.removeItem('chaos_tip_'+k)); }catch(e){}
-        log('Обучение: строка ввода — TUT и D1');
+        log('Обучение');
         showTip('input_line', true);
         return;
       }
-      if(cmd==='TUT' && parts[1] && parts[1].toUpperCase()==='D1'){ /* handled below if needed */ }
-      log('Строка ввода: TUT · D1 · A1 · A2 · RES');
+      // hidden commands (not listed in UI)
+      if(cmd==='A1'){ giveItem(parts[1]||'future'); render(); return; }
+      if(cmd==='A2'){ giveItem(parts[1]||'future',true); render(); return; }
+      if(cmd==='RES'){
+        const id=parts[1]||'future';
+        const def=ITEM_DEFS[id]; if(!def) return;
+        playerReserve={item:{...def,id}, readyAt: id==='future'?999999:turnCount+6, autoOnly:id==='future'};
+        render(); return;
+      }
     }
     document.getElementById('debug-btn').onclick=()=>{
       runDebug(document.getElementById('debug-input').value);
@@ -2119,8 +2495,9 @@ function applyCam(){
       }
       // player can receive future in normal rotation
       gameLog=[]; log('Игра началась');
+      window._cardBusy=false;
       render();
-      // tips are event-based
+      requestAnimationFrame(()=>{ render(); updateSkipBtn(); });
     }
 
     setupStartPosition();
