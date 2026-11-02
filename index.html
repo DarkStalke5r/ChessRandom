@@ -1,0 +1,1147 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Chaos Chess</title>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <style>
+    :root {
+      --bg: var(--tg-theme-bg-color, #121214);
+      --text: var(--tg-theme-text-color, #f2f2f7);
+      --hint: var(--tg-theme-hint-color, #8e8e93);
+      --btn: var(--tg-theme-button-color, #2aabee);
+      --btn-text: var(--tg-theme-button-text-color, #fff);
+      --secondary: var(--tg-theme-secondary-bg-color, #1c1c1e);
+      --accent: #e8b84a;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+    body {
+      background: var(--bg); color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      height: 100vh; height: 100dvh;
+      display: flex; flex-direction: column; overflow: hidden;
+    }
+
+    #ai-zone {
+      flex-shrink: 0; padding: 8px 10px 4px;
+      background: linear-gradient(180deg, #1a1520 0%, var(--bg) 100%);
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+    }
+    #ai-label {
+      font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase;
+      color: var(--hint); text-align: center; margin-bottom: 6px;
+    }
+    #ai-cards { display: flex; gap: 8px; justify-content: center; }
+
+    .card {
+      width: 64px; height: 88px; border-radius: 8px;
+      background: linear-gradient(145deg, #2e2a35 0%, #1e1a24 100%);
+      border: 1.5px solid rgba(255,255,255,0.12);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.06);
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      position: relative; overflow: hidden;
+      transition: transform 0.2s cubic-bezier(0.34,1.2,0.64,1), box-shadow 0.2s;
+    }
+    .card.empty {
+      background: transparent; border: 1.5px dashed rgba(255,255,255,0.12);
+      box-shadow: none; color: var(--hint); font-size: 11px;
+    }
+    .card .icon { font-size: 22px; margin-bottom: 2px; }
+    .card .cname { font-size: 9px; font-weight: 600; text-align: center; line-height: 1.15; padding: 0 3px; }
+    .card .corner {
+      position: absolute; top: 3px; left: 5px;
+      font-size: 9px; font-weight: 700; color: var(--accent); opacity: 0.9;
+    }
+    .card.ai-card { opacity: 0.85; transform: scale(0.92); }
+    .card.player { cursor: pointer; width: 72px; height: 100px; }
+    .card.player.active {
+      transform: translateY(-10px) scale(1.06);
+      border-color: var(--accent);
+      box-shadow: 0 8px 20px rgba(232,184,74,0.25), 0 0 0 2px rgba(232,184,74,0.3);
+    }
+
+    #status-bar {
+      flex-shrink: 0; display: flex; justify-content: space-between; align-items: center;
+      padding: 4px 12px; font-size: 12px; color: var(--hint);
+    }
+    #status-bar b { color: var(--text); }
+
+    #viewport {
+      flex: 1; min-height: 0; position: relative; overflow: hidden;
+      background: #0d0d0f; touch-action: none;
+    }
+    #board-stage {
+      position: absolute; left: 50%; top: 50%;
+      transform-origin: center center; will-change: transform;
+      transition: transform 0.15s ease-out;
+    }
+    #board {
+      display: grid; gap: 0;
+      border: 2px solid rgba(255,255,255,0.2);
+      box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+    }
+    .cell {
+      width: 40px; height: 40px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 28px; cursor: pointer; position: relative;
+    }
+    .cell.light { background: #e8e4d4; }
+    .cell.dark { background: #6b8f5a; }
+    .cell.selected { outline: 3px solid #f0c14b; outline-offset: -3px; z-index: 2; }
+    .cell.possible::after {
+      content: ''; position: absolute; width: 12px; height: 12px;
+      border-radius: 50%; background: rgba(0,0,0,0.28);
+    }
+    .cell.possible.has-enemy::after {
+      width: 34px; height: 34px; border: 3px solid rgba(180,40,40,0.55);
+      background: transparent; border-radius: 50%;
+    }
+    .piece {
+      width: 100%; height: 100%;
+      display: flex; align-items: center; justify-content: center;
+      pointer-events: none; z-index: 3;
+    }
+    .piece.white { color: #f8f8f8; text-shadow: 0 1px 3px #000, 0 0 1px #000; }
+    .piece.black { color: #1a1a1a; text-shadow: 0 0 1px #fff, 0 1px 0 rgba(255,255,255,0.35); font-weight: 700; }
+    .piece.merged::after {
+      content: '✦'; position: absolute; font-size: 11px; top: 0; right: 1px; color: #f0c14b;
+    }
+
+    #fly {
+      position: absolute; pointer-events: none; z-index: 30;
+      font-size: 28px; display: none;
+      transition: transform 0.38s cubic-bezier(0.22, 0.61, 0.36, 1);
+      will-change: transform;
+      filter: drop-shadow(0 4px 8px rgba(0,0,0,0.45));
+    }
+
+    #cam-controls {
+      position: absolute; right: 8px; bottom: 8px;
+      display: flex; flex-direction: column; gap: 6px; z-index: 15;
+    }
+    .cam-btn {
+      width: 36px; height: 36px; border-radius: 50%;
+      background: rgba(30,30,34,0.85); border: 1px solid rgba(255,255,255,0.15);
+      color: var(--text); font-size: 18px; font-weight: 600;
+      display: flex; align-items: center; justify-content: center;
+      backdrop-filter: blur(6px);
+    }
+
+    #player-zone {
+      flex-shrink: 0; padding: 6px 10px 10px;
+      background: linear-gradient(0deg, #151820 0%, var(--bg) 100%);
+      border-top: 1px solid rgba(255,255,255,0.06);
+    }
+    #player-label {
+      font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase;
+      color: var(--hint); text-align: center; margin-bottom: 6px;
+    }
+    #player-cards { display: flex; gap: 10px; justify-content: center; }
+
+    #log {
+      flex-shrink: 0; max-height: 40px; overflow-y: auto;
+      font-size: 11px; color: var(--hint); padding: 0 12px 8px;
+      line-height: 1.3; text-align: center;
+    }
+
+    #game-over {
+      position: fixed; inset: 0; background: rgba(0,0,0,0.78);
+      display: none; align-items: center; justify-content: center;
+      z-index: 50; flex-direction: column; gap: 14px;
+    }
+    #game-over.show { display: flex; }
+    #game-over h2 { font-size: 30px; }
+    #game-over button {
+      padding: 12px 28px; border-radius: 12px; border: none;
+      background: var(--btn); color: var(--btn-text); font-size: 16px; font-weight: 600;
+    }
+
+    #future-picker {
+      position: fixed; inset: 0; background: rgba(0,0,0,0.65);
+      display: none; align-items: center; justify-content: center; z-index: 40;
+    }
+    #future-picker.show { display: flex; }
+    #future-box {
+      background: var(--secondary); padding: 20px; border-radius: 16px;
+      display: flex; flex-direction: column; gap: 12px; align-items: center; min-width: 240px;
+    }
+    #future-box .title { font-size: 14px; margin-bottom: 4px; }
+    #future-box .row { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
+    #future-box button {
+      padding: 10px 16px; border-radius: 10px; border: none;
+      background: var(--btn); color: var(--btn-text); font-size: 15px; font-weight: 600;
+    }
+    #fp-cancel { background: #444 !important; }
+
+    #dbg-btn {
+      position: fixed; top: 6px; right: 6px; z-index: 60;
+      width: 28px; height: 28px; border-radius: 50%;
+      background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.12);
+      color: var(--hint); font-size: 12px;
+      display: flex; align-items: center; justify-content: center;
+    }
+    #dbg-panel {
+      display: none; position: fixed; top: 40px; right: 8px; z-index: 60;
+      background: var(--secondary); border-radius: 10px; padding: 8px;
+      border: 1px solid rgba(255,255,255,0.12); width: 200px;
+    }
+    #dbg-panel.show { display: block; }
+    #dbg-panel input {
+      width: 100%; padding: 6px 8px; border-radius: 6px;
+      border: 1px solid rgba(255,255,255,0.15);
+      background: var(--bg); color: var(--text); font-size: 12px; margin-bottom: 6px;
+    }
+    #dbg-panel button {
+      width: 100%; padding: 6px; border-radius: 6px; border: none;
+      background: var(--btn); color: var(--btn-text); font-size: 12px;
+    }
+
+    /* ========== TUTORIAL ========== */
+    #tutorial {
+      position: fixed; inset: 0; z-index: 100;
+      background: rgba(0,0,0,0.72);
+      display: none; align-items: flex-end; justify-content: center;
+      padding: 0 14px 24px;
+      opacity: 0; transition: opacity 0.35s ease;
+    }
+    #tutorial.show { display: flex; opacity: 1; }
+    #tutorial.hiding { opacity: 0; }
+
+    #tut-row {
+      display: flex; align-items: flex-end; gap: 10px;
+      max-width: 440px; width: 100%;
+      transform: translateY(24px);
+      transition: transform 0.4s cubic-bezier(0.22, 1, 0.36, 1);
+    }
+    #tutorial.show #tut-row { transform: translateY(0); }
+
+    /* character layered – feet fixed, breathe */
+    #tut-char {
+      flex-shrink: 0;
+      width: 110px;
+      height: 150px;
+      position: relative;
+      display: flex;
+      align-items: flex-end;
+      justify-content: center;
+    }
+    #tut-sprite-wrap {
+      width: 110px;
+      height: 150px;
+      position: relative;
+      transform-origin: center bottom;
+      animation: breathe 2.8s ease-in-out infinite;
+    }
+    @keyframes breathe {
+      0%, 100% { transform: scaleY(1) translateY(0); }
+      50% { transform: scaleY(1.035) translateY(-2.5px); }
+    }
+    .teto-layer {
+      position: absolute;
+      left: 0; top: 0;
+      width: 100%; height: 100%;
+      object-fit: contain;
+      object-position: bottom center;
+      pointer-events: none;
+      user-select: none;
+    }
+    /* z-order via DOM order + explicit z-index */
+    #layer-eyes-bottom { z-index: 1; }
+    #layer-eye-left { z-index: 2; transition: opacity 0.08s ease; }
+    #layer-eye-right { z-index: 2; transition: opacity 0.08s ease; }
+    #layer-brows-bottom { z-index: 3; transition: transform 0.25s ease; }
+    #layer-teto { z-index: 4; }
+    #layer-brows { z-index: 5; transition: transform 0.25s ease, opacity 0.08s ease; }
+
+    /* blink: eyes hide */
+    #tut-sprite-wrap.blink #layer-eye-left,
+    #tut-sprite-wrap.blink #layer-eye-right {
+      opacity: 0;
+    }
+    /* brows dip slightly on blink together with browsBottom */
+    #tut-sprite-wrap.blink #layer-brows,
+    #tut-sprite-wrap.blink #layer-brows-bottom {
+      transform: translateY(3px);
+    }
+
+    #tut-fallback {
+      display: none;
+      width: 72px; height: 96px;
+      align-items: flex-end; justify-content: center;
+      font-size: 48px;
+    }
+    #tut-fallback.show { display: flex; }
+
+
+
+    #tut-bubble {
+      flex: 1; background: #f5f0e6; color: #1a1a1a;
+      border-radius: 16px 16px 16px 4px;
+      padding: 14px 16px 12px;
+      box-shadow: 0 8px 28px rgba(0,0,0,0.35);
+      position: relative;
+      min-height: 100px;
+    }
+    #tut-bubble .text {
+      font-size: 14px; line-height: 1.45; margin-bottom: 12px;
+      padding-right: 28px;
+    }
+    #tut-actions {
+      display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap;
+    }
+    #tut-actions button {
+      padding: 8px 14px; border-radius: 8px; border: none;
+      font-size: 13px; font-weight: 600; cursor: pointer;
+    }
+    #tut-next { background: #2aabee; color: #fff; }
+    #tut-skip {
+      background: transparent; color: #666; border: 1px solid #ccc !important;
+    }
+    #tut-disable {
+      background: transparent; color: #999; font-size: 11px !important;
+      padding: 6px 8px !important; font-weight: 500 !important;
+    }
+    #tut-step {
+      position: absolute; top: 8px; right: 12px;
+      font-size: 11px; color: #999;
+    }
+  </style>
+</head>
+<body>
+  <button id="dbg-btn" title="debug">⚙</button>
+  <div id="dbg-panel">
+    <input id="debug-input" placeholder="A1 future / A2 support / D1 / TUT" />
+    <button id="debug-btn">Run</button>
+  </div>
+
+  <div id="ai-zone">
+    <div id="ai-label">Карты противника</div>
+    <div id="ai-cards"></div>
+  </div>
+
+  <div id="status-bar">
+    <span id="status">Ход: <b>белые</b></span>
+    <span id="info">8×8</span>
+  </div>
+
+  <div id="viewport">
+    <div id="board-stage">
+      <div id="board"></div>
+    </div>
+    <div id="fly"></div>
+    <div id="cam-controls">
+      <button class="cam-btn" id="zoom-in">+</button>
+      <button class="cam-btn" id="zoom-out">−</button>
+      <button class="cam-btn" id="zoom-reset" style="font-size:13px">⟲</button>
+    </div>
+  </div>
+
+  <div id="player-zone">
+    <div id="player-label">Твои карты</div>
+    <div id="player-cards"></div>
+  </div>
+  <div id="log"></div>
+
+  <div id="game-over">
+    <h2 id="go-text">Победа!</h2>
+    <button onclick="setupStartPosition()">Заново</button>
+  </div>
+
+  <div id="future-picker">
+    <div id="future-box">
+      <div class="title">На сколько пар ходов?</div>
+      <div class="row">
+        <button data-t="1">1</button>
+        <button data-t="2">2</button>
+        <button data-t="3">3</button>
+        <button data-t="4">4</button>
+        <button data-t="5">5</button>
+      </div>
+      <button id="fp-cancel">Отмена</button>
+    </div>
+  </div>
+
+  <!-- TUTORIAL -->
+  <div id="tutorial">
+    <div id="tut-row">
+      <div id="tut-char">
+        <div id="tut-sprite-wrap">
+          <!-- bottom → top -->
+          <img class="teto-layer" id="layer-eyes-bottom" src="teto-layers/EyesBottom.png" alt="" />
+          <img class="teto-layer" id="layer-eye-left" src="teto-layers/EyeLeft.png" alt="" />
+          <img class="teto-layer" id="layer-eye-right" src="teto-layers/EyeRight.png" alt="" />
+          <img class="teto-layer" id="layer-brows-bottom" src="teto-layers/BrowsBottom.png" alt="" />
+          <img class="teto-layer" id="layer-teto" src="teto-layers/Teto.png" alt="" />
+          <img class="teto-layer" id="layer-brows" src="teto-layers/Brows.png" alt="" />
+        </div>
+        <div id="tut-fallback">🧙</div>
+      </div>
+      <div id="tut-bubble">
+        <div id="tut-step"></div>
+        <div class="text" id="tut-text"></div>
+        <div id="tut-actions">
+          <button id="tut-disable">Больше не показывать</button>
+          <button id="tut-skip">Закрыть</button>
+          <button id="tut-next">Понятно</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    /* ============================================================
+       ПОДСКАЗКИ ПО СОБЫТИЯМ (не стартовое обучение)
+       Каждая подсказка показывается ОДИН раз, когда событие случается.
+       emotion: путь к картинке или "" для fallback
+       ============================================================ */
+
+    const EVENT_TIPS = {
+      first_move: {
+        message: "Нажми на свою фигуру, затем на подсвеченную клетку — так ходят.",
+        emotion: ""
+      },
+      cards: {
+        message: "Внизу твои карты. Выбери карту, потом клетку или фигуру, чтобы применить эффект.",
+        emotion: ""
+      },
+      future: {
+        message: "Карта «Будущее»: фигура исчезает и вернётся через выбранное число пар ходов. Если на клетке кто-то будет — съест или сольётся.",
+        emotion: ""
+      },
+      board_resize: {
+        message: "Поле только что изменило размер! Фигуры за краем заморожены и появятся снова, когда поле до них дорастёт.",
+        emotion: ""
+      },
+      support: {
+        message: "«Поддержка» — случайно даёт 2 пешки тебе или врагу в пустых клетках.",
+        emotion: ""
+      },
+      spawn: {
+        message: "«Спавн» ставит случайную фигуру на выбранную пустую клетку.",
+        emotion: ""
+      },
+      remove: {
+        message: "«Убрать» удаляет выбранную фигуру (короля так убрать нельзя).",
+        emotion: ""
+      },
+      merge: {
+        message: "Слияние! Две союзные фигуры стали одной и ходят по правилам обеих. Метка ✦ — признак слияния.",
+        emotion: ""
+      },
+      camera: {
+        message: "Доску можно двигать пальцем и масштабировать кнопками + / − справа.",
+        emotion: ""
+      }
+    };
+
+    const tg = window.Telegram?.WebApp;
+    if (tg) {
+      tg.ready(); tg.expand();
+      try { tg.setHeaderColor('secondary_bg_color'); tg.setBackgroundColor('bg_color'); } catch(e){}
+    }
+    const userId = tg?.initDataUnsafe?.user?.id || null;
+
+    function haptic(type='light') {
+      try {
+        if (tg?.HapticFeedback) {
+          if (type==='success') tg.HapticFeedback.notificationOccurred('success');
+          else if (type==='error') tg.HapticFeedback.notificationOccurred('error');
+          else tg.HapticFeedback.impactOccurred(type);
+        }
+      } catch(e){}
+    }
+
+    const SYM = {K:'♚',Q:'♛',R:'♜',B:'♝',N:'♞',P:'♟',k:'♚',q:'♛',r:'♜',b:'♝',n:'♞',p:'♟'};
+    const VAL = {p:10,n:32,b:33,r:50,q:90,k:1000};
+    const CARD_ICON = {future:'⏳',spawn:'✨',remove:'💨',support:'🛡'};
+    const CARD_CORNER = {future:'F',spawn:'S',remove:'R',support:'P'};
+
+    function pieceChar(p){ if(!p) return null; return typeof p==='string'?p:p.base; }
+    function pieceOwner(p){ const c=pieceChar(p); return c===c.toLowerCase()?'white':'black'; }
+    function isWhite(p){ return pieceOwner(p)==='white'; }
+    function isMerged(p){ return p && typeof p==='object' && p.merged; }
+
+    let boardW=8, boardH=8, board=[], frozen=[], turn='white';
+    let selected=null, possibleMoves=[], slots=[null,null,null], aiSlots=[null,null,null];
+    let selectedSlot=null, futureQueue=[], gameLog=[], gameOver=false;
+    let pendingFuture=null, turnCount=0;
+    let whiteKingMoved=false, blackKingMoved=false;
+    let whiteRookA=false, whiteRookH=false, blackRookA=false, blackRookH=false;
+    let camScale=1, camX=0, camY=0, dragging=false, lastTouch=null;
+    let moving = false;
+
+    // ===== EVENT TIPS =====
+    let tutActive = false;
+    let currentTipId = null;
+
+    function tipsEnabled() {
+      try { return localStorage.getItem('chaos_chess_tut_off') !== '1'; } catch(e){ return true; }
+    }
+    function tipSeen(id) {
+      try { return localStorage.getItem('chaos_tip_' + id) === '1'; } catch(e){ return false; }
+    }
+    function markTipSeen(id) {
+      try { localStorage.setItem('chaos_tip_' + id, '1'); } catch(e){}
+    }
+    function showTip(id) {
+      if (!tipsEnabled() || tipSeen(id) || tutActive) return;
+      const tip = EVENT_TIPS[id];
+      if (!tip) return;
+      currentTipId = id;
+      tutActive = true;
+      markTipSeen(id);
+      const el = document.getElementById('tutorial');
+      el.classList.remove('hiding');
+      el.classList.add('show');
+      document.getElementById('tut-text').textContent = tip.message;
+      document.getElementById('tut-step').textContent = '';
+      document.getElementById('tut-next').textContent = 'Понятно';
+      setEmotion(tip.emotion || '');
+      startBlinkLoop();
+      haptic('light');
+    }
+    function setEmotion(src) {
+      // Layered Teto is always shown. Optional src can be used later for alt outfits.
+      // Keep fallback hidden while layers load.
+      const fb = document.getElementById('tut-fallback');
+      const wrap = document.getElementById('tut-sprite-wrap');
+      if (fb) fb.classList.remove('show');
+      if (wrap) wrap.style.display = 'block';
+      // if custom full-body emotion provided, could swap Teto layer:
+      if (src) {
+        const teto = document.getElementById('layer-teto');
+        // only replace body if a special emotion path is given; eyes/brows stay
+        // teto.src = src;
+      }
+    }
+
+    function startBlinkLoop() {
+      const wrap = document.getElementById('tut-sprite-wrap');
+      if (!wrap || wrap._blinkStarted) return;
+      wrap._blinkStarted = true;
+      function blink() {
+        if (!document.getElementById('tutorial').classList.contains('show')) {
+          setTimeout(blink, 2000);
+          return;
+        }
+        wrap.classList.add('blink');
+        setTimeout(() => wrap.classList.remove('blink'), 140);
+        // next blink random 2.5–5.5s
+        setTimeout(blink, 2500 + Math.random() * 3000);
+      }
+      setTimeout(blink, 1800);
+    }
+
+
+    function closeTip() {
+      tutActive = false;
+      currentTipId = null;
+      const el = document.getElementById('tutorial');
+      el.classList.add('hiding');
+      setTimeout(() => el.classList.remove('show', 'hiding'), 350);
+    }
+    function disableAllTips() {
+      try { localStorage.setItem('chaos_chess_tut_off', '1'); } catch(e){}
+      closeTip();
+      log('Подсказки отключены');
+    }
+    document.getElementById('tut-next').onclick = closeTip;
+    document.getElementById('tut-skip').onclick = closeTip;
+    document.getElementById('tut-disable').onclick = disableAllTips;
+
+    function createEmpty(w,h){ const b=[]; for(let y=0;y<h;y++) b[y]=Array(w).fill(null); return b; }
+    function inBounds(x,y){ return x>=0&&y>=0&&x<boardW&&y<boardH; }
+
+    function findKing(color){
+      for(let y=0;y<boardH;y++) for(let x=0;x<boardW;x++){
+        const p=board[y][x]; if(!p) continue;
+        if(pieceChar(p).toUpperCase()==='K' && pieceOwner(p)===color) return {x,y};
+      }
+      for(const f of frozen) if(pieceChar(f.piece).toUpperCase()==='K' && f.owner===color) return {x:f.x,y:f.y,frozen:true};
+      for(const f of futureQueue) if(pieceChar(f.piece).toUpperCase()==='K' && f.owner===color) return {x:f.x,y:f.y,future:true};
+      return null;
+    }
+    function getMovementTypes(p){
+      if(!p) return [];
+      if(typeof p==='string') return [p.toUpperCase()];
+      const types=[p.base.toUpperCase()];
+      if(p.extra) p.extra.forEach(e=>types.push(e.toUpperCase()));
+      return [...new Set(types)];
+    }
+
+    function getRawMoves(x,y){
+      const p=board[y][x]; if(!p) return [];
+      const color=pieceOwner(p); const types=getMovementTypes(p);
+      const moves=[]; const dir=color==='white'?-1:1;
+      const startRank=color==='white'?boardH-2:1;
+      const add=(nx,ny)=>{
+        if(!inBounds(nx,ny)) return false;
+        const t=board[ny][nx];
+        if(!t){ moves.push({x:nx,y:ny}); return true; }
+        if(pieceOwner(t)!==color) moves.push({x:nx,y:ny});
+        return false;
+      };
+      types.forEach(type=>{
+        if(type==='P'){
+          if(inBounds(x,y+dir)&&!board[y+dir][x]){
+            moves.push({x,y:y+dir});
+            if(y===startRank&&inBounds(x,y+dir*2)&&!board[y+dir*2][x]) moves.push({x,y:y+dir*2});
+          }
+          [[x-1,y+dir],[x+1,y+dir]].forEach(([nx,ny])=>{
+            if(inBounds(nx,ny)&&board[ny][nx]&&pieceOwner(board[ny][nx])!==color) moves.push({x:nx,y:ny});
+          });
+        } else if(type==='N'){
+          [[1,2],[2,1],[-1,2],[-2,1],[1,-2],[2,-1],[-1,-2],[-2,-1]].forEach(([dx,dy])=>add(x+dx,y+dy));
+        } else if(type==='K'){
+          for(let dx=-1;dx<=1;dx++) for(let dy=-1;dy<=1;dy++) if(dx||dy) add(x+dx,y+dy);
+          if(color==='white'&&!whiteKingMoved&&y===boardH-1&&x===4){
+            if(!whiteRookH&&board[y][7]&&pieceChar(board[y][7]).toUpperCase()==='R'&&isWhite(board[y][7])&&!board[y][5]&&!board[y][6])
+              moves.push({x:6,y,castle:'K'});
+            if(!whiteRookA&&board[y][0]&&pieceChar(board[y][0]).toUpperCase()==='R'&&isWhite(board[y][0])&&!board[y][1]&&!board[y][2]&&!board[y][3])
+              moves.push({x:2,y,castle:'Q'});
+          }
+          if(color==='black'&&!blackKingMoved&&y===0&&x===4){
+            if(!blackRookH&&board[y][7]&&pieceChar(board[y][7]).toUpperCase()==='R'&&!isWhite(board[y][7])&&!board[y][5]&&!board[y][6])
+              moves.push({x:6,y,castle:'K'});
+            if(!blackRookA&&board[y][0]&&pieceChar(board[y][0]).toUpperCase()==='R'&&!isWhite(board[y][0])&&!board[y][1]&&!board[y][2]&&!board[y][3])
+              moves.push({x:2,y,castle:'Q'});
+          }
+        } else {
+          const rays=[];
+          if(type==='R'||type==='Q') rays.push([1,0],[-1,0],[0,1],[0,-1]);
+          if(type==='B'||type==='Q') rays.push([1,1],[1,-1],[-1,1],[-1,-1]);
+          rays.forEach(([dx,dy])=>{
+            for(let i=1;i<22;i++){
+              const nx=x+dx*i, ny=y+dy*i;
+              if(!inBounds(nx,ny)) break;
+              const t=board[ny][nx];
+              if(!t){ moves.push({x:nx,y:ny}); continue; }
+              if(pieceOwner(t)!==color) moves.push({x:nx,y:ny});
+              break;
+            }
+          });
+        }
+      });
+      const seen=new Set();
+      return moves.filter(m=>{ const k=m.x+','+m.y+(m.castle||''); if(seen.has(k)) return false; seen.add(k); return true; });
+    }
+
+    function isSquareAttacked(x,y,byColor){
+      for(let yy=0;yy<boardH;yy++) for(let xx=0;xx<boardW;xx++){
+        const p=board[yy][xx];
+        if(!p||pieceOwner(p)!==byColor) continue;
+        if(getRawMoves(xx,yy).some(m=>m.x===x&&m.y===y&&!m.castle)) return true;
+      }
+      return false;
+    }
+    function inCheck(color){
+      const k=findKing(color);
+      if(!k||k.frozen||k.future) return false;
+      return isSquareAttacked(k.x,k.y,color==='white'?'black':'white');
+    }
+    function getLegalMoves(x,y){
+      const p=board[y][x]; if(!p) return [];
+      const color=pieceOwner(p);
+      return getRawMoves(x,y).filter(m=>{
+        const cap=board[m.y][m.x]; const from=board[y][x];
+        board[m.y][m.x]=from; board[y][x]=null;
+        let rf=null,rt=null,rp=null;
+        if(m.castle){ rf=m.castle==='K'?7:0; rt=m.castle==='K'?5:3; rp=board[y][rf]; board[y][rt]=rp; board[y][rf]=null; }
+        const ok=!inCheck(color);
+        board[y][x]=from; board[m.y][m.x]=cap;
+        if(m.castle){ board[y][rf]=rp; board[y][rt]=null; }
+        return ok;
+      });
+    }
+    function hasAnyLegalMove(color){
+      for(let y=0;y<boardH;y++) for(let x=0;x<boardW;x++){
+        const p=board[y][x];
+        if(p&&pieceOwner(p)===color&&getLegalMoves(x,y).length) return true;
+      }
+      return false;
+    }
+
+    function evaluate(){
+      let score=0;
+      for(let y=0;y<boardH;y++) for(let x=0;x<boardW;x++){
+        const p=board[y][x]; if(!p) continue;
+        const v=VAL[pieceChar(p).toLowerCase()]||0;
+        const center=3.5-(Math.abs(x-boardW/2)+Math.abs(y-boardH/2))*0.35;
+        score += (pieceOwner(p)==='black'?1:-1)*(v+center);
+      }
+      if(inCheck('white')) score+=20;
+      if(inCheck('black')) score-=20;
+      return score;
+    }
+    function minimax(depth,maxing,alpha,beta){
+      if(depth===0) return evaluate();
+      const color=maxing?'black':'white';
+      let moves=[];
+      for(let y=0;y<boardH;y++) for(let x=0;x<boardW;x++){
+        const p=board[y][x];
+        if(p&&pieceOwner(p)===color) getLegalMoves(x,y).forEach(m=>moves.push({fx:x,fy:y,tx:m.x,ty:m.y,castle:m.castle}));
+      }
+      if(!moves.length) return maxing?-8000:8000;
+      moves.sort((a,b)=>{
+        const ca=board[a.ty][a.tx]?VAL[pieceChar(board[a.ty][a.tx]).toLowerCase()]||0:0;
+        const cb=board[b.ty][b.tx]?VAL[pieceChar(board[b.ty][b.tx]).toLowerCase()]||0:0;
+        return cb-ca;
+      });
+      if(maxing){
+        let best=-Infinity;
+        for(const m of moves){
+          const piece=board[m.fy][m.fx],cap=board[m.ty][m.tx];
+          board[m.ty][m.tx]=piece; board[m.fy][m.fx]=null;
+          best=Math.max(best,minimax(depth-1,false,alpha,beta));
+          board[m.fy][m.fx]=piece; board[m.ty][m.tx]=cap;
+          alpha=Math.max(alpha,best); if(beta<=alpha) break;
+        }
+        return best;
+      } else {
+        let best=Infinity;
+        for(const m of moves){
+          const piece=board[m.fy][m.fx],cap=board[m.ty][m.tx];
+          board[m.ty][m.tx]=piece; board[m.fy][m.fx]=null;
+          best=Math.min(best,minimax(depth-1,true,alpha,beta));
+          board[m.fy][m.fx]=piece; board[m.ty][m.tx]=cap;
+          beta=Math.min(beta,best); if(beta<=alpha) break;
+        }
+        return best;
+      }
+    }
+
+    function aiTurn(){
+      if(gameOver||tutActive) return;
+      const usable=aiSlots.map((s,i)=>s?{s,i}:null).filter(Boolean);
+      if(usable.length && Math.random()<0.38){
+        const c=usable[Math.floor(Math.random()*usable.length)];
+        aiUseItem(c.s,c.i);
+      }
+      const moves=[];
+      for(let y=0;y<boardH;y++) for(let x=0;x<boardW;x++){
+        const p=board[y][x];
+        if(p&&pieceOwner(p)==='black') getLegalMoves(x,y).forEach(m=>moves.push({fx:x,fy:y,tx:m.x,ty:m.y,castle:m.castle}));
+      }
+      if(!moves.length){
+        if(findKing('black')&&!findKing('black').frozen&&!findKing('black').future) endGame('white');
+        else { log('Чёрным нечем ходить'); turn='white'; render(); }
+        return;
+      }
+      let bestScore=-Infinity, best=[];
+      const depth=boardW*boardH>120?1:2;
+      for(const m of moves){
+        const piece=board[m.fy][m.fx],cap=board[m.ty][m.tx];
+        board[m.ty][m.tx]=piece; board[m.fy][m.fx]=null;
+        let score=minimax(depth-1,false,-Infinity,Infinity);
+        if(cap&&pieceChar(cap).toUpperCase()==='K') score=50000;
+        board[m.fy][m.fx]=piece; board[m.ty][m.tx]=cap;
+        if(score>bestScore){ bestScore=score; best=[m]; }
+        else if(score===bestScore) best.push(m);
+      }
+      const choice=best[Math.floor(Math.random()*best.length)];
+      animateAndMove(choice.fx,choice.fy,choice.tx,choice.ty,choice.castle,()=>log('ИИ походил'));
+    }
+
+    function aiUseItem(item,idx){
+      if(item.type==='future'){
+        const cands=[];
+        for(let y=0;y<boardH;y++) for(let x=0;x<boardW;x++){
+          const p=board[y][x]; if(p&&pieceOwner(p)==='black') cands.push({x,y,p});
+        }
+        if(!cands.length) return;
+        const c=cands[Math.floor(Math.random()*cands.length)];
+        const pairs=1+Math.floor(Math.random()*5);
+        board[c.y][c.x]=null;
+        futureQueue.push({turnsLeft:pairs*2, x:c.x,y:c.y,piece:c.p,owner:'black'});
+        aiSlots[idx]=null;
+        log(`ИИ: в будущее на ${pairs} пар`);
+        render(); return;
+      }
+      if(item.type==='spawn'){
+        const empties=[];
+        for(let y=0;y<boardH;y++) for(let x=0;x<boardW;x++) if(!board[y][x]) empties.push({x,y});
+        if(!empties.length) return;
+        const c=empties[Math.floor(Math.random()*empties.length)];
+        board[c.y][c.x]=['N','B','R','P'][Math.floor(Math.random()*4)];
+        aiSlots[idx]=null; log('ИИ заспавнил фигуру'); render(); return;
+      }
+      if(item.type==='support'){
+        const forBlack=Math.random()<0.55; const pawn=forBlack?'P':'p';
+        let placed=0;
+        for(let i=0;i<50&&placed<2;i++){
+          const rx=Math.floor(Math.random()*boardW), ry=Math.floor(Math.random()*boardH);
+          if(!board[ry][rx]){ board[ry][rx]=pawn; placed++; }
+        }
+        aiSlots[idx]=null;
+        log(forBlack?`ИИ: +${placed} пешек`:`ИИ дал тебе +${placed}`);
+        render(); return;
+      }
+      if(item.type==='remove'){
+        const targets=[];
+        for(let y=0;y<boardH;y++) for(let x=0;x<boardW;x++){
+          const p=board[y][x];
+          if(p&&pieceOwner(p)==='white'&&pieceChar(p).toUpperCase()!=='K') targets.push({x,y});
+        }
+        if(!targets.length) return;
+        const t=targets[Math.floor(Math.random()*targets.length)];
+        board[t.y][t.x]=null; aiSlots[idx]=null; log('ИИ убрал твою фигуру'); render();
+      }
+    }
+
+    function animateAndMove(fx,fy,tx,ty,castle,cb){
+      if(moving) return;
+      const piece=board[fy][fx];
+      if(!piece){ doMove(fx,fy,tx,ty,castle); if(cb)cb(); return; }
+      const boardEl=document.getElementById('board');
+      const cells=boardEl.children;
+      const fromCell=cells[fy*boardW+fx], toCell=cells[ty*boardW+tx];
+      if(!fromCell||!toCell){ doMove(fx,fy,tx,ty,castle); if(cb)cb(); return; }
+      moving = true;
+      const fr=fromCell.getBoundingClientRect();
+      const tr=toCell.getBoundingClientRect();
+      const wrap=document.getElementById('viewport').getBoundingClientRect();
+      const fly=document.getElementById('fly');
+      fly.textContent=SYM[pieceChar(piece)]||'?';
+      fly.className='piece '+(isWhite(piece)?'white':'black');
+      fly.style.transition = 'none';
+      fly.style.display='block';
+      fly.style.left = (fr.left - wrap.left) + 'px';
+      fly.style.top  = (fr.top  - wrap.top)  + 'px';
+      fly.style.transform = 'translate(0,0) scale(1)';
+      const orig=fromCell.querySelector('.piece');
+      if(orig) orig.style.opacity='0';
+      void fly.offsetWidth;
+      fly.style.transition = 'transform 0.38s cubic-bezier(0.22, 0.61, 0.36, 1)';
+      requestAnimationFrame(()=>{
+        fly.style.transform = `translate(${tr.left-fr.left}px, ${tr.top-fr.top}px) scale(1.05)`;
+      });
+      setTimeout(()=>{
+        fly.style.display='none';
+        fly.style.transition = 'none';
+        moving = false;
+        doMove(fx,fy,tx,ty,castle);
+        if(cb) cb();
+      }, 400);
+    }
+
+    function applyCam(){
+      const stage=document.getElementById('board-stage');
+      stage.style.transform=`translate(calc(-50% + ${camX}px), calc(-50% + ${camY}px)) scale(${camScale})`;
+    }
+    function zoom(delta){
+      camScale=Math.max(0.45, Math.min(2.2, camScale+delta));
+      applyCam(); haptic('light');
+    }
+    document.getElementById('zoom-in').onclick=()=>zoom(0.15);
+    document.getElementById('zoom-out').onclick=()=>zoom(-0.15);
+    document.getElementById('zoom-reset').onclick=()=>{ camScale=1; camX=0; camY=0; applyCam(); };
+
+    const vp=document.getElementById('viewport');
+    vp.addEventListener('pointerdown', e=>{
+      if(e.target.closest('.cam-btn') || tutActive) return;
+      dragging=true; lastTouch={x:e.clientX,y:e.clientY}; vp.setPointerCapture(e.pointerId);
+    });
+    vp.addEventListener('pointermove', e=>{
+      if(!dragging||!lastTouch) return;
+      camX+=(e.clientX-lastTouch.x); camY+=(e.clientY-lastTouch.y);
+      lastTouch={x:e.clientX,y:e.clientY}; applyCam();
+    });
+    vp.addEventListener('pointerup', ()=>{ dragging=false; lastTouch=null; });
+    vp.addEventListener('pointercancel', ()=>{ dragging=false; lastTouch=null; });
+    vp.addEventListener('wheel', e=>{ e.preventDefault(); zoom(e.deltaY>0?-0.08:0.08); }, {passive:false});
+
+    function renderCards(){
+      const aiEl=document.getElementById('ai-cards');
+      aiEl.innerHTML='';
+      for(let i=0;i<3;i++){
+        const item=aiSlots[i];
+        const div=document.createElement('div');
+        if(!item){ div.className='card empty ai-card'; div.textContent='—'; }
+        else {
+          div.className='card ai-card';
+          div.innerHTML=`<div class="corner">${CARD_CORNER[item.type]||'?'}</div>
+            <div class="icon">${CARD_ICON[item.type]||'?'}</div>
+            <div class="cname">${item.name}</div>`;
+        }
+        aiEl.appendChild(div);
+      }
+      const plEl=document.getElementById('player-cards');
+      plEl.innerHTML='';
+      for(let i=0;i<3;i++){
+        const item=slots[i];
+        const div=document.createElement('div');
+        if(!item){ div.className='card empty player'; div.textContent='Пусто'; }
+        else {
+          div.className='card player'+(selectedSlot===i?' active':'');
+          div.innerHTML=`<div class="corner">${CARD_CORNER[item.type]||'?'}</div>
+            <div class="icon">${CARD_ICON[item.type]||'?'}</div>
+            <div class="cname">${item.name}</div>`;
+          div.onclick=()=>{
+            if(gameOver||turn!=='white'||tutActive) return;
+            selectedSlot=selectedSlot===i?null:i;
+            selected=null; possibleMoves=[];
+            haptic('light'); showTip('cards'); render();
+          };
+        }
+        plEl.appendChild(div);
+      }
+    }
+
+    function render(){
+      const boardEl=document.getElementById('board');
+      boardEl.style.gridTemplateColumns=`repeat(${boardW},40px)`;
+      boardEl.innerHTML='';
+      for(let y=0;y<boardH;y++) for(let x=0;x<boardW;x++){
+        const cell=document.createElement('div');
+        cell.className='cell '+((x+y)%2===0?'light':'dark');
+        if(selected&&selected.x===x&&selected.y===y) cell.classList.add('selected');
+        const isPos=possibleMoves.find(m=>m.x===x&&m.y===y);
+        if(isPos){ cell.classList.add('possible'); if(board[y][x]) cell.classList.add('has-enemy'); }
+        const p=board[y][x];
+        if(p){
+          const span=document.createElement('div');
+          span.className='piece '+(isWhite(p)?'white':'black')+(isMerged(p)?' merged':'');
+          span.textContent=SYM[pieceChar(p)]||'?';
+          cell.appendChild(span);
+        }
+        cell.onclick=e=>{ e.stopPropagation(); if(!tutActive) onCellClick(x,y); };
+        boardEl.appendChild(cell);
+      }
+      renderCards();
+      document.getElementById('status').innerHTML=
+        gameOver?'Игра окончена':`Ход: <b>${turn==='white'?'белые':'чёрные'}</b>`;
+      document.getElementById('info').textContent=`${boardW}×${boardH} · #${turnCount}`;
+    }
+
+    function log(msg){
+      gameLog.unshift(msg);
+      if(gameLog.length>6) gameLog.pop();
+      document.getElementById('log').textContent=gameLog[0]||'';
+    }
+
+    function maybeRandomResize(){
+      if(turnCount>0 && turnCount%2===0 && Math.random()<0.20){
+        const newW=Math.max(4, Math.min(20, 4+Math.floor(Math.random()*17)));
+        const newH=Math.max(8, Math.min(20, 8+Math.floor(Math.random()*13)));
+        if(newW===boardW && newH===boardH) return;
+        const nb=createEmpty(newW,newH);
+        for(let y=0;y<boardH;y++) for(let x=0;x<boardW;x++){
+          if(!board[y][x]) continue;
+          if(x<newW&&y<newH) nb[y][x]=board[y][x];
+          else frozen.push({x,y,piece:board[y][x],owner:pieceOwner(board[y][x])});
+        }
+        const still=[];
+        frozen.forEach(f=>{
+          if(f.x<newW&&f.y<newH){ if(!nb[f.y][f.x]) nb[f.y][f.x]=f.piece; else still.push(f); }
+          else still.push(f);
+        });
+        frozen=still; boardW=newW; boardH=newH; board=nb;
+        log(`Поле → ${boardW}×${boardH}`);
+        showTip('board_resize');
+        haptic('medium');
+        camScale=Math.min(camScale, 1.1); applyCam();
+      }
+    }
+
+    const ITEM_DEFS={
+      future:{name:'Будущее',type:'future'},
+      spawn:{name:'Спавн',type:'spawn'},
+      remove:{name:'Убрать',type:'remove'},
+      support:{name:'Поддержка',type:'support'}
+    };
+    function giveItem(id,toAI=false){
+      const def=ITEM_DEFS[id]; if(!def) return false;
+      const arr=toAI?aiSlots:slots;
+      const empty=arr.findIndex(s=>!s); if(empty===-1) return false;
+      arr[empty]={...def,id};
+      if(!toAI) log('Карта: '+def.name);
+      haptic('success'); return true;
+    }
+    function clearSlot(item){
+      const i=slots.findIndex(s=>s===item); if(i!==-1) slots[i]=null;
+      selectedSlot=null;
+    }
+
+    function useItem(item,x,y){
+      if(item.type==='future'){
+        if(!inBounds(x,y)||!board[y][x]||pieceOwner(board[y][x])!=='white'){ log('Выбери свою фигуру'); return false; }
+        pendingFuture={x,y,piece:board[y][x],item};
+        document.getElementById('future-picker').classList.add('show');
+        return true;
+      }
+      if(item.type==='spawn'){
+        if(!inBounds(x,y)||board[y][x]){ log('Нужна пустая клетка'); return false; }
+        board[y][x]=['n','b','r','p','q'][Math.floor(Math.random()*5)];
+        clearSlot(item); log('Спавн!'); haptic('medium'); showTip('spawn'); render(); return true;
+      }
+      if(item.type==='remove'){
+        if(!inBounds(x,y)||!board[y][x]){ log('Выбери фигуру'); return false; }
+        if(pieceChar(board[y][x]).toUpperCase()==='K'){ log('Короля так не убрать'); return false; }
+        board[y][x]=null; clearSlot(item); log('Фигура исчезла'); haptic('medium'); showTip('remove'); render(); return true;
+      }
+      if(item.type==='support'){
+        const forWhite=Math.random()<0.6; const pawn=forWhite?'p':'P';
+        let placed=0;
+        for(let i=0;i<50&&placed<2;i++){
+          const rx=Math.floor(Math.random()*boardW), ry=Math.floor(Math.random()*boardH);
+          if(!board[ry][rx]){ board[ry][rx]=pawn; placed++; }
+        }
+        clearSlot(item);
+        log(forWhite?`+${placed} твоих пешек`:`Врагу +${placed}`);
+        haptic(forWhite?'success':'error'); showTip('support'); render(); return true;
+      }
+      return false;
+    }
+
+    document.querySelectorAll('#future-box button[data-t]').forEach(btn=>{
+      btn.onclick=()=>{
+        const pairs=parseInt(btn.dataset.t);
+        if(!pendingFuture) return;
+        const {x,y,piece,item}=pendingFuture;
+        board[y][x]=null;
+        futureQueue.push({turnsLeft:pairs*2, x,y,piece,owner:'white'});
+        clearSlot(item); pendingFuture=null;
+        document.getElementById('future-picker').classList.remove('show');
+        log(`В будущее на ${pairs} пар`);
+        showTip('future');
+        haptic('medium'); afterMove();
+      };
+    });
+    document.getElementById('fp-cancel').onclick=()=>{
+      pendingFuture=null;
+      document.getElementById('future-picker').classList.remove('show');
+    };
+
+    function onCellClick(x,y){
+      if(gameOver||turn!=='white'||moving||tutActive) return;
+      if(selectedSlot!==null){
+        const item=slots[selectedSlot]; if(item) useItem(item,x,y); return;
+      }
+      if(selected){
+        const m=possibleMoves.find(mm=>mm.x===x&&mm.y===y);
+        if(m){ animateAndMove(selected.x,selected.y,x,y,m.castle); return; }
+      }
+      const p=board[y][x];
+      if(p&&pieceOwner(p)==='white'){
+        selected={x,y}; possibleMoves=getLegalMoves(x,y); haptic('light');
+      } else { selected=null; possibleMoves=[]; }
+      render();
+    }
+
+    function doMove(fx,fy,tx,ty,castle){
+      const piece=board[fy][fx]; const captured=board[ty][tx];
+      if(castle){
+        if(castle==='K'){ board[fy][5]=board[fy][7]; board[fy][7]=null; }
+        else { board[fy][3]=board[fy][0]; board[fy][0]=null; }
+      }
+      if(pieceChar(piece).toUpperCase()==='K'){ if(isWhite(piece)) whiteKingMoved=true; else blackKingMoved=true; }
+      if(pieceChar(piece).toUpperCase()==='R'){
+        if(isWhite(piece)){ if(fx===0) whiteRookA=true; if(fx===7) whiteRookH=true; }
+        else { if(fx===0) blackRookA=true; if(fx===7) blackRookH=true; }
+      }
+      if(captured&&pieceOwner(captured)===pieceOwner(piece)){
+        const base=pieceChar(piece);
+        const extra=getMovementTypes(captured).map(t=>t.toLowerCase());
+        const existing=(typeof piece==='object'&&piece.extra)?piece.extra:[];
+        board[ty][tx]={base, extra:[...new Set([...existing,...extra.filter(e=>e!==base.toLowerCase())])], merged:true};
+        log('Слияние!'); haptic('success'); showTip('merge');
+      } else {
+        board[ty][tx]=piece;
+        if(captured&&pieceChar(captured).toUpperCase()==='K'){ board[fy][fx]=null; endGame(pieceOwner(piece)); return; }
+      }
+      board[fy][fx]=null; selected=null; possibleMoves=[]; afterMove();
+    }
+
+    function processFuture(){
+      const next=[];
+      futureQueue.forEach(f=>{
+        f.turnsLeft--;
+        if(f.turnsLeft>0){ next.push(f); return; }
+        if(!inBounds(f.x,f.y)){ frozen.push({x:f.x,y:f.y,piece:f.piece,owner:f.owner}); return; }
+        const existing=board[f.y][f.x];
+        if(!existing){ board[f.y][f.x]=f.piece; log('Вернулась из будущего'); }
+        else if(pieceOwner(existing)!==f.owner){
+          board[f.y][f.x]=f.piece; log('Вернулась и съела');
+          if(pieceChar(existing).toUpperCase()==='K') endGame(f.owner);
+        } else {
+          const base=pieceChar(f.piece);
+          const extra=getMovementTypes(existing).map(t=>t.toLowerCase());
+          board[f.y][f.x]={base,extra:[...new Set(extra.filter(e=>e!==base.toLowerCase()))],merged:true};
+          log('Слияние при возврате');
+        }
+        haptic('medium');
+      });
+      futureQueue=next;
+    }
+
+    function checkEnd(){
+      if(!findKing('white')){ endGame('black'); return true; }
+      if(!findKing('black')){ endGame('white'); return true; }
+      if(!hasAnyLegalMove(turn)){ endGame(turn==='white'?'black':'white'); return true; }
+      return false;
+    }
+    function endGame(winner){
+      gameOver=true;
+      document.getElementById('go-text').textContent=winner==='white'?'Победа!':'Поражение...';
+      document.getElementById('game-over').classList.add('show');
+      log(winner==='white'?'Победа!':'Поражение...');
+      haptic(winner==='white'?'success':'error'); render();
+    }
+
+    function afterMove(){
+      processFuture(); turnCount++;
+      if(turnCount===1){ showTip('first_move'); setTimeout(()=>showTip('camera'), 600); }
+      maybeRandomResize();
+      if(checkEnd()) return;
+      turn=turn==='white'?'black':'white';
+      selected=null; possibleMoves=[]; render();
+      if(turn==='black'&&!gameOver) setTimeout(aiTurn,420);
+      else if(turn==='white'&&!gameOver&&Math.random()<0.14){
+        const keys=Object.keys(ITEM_DEFS);
+        giveItem(keys[Math.floor(Math.random()*keys.length)]); render();
+      }
+    }
+
+    document.getElementById('dbg-btn').onclick=()=>{
+      document.getElementById('dbg-panel').classList.toggle('show');
+    };
+    function runDebug(code){
+      const parts=code.trim().split(/\s+/); if(!parts[0]) return;
+      const cmd=parts[0].toUpperCase();
+      if(cmd==='A1'){ giveItem(parts[1]||'future'); render(); return; }
+      if(cmd==='A2'){ giveItem(parts[1]||'future',true); render(); return; }
+      if(cmd==='D1'){ setupStartPosition(); return; }
+      if(cmd==='TUT'){ try{ localStorage.removeItem('chaos_chess_tut_off'); Object.keys(EVENT_TIPS).forEach(k=>localStorage.removeItem('chaos_tip_'+k)); }catch(e){} log('Подсказки сброшены'); return; }
+      log('A1 / A2 / D1 / TUT');
+    }
+    document.getElementById('debug-btn').onclick=()=>{
+      runDebug(document.getElementById('debug-input').value);
+      document.getElementById('debug-input').value='';
+      document.getElementById('dbg-panel').classList.remove('show');
+    };
+
+    function setupStartPosition(){
+      document.getElementById('game-over').classList.remove('show');
+      document.getElementById('future-picker').classList.remove('show');
+      gameOver=false; boardW=8; boardH=8; turnCount=0; moving=false;
+      board=createEmpty(8,8);
+      const back=['R','N','B','Q','K','B','N','R'];
+      for(let x=0;x<8;x++){ board[0][x]=back[x]; board[1][x]='P'; board[6][x]='p'; board[7][x]=back[x].toLowerCase(); }
+      frozen=[]; futureQueue=[]; turn='white';
+      selected=null; possibleMoves=[]; selectedSlot=null; pendingFuture=null;
+      slots=[null,null,null]; aiSlots=[null,null,null];
+      whiteKingMoved=blackKingMoved=false;
+      whiteRookA=whiteRookH=blackRookA=blackRookH=false;
+      camScale=1; camX=0; camY=0; applyCam();
+      giveItem('future'); giveItem('support'); giveItem('spawn');
+      giveItem('future',true); giveItem('support',true); giveItem('remove',true);
+      gameLog=[]; log('Игра началась');
+      render();
+      // tips are event-based
+    }
+
+    setupStartPosition();
+  </script>
+</body>
+</html>
