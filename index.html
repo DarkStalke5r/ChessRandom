@@ -68,10 +68,12 @@
 
     #status-bar {
       flex-shrink: 0; display: flex; justify-content: space-between; align-items: center;
+      gap: 6px; flex-wrap: wrap;
       padding: 4px 10px; font-size: 11px; color: var(--hint);
       position: relative; z-index: 20;
     }
     #status-bar b { color: var(--text); }
+    #status-actions { display: flex; gap: 6px; align-items: center; }
 
     #viewport {
       flex: 1 1 auto; min-height: 0; max-height: 100%;
@@ -172,6 +174,133 @@
       display: flex; gap: 6px; justify-content: center; align-items: center;
       min-height: 82px; min-width: 180px;
     }
+    .card.chaos-flash .icon { transition: none; }
+    .card.nuclear-card {
+      border-color: #ff4444;
+      box-shadow: 0 0 14px rgba(255,60,40,0.45);
+      background: linear-gradient(145deg, #4a1a1a 0%, #1e0a0a 100%);
+    }
+    .card.craft-slot {
+      border-style: dashed;
+      border-color: rgba(255,200,80,0.45);
+      background: rgba(40,30,10,0.5);
+    }
+    .card.craft-slot .craft-q {
+      font-size: 22px; color: var(--accent); font-weight: 700;
+    }
+    .card.craft-filled .icon { font-size: 14px; }
+    .mega-pawn {
+      position: relative;
+    }
+    .mega-pawn::after {
+      content: '☢';
+      position: absolute;
+      font-size: 10px;
+      bottom: 0; right: 1px;
+      filter: drop-shadow(0 0 3px #f44);
+    }
+    .boss-sprite {
+      position: absolute;
+      pointer-events: none;
+      z-index: 6;
+      object-fit: fill;
+      image-rendering: auto;
+      filter: drop-shadow(0 4px 14px rgba(255,40,20,0.65));
+      border-radius: 6px;
+    }
+    .boss-sprite.boss-fallback {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: radial-gradient(ellipse at 50% 60%, rgba(255,60,40,0.35), rgba(120,10,10,0.15) 70%, transparent);
+      color: #ff2a2a;
+      font-weight: 900;
+      line-height: 1;
+      text-shadow: 0 0 10px #f00, 0 2px 4px #000;
+    }
+    .cell.boss-foot {
+      box-shadow: inset 0 0 0 2px rgba(255,50,40,0.45);
+    }
+    #ai-zone.slide-off, #player-zone.slide-off {
+      transition: transform 0.55s cubic-bezier(0.4,0,0.2,1), opacity 0.45s ease;
+    }
+    #ai-zone.slide-off { transform: translateY(-120%); opacity: 0; }
+    #player-zone.slide-off { transform: translateY(120%); opacity: 0; }
+    .cell.nuke-blast {
+      background: #8b1a1a !important;
+      animation: nukePulse 0.8s ease infinite alternate;
+    }
+    @keyframes nukePulse {
+      from { filter: brightness(1); }
+      to { filter: brightness(1.35); }
+    }
+    #nuke-ritual-ui {
+      position: fixed; inset: 0; z-index: 95;
+      pointer-events: none;
+      display: none;
+    }
+    #nuke-ritual-ui.show { display: block; }
+    #nuke-opp-hand {
+      position: absolute; left: 50%; top: 12%;
+      transform: translateX(-50%);
+      display: flex; gap: 10px; align-items: center;
+      pointer-events: none;
+    }
+    #nuke-opp-hand .mini-card {
+      width: 36px; height: 50px; border-radius: 6px;
+      background: linear-gradient(145deg, #2e2a35, #1e1a24);
+      border: 1.5px solid rgba(255,255,255,0.2);
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      font-size: 16px; color: #fff;
+      opacity: 0; transform: scale(0.5);
+      transition: opacity 0.45s ease, transform 0.55s cubic-bezier(0.22,1,0.36,1), left 0.55s ease;
+    }
+    #nuke-opp-hand .mini-card.show {
+      opacity: 1; transform: scale(1);
+    }
+    #nuke-protect-hint {
+      position: absolute; left: 50%; bottom: 28%;
+      transform: translateX(-50%);
+      background: rgba(0,0,0,0.85);
+      color: #ffe08a;
+      padding: 10px 16px;
+      border-radius: 12px;
+      font-size: 14px; font-weight: 600;
+      text-align: center;
+      border: 1px solid rgba(232,184,74,0.4);
+      pointer-events: none;
+      display: none;
+      max-width: 90%;
+    }
+    #nuke-protect-hint.show { display: block; }
+    .cell.protect-pick {
+      outline: 3px solid #6ad0ff !important;
+      outline-offset: -3px;
+    }
+    .cell.protected-mark {
+      box-shadow: inset 0 0 14px rgba(100,200,255,0.55);
+    }
+    /* Teto splash covers nuclear owner's cards during equalize anim */
+    #nuke-teto-splash {
+      position: absolute;
+      right: 4%;
+      bottom: 18%;
+      width: min(200px, 42vw);
+      height: min(260px, 48vh);
+      pointer-events: none;
+      display: none;
+      z-index: 96;
+      align-items: flex-end;
+      justify-content: center;
+    }
+    #nuke-teto-splash.show { display: flex; }
+    #nuke-teto-splash .splash-card {
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(ellipse at center, rgba(30,20,40,0.92), rgba(10,8,14,0.96));
+      border-radius: 16px;
+      border: 1px solid rgba(255,255,255,0.1);
+    }
 
     #log {
       flex-shrink: 0; max-height: 18px; overflow: hidden;
@@ -229,7 +358,7 @@
       cursor: pointer;
       padding: 0;
     }
-    #skip-btn {
+    #skip-btn, #undo-btn {
       padding: 6px 12px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.22);
       background: rgba(255,255,255,0.12); color: var(--text);
       font-size: 12px; font-weight: 600;
@@ -239,8 +368,20 @@
       position: relative; z-index: 21;
       min-height: 28px;
     }
-    #skip-btn:disabled { opacity: 0.35; cursor: default; }
-    #skip-btn:active:not(:disabled) { background: rgba(255,255,255,0.22); }
+    #skip-btn:disabled, #undo-btn:disabled { opacity: 0.35; cursor: default; }
+    #skip-btn:active:not(:disabled), #undo-btn:active:not(:disabled) { background: rgba(255,255,255,0.22); }
+    .piece.neutral { color: #b8b8c8; text-shadow: 0 0 4px #666, 0 1px 2px #000; }
+    .piece.red-boss { color: #ff3b3b !important; text-shadow: 0 0 6px #f00, 0 1px 2px #000; font-weight: 800; }
+    .piece.demon::after {
+      content: '😈';
+      position: absolute;
+      font-size: 11px;
+      top: -2px; right: 0;
+      filter: drop-shadow(0 0 3px #f44);
+    }
+    .cell.demon-aura {
+      box-shadow: inset 0 0 10px rgba(180,40,80,0.35);
+    }
 
     #dbg-panel {
       display: none; position: fixed; top: 8px; left: 50%; transform: translateX(-50%);
@@ -595,7 +736,10 @@
 
   <div id="status-bar">
     <span id="status">Ход: <b>белые</b></span>
-    <button type="button" id="skip-btn">Пропуск хода</button>
+    <div id="status-actions">
+      <button type="button" id="undo-btn">Отмена</button>
+      <button type="button" id="skip-btn">Пропуск хода</button>
+    </div>
     <span id="info">8×8</span>
   </div>
 
@@ -624,17 +768,29 @@
         <div class="reserve-label">Рез.</div>
         <div id="player-reserve" class="card reserve empty">+</div>
       </div>
+      <div class="reserve-wrap">
+        <div class="reserve-label">Крафт</div>
+        <div id="craft-slot" class="card craft-slot empty" title="2 одинаковые + 1 любая = ядерка">
+          <div class="craft-q">?</div>
+        </div>
+      </div>
     </div>
   </div>
   <div id="log"></div>
   </div>
 
+  <div id="nuke-ritual-ui">
+    <div id="nuke-opp-hand"></div>
+    <div id="nuke-protect-hint"></div>
+    <div id="nuke-teto-splash"><div class="splash-card"></div></div>
+  </div>
+
   <div id="game-over">
     <h2 id="go-text">Победа!</h2>
-    <p id="go-reason" style="font-size:13px;color:#ccc;max-width:280px;text-align:center;padding:0 12px"></p>
+    <p id="go-reason" style="font-size:13px;color:#ccc;max-width:300px;text-align:center;padding:0 12px;line-height:1.45;white-space:pre-line"></p>
     <div class="go-btns">
       <button onclick="setupStartPosition()">Заново</button>
-      <button class="secondary" id="btn-show-result">Показать результат</button>
+      <button class="secondary" id="btn-show-result">Показать на доске</button>
     </div>
   </div>
 
@@ -742,6 +898,26 @@
       camera: {
         message: "Доску можно двигать пальцем и масштабировать кнопками + / − справа.",
         emotion: ""
+      },
+      chaos: {
+        message: "Мигающая карта: внешне перебирает все карты, а при использовании — случайный эффект на случайной клетке.",
+        emotion: ""
+      },
+      nuclear: {
+        message: "«Ядерка»: после выстрела 8 сек тишины, затем ракета с неба. Жертвы перерождаются красными, сходятся в эпицентр и становятся босс-пешкой 3×3. Нужно нанести 20 ударов.",
+        emotion: ""
+      },
+      neutral_unit: {
+        message: "Нейтральная фигура! Она ничья — бьёт и белых, и чёрных. Пешка-нейтрал ходит и бьёт во все стороны, в том числе по диагонали.",
+        emotion: ""
+      },
+      demon: {
+        message: "Демон! В зоне 5×5 вокруг него все эффекты ангела отключены — ни нимб, ни световое отражение не работают.",
+        emotion: ""
+      },
+      offboard: {
+        message: "Фигура за краем поля! Она идёт обратно вне экрана: столько шагов, сколько нужно дойти, плюс 2 хода. Пешки за краем шагают по 2 клетки в любую сторону.",
+        emotion: ""
       }
     };
 
@@ -764,12 +940,19 @@
 
     const SYM = {K:'♚',Q:'♛',R:'♜',B:'♝',N:'♞',P:'♟',k:'♚',q:'♛',r:'♜',b:'♝',n:'♞',p:'♟'};
     const VAL = {p:10,n:32,b:33,r:50,q:90,k:1000};
-    const CARD_ICON = {future:'⏳',spawn:'✨',airstrike:'✈',support:'🛡',shield:'🔵',extra:'2️⃣',angel:'😇',reset:'↺'};
-    const CARD_CORNER = {future:'F',spawn:'S',airstrike:'A',support:'P',shield:'H',extra:'2',angel:'G',reset:'Z'};
+    const CARD_ICON = {future:'⏳',spawn:'✨',airstrike:'✈',support:'🛡',shield:'🔵',extra:'2️⃣',angel:'😇',reset:'↺',chaos:'🌀',nuclear:'☢'};
+    const CARD_CORNER = {future:'F',spawn:'S',airstrike:'A',support:'P',shield:'H',extra:'2',angel:'G',reset:'Z',chaos:'C',nuclear:'N'};
+    const CHAOS_FLASH_TYPES = ['future','spawn','airstrike','support','shield','extra','angel','reset','nuclear'];
 
     function pieceChar(p){ if(!p) return null; return typeof p==='string'?p:p.base; }
-    function pieceOwner(p){ const c=pieceChar(p); return c===c.toLowerCase()?'white':'black'; }
+    function pieceOwner(p){
+      if(!p) return null;
+      if(typeof p==='object' && (p.boss || p.red)) return 'red';
+      if(typeof p==='object' && p.neutral) return 'neutral';
+      const c=pieceChar(p); return c===c.toLowerCase()?'white':'black';
+    }
     function isWhite(p){ return pieceOwner(p)==='white'; }
+    function isNeutral(p){ return pieceOwner(p)==='neutral'; }
     function isMerged(p){ return p && typeof p==='object' && p.merged; }
 
     let boardW=8, boardH=8, board=[], frozen=[], turn='white';
@@ -787,6 +970,49 @@
     let lastEndHighlight = []; // [{x,y,cls}]
     let pendingHighlights = []; // [{x,y,cls,until}]
     let angelZones = []; // {x,y,owner} glow cells
+    let undoStack = [];
+    let consecutiveUndos = 0;
+    // craft: discard 2 identical + 1 any this turn → nuclear
+    let craftPile = []; // [{type, name, id}]
+    let craftTurnId = -1;
+    // nuclear ritual
+    let nukeRitual = null; // {owner, phase, protected:[{x,y}], futuresGiven}
+    let megaPawns = []; // {x,y,size} top-left of mega block
+    let bossMode = false;
+    let bossHP = 20;
+    let bossMaxHP = 20;
+    let bossPhase2 = false; // HP<=5: officer (bishop), 5 diagonal steps
+    // white turn budget in boss mode: 4 moves, max 2 per piece, 1 attack
+    let bossBudget = { movesLeft:4, attacksLeft:1, pieceUsed:{} };
+    // if player king dies in boss fight — AI takes white army
+    let whiteAIControl = false;
+    // custom textures (URL / data-URL). Set via setBossTexture / setRocketTexture or debug BOSS/ROCKET
+    let bossTexture = localStorage.getItem('chaos_boss_tex') || null;
+    let rocketTexture = localStorage.getItem('chaos_rocket_tex') || null;
+    function setBossTexture(url){
+      bossTexture = url || null;
+      try { if(url) localStorage.setItem('chaos_boss_tex', url); else localStorage.removeItem('chaos_boss_tex'); } catch(e){}
+      render();
+    }
+    function setRocketTexture(url){
+      rocketTexture = url || null;
+      try { if(url) localStorage.setItem('chaos_rocket_tex', url); else localStorage.removeItem('chaos_rocket_tex'); } catch(e){}
+    }
+    window.setBossTexture = setBossTexture;
+    window.setRocketTexture = setRocketTexture;
+
+    function hasNuclearCard(side){
+      if(side==='white'){
+        if(slots.some(s=>s&&s.type==='nuclear')) return true;
+        if(playerReserve&&playerReserve.item&&playerReserve.item.type==='nuclear') return true;
+      } else {
+        if(aiSlots.some(s=>s&&s.type==='nuclear')) return true;
+        if(aiReserve&&aiReserve.item&&aiReserve.item.type==='nuclear') return true;
+      }
+      if(nukeRitual && nukeRitual.owner===side && (nukeRitual.phase==='fire'||nukeRitual.phase==='equalize'||nukeRitual.phase==='protect'))
+        return true;
+      return false;
+    }
 
     // ===== EVENT TIPS =====
     let tutActive = false;
@@ -917,37 +1143,104 @@
       const color=pieceOwner(p); const types=getMovementTypes(p);
       const moves=[]; const dir=color==='white'?-1:1;
       const startRank=color==='white'?boardH-2:1;
+      const isBossTarget=(t,nx,ny)=> !!(t && (t.boss || t.red)) || isBossCell(nx,ny);
+      const isAllyBossMode=(t)=>{
+        if(!t || !bossMode) return false;
+        if(t.boss || t.red) return false;
+        // white, black, neutral are all allies vs boss
+        const o=pieceOwner(t);
+        return o==='white'||o==='black'||o==='neutral';
+      };
       const add=(nx,ny)=>{
         if(!inBounds(nx,ny)) return false;
         const t=board[ny][nx];
-        if(!t){ moves.push({x:nx,y:ny}); return true; }
+        if(!t){
+          if(bossMode && isBossCell(nx,ny)) moves.push({x:nx,y:ny, bossHit:true});
+          else moves.push({x:nx,y:ny});
+          return true;
+        }
+        if(bossMode){
+          if(isBossTarget(t,nx,ny)){ moves.push({x:nx,y:ny, bossHit:true}); return false; }
+          return false; // never attack allies
+        }
         if(pieceOwner(t)!==color) moves.push({x:nx,y:ny});
         return false;
       };
+      // Boss / radio mega-pawn: players don't control boss
+      if(p && (p.mega || p.radio || p.boss)){
+        if(p.boss) return [];
+        const origin=getMegaAt(x,y)||{x,y,size:3};
+        const sz=origin.size||3;
+        if(x!==origin.x || y!==origin.y) return [];
+        [[1,0],[-1,0],[0,1],[0,-1]].forEach(([dx,dy])=>{
+          const nx=origin.x+dx, ny=origin.y+dy;
+          if(nx<0||ny<0||nx+sz>boardW||ny+sz>boardH) return;
+          let blocked=false;
+          for(let yy=0;yy<sz&&!blocked;yy++) for(let xx=0;xx<sz&&!blocked;xx++){
+            const tx=nx+xx, ty=ny+yy;
+            const t=board[ty][tx];
+            if(!t) continue;
+            const m2=getMegaAt(tx,ty);
+            if(m2 && m2.x===origin.x && m2.y===origin.y) continue;
+            blocked=true;
+          }
+          if(!blocked) moves.push({x:nx,y:ny, megaMove:true});
+        });
+        return moves;
+      }
+      // Neutral pawn: in boss mode only hits boss; otherwise attacks all non-neutrals
+      if(color==='neutral' && types.includes('P')){
+        for(let dx=-1;dx<=1;dx++) for(let dy=-1;dy<=1;dy++){
+          if(!dx&&!dy) continue;
+          const nx=x+dx, ny=y+dy;
+          if(!inBounds(nx,ny)) continue;
+          const t=board[ny][nx];
+          if(!t){ moves.push({x:nx,y:ny}); continue; }
+          if(bossMode){
+            if(isBossTarget(t,nx,ny)) moves.push({x:nx,y:ny, bossHit:true});
+          } else if(pieceOwner(t)!=='neutral'){
+            moves.push({x:nx,y:ny});
+          }
+        }
+        const seenN=new Set();
+        return moves.filter(m=>{ const k=m.x+','+m.y; if(seenN.has(k)) return false; seenN.add(k); return true; });
+      }
       types.forEach(type=>{
         if(type==='P'){
           if(inBounds(x,y+dir)&&!board[y+dir][x]){
-            moves.push({x,y:y+dir});
-            if(y===startRank&&inBounds(x,y+dir*2)&&!board[y+dir*2][x]) moves.push({x,y:y+dir*2});
+            // empty forward — but boss footprint counts as attack square
+            if(bossMode && isBossCell(x,y+dir)) moves.push({x,y:y+dir, bossHit:true});
+            else moves.push({x,y:y+dir});
+            if(y===startRank&&inBounds(x,y+dir*2)&&!board[y+dir*2][x]){
+              if(!(bossMode && isBossCell(x,y+dir*2))) moves.push({x,y:y+dir*2});
+            }
           }
           [[x-1,y+dir],[x+1,y+dir]].forEach(([nx,ny])=>{
-            if(inBounds(nx,ny)&&board[ny][nx]&&pieceOwner(board[ny][nx])!==color) moves.push({x:nx,y:ny});
+            if(!inBounds(nx,ny)) return;
+            const t=board[ny][nx];
+            if(bossMode){
+              if(isBossTarget(t,nx,ny) || isBossCell(nx,ny)) moves.push({x:nx,y:ny, bossHit:true});
+            } else if(t && pieceOwner(t)!==color){
+              moves.push({x:nx,y:ny});
+            }
           });
         } else if(type==='N'){
           [[1,2],[2,1],[-1,2],[-2,1],[1,-2],[2,-1],[-1,-2],[-2,-1]].forEach(([dx,dy])=>add(x+dx,y+dy));
         } else if(type==='K'){
           for(let dx=-1;dx<=1;dx++) for(let dy=-1;dy<=1;dy++) if(dx||dy) add(x+dx,y+dy);
-          if(color==='white'&&!whiteKingMoved&&y===boardH-1&&x===4){
-            if(!whiteRookH&&board[y][7]&&pieceChar(board[y][7]).toUpperCase()==='R'&&isWhite(board[y][7])&&!board[y][5]&&!board[y][6])
-              moves.push({x:6,y,castle:'K'});
-            if(!whiteRookA&&board[y][0]&&pieceChar(board[y][0]).toUpperCase()==='R'&&isWhite(board[y][0])&&!board[y][1]&&!board[y][2]&&!board[y][3])
-              moves.push({x:2,y,castle:'Q'});
-          }
-          if(color==='black'&&!blackKingMoved&&y===0&&x===4){
-            if(!blackRookH&&board[y][7]&&pieceChar(board[y][7]).toUpperCase()==='R'&&!isWhite(board[y][7])&&!board[y][5]&&!board[y][6])
-              moves.push({x:6,y,castle:'K'});
-            if(!blackRookA&&board[y][0]&&pieceChar(board[y][0]).toUpperCase()==='R'&&!isWhite(board[y][0])&&!board[y][1]&&!board[y][2]&&!board[y][3])
-              moves.push({x:2,y,castle:'Q'});
+          if(!bossMode){
+            if(color==='white'&&!whiteKingMoved&&y===boardH-1&&x===4){
+              if(!whiteRookH&&board[y][7]&&pieceChar(board[y][7]).toUpperCase()==='R'&&isWhite(board[y][7])&&!board[y][5]&&!board[y][6])
+                moves.push({x:6,y,castle:'K'});
+              if(!whiteRookA&&board[y][0]&&pieceChar(board[y][0]).toUpperCase()==='R'&&isWhite(board[y][0])&&!board[y][1]&&!board[y][2]&&!board[y][3])
+                moves.push({x:2,y,castle:'Q'});
+            }
+            if(color==='black'&&!blackKingMoved&&y===0&&x===4){
+              if(!blackRookH&&board[y][7]&&pieceChar(board[y][7]).toUpperCase()==='R'&&!isWhite(board[y][7])&&!board[y][5]&&!board[y][6])
+                moves.push({x:6,y,castle:'K'});
+              if(!blackRookA&&board[y][0]&&pieceChar(board[y][0]).toUpperCase()==='R'&&!isWhite(board[y][0])&&!board[y][1]&&!board[y][2]&&!board[y][3])
+                moves.push({x:2,y,castle:'Q'});
+            }
           }
         } else {
           const rays=[];
@@ -958,13 +1251,50 @@
               const nx=x+dx*i, ny=y+dy*i;
               if(!inBounds(nx,ny)) break;
               const t=board[ny][nx];
-              if(!t){ moves.push({x:nx,y:ny}); continue; }
+              if(!t){
+                if(bossMode && isBossCell(nx,ny)){ moves.push({x:nx,y:ny, bossHit:true}); break; }
+                moves.push({x:nx,y:ny}); continue;
+              }
+              if(bossMode){
+                if(isBossTarget(t,nx,ny)) moves.push({x:nx,y:ny, bossHit:true});
+                break; // allies block but not capturable
+              }
               if(pieceOwner(t)!==color) moves.push({x:nx,y:ny});
               break;
             }
           });
         }
       });
+      // Boss fight: approach from diagonal — 8-dir step + «вверх затем вправо» за один ход
+      if(bossMode && p && !p.boss && !p.red){
+        for(let dx=-1;dx<=1;dx++) for(let dy=-1;dy<=1;dy++){
+          if(!dx&&!dy) continue;
+          add(x+dx,y+dy);
+        }
+        // combined two orthogonal steps (e.g. up then right) as one move
+        const orth=[[1,0],[-1,0],[0,1],[0,-1]];
+        orth.forEach(([dx1,dy1])=>{
+          orth.forEach(([dx2,dy2])=>{
+            if(dx1===dx2 && dy1===dy2) return; // same axis twice → handled as 2 budget moves
+            if(dx1===-dx2 && dy1===-dy2) return; // reverse
+            const mx=x+dx1, my=y+dy1;
+            const tx=x+dx1+dx2, ty=y+dy1+dy2;
+            if(!inBounds(tx,ty)) return;
+            // intermediate must be empty or boss footprint
+            if(inBounds(mx,my)){
+              const mid=board[my][mx];
+              if(mid && !isBossCell(mx,my) && !(mid.boss||mid.red)) return;
+            }
+            const t=board[ty][tx];
+            if(!t){
+              if(isBossCell(tx,ty)) moves.push({x:tx,y:ty, bossHit:true, combo:true});
+              else moves.push({x:tx,y:ty, combo:true});
+            } else if(t.boss || t.red || isBossCell(tx,ty)){
+              moves.push({x:tx,y:ty, bossHit:true, combo:true});
+            }
+          });
+        });
+      }
       const seen=new Set();
       return moves.filter(m=>{ const k=m.x+','+m.y+(m.castle||''); if(seen.has(k)) return false; seen.add(k); return true; });
     }
@@ -972,19 +1302,29 @@
     function isSquareAttacked(x,y,byColor){
       for(let yy=0;yy<boardH;yy++) for(let xx=0;xx<boardW;xx++){
         const p=board[yy][xx];
-        if(!p||pieceOwner(p)!==byColor) continue;
+        if(!p) continue;
+        const o=pieceOwner(p);
+        // colored attackers + neutrals threaten everyone
+        if(o!==byColor && o!=='neutral') continue;
         if(getRawMoves(xx,yy).some(m=>m.x===x&&m.y===y&&!m.castle)) return true;
       }
       return false;
     }
     function inCheck(color){
+      if(bossMode) return false; // no checks between sides in boss fight
       const k=findKing(color);
       if(!k||k.frozen||k.future) return false;
       return isSquareAttacked(k.x,k.y,color==='white'?'black':'white');
     }
     function getLegalMoves(x,y){
+      // boss fight: no inter-side checks/mates — all legal raw moves vs boss only
+      if(bossMode){
+        const p=board[y][x]; if(!p) return [];
+        return getRawMoves(x,y);
+      }
       const p=board[y][x]; if(!p) return [];
       const color=pieceOwner(p);
+      if(color==='neutral') return getRawMoves(x,y);
       return getRawMoves(x,y).filter(m=>{
         const cap=board[m.y][m.x]; const from=board[y][x];
         board[m.y][m.x]=from; board[y][x]=null;
@@ -1057,6 +1397,25 @@
       if(gameOver) return;
       moving=false;
 
+      // With nuclear — only fire nuclear, no normal play
+      if(hasNuclearCard('black')){
+        if(nukeRitual && nukeRitual.phase==='fire' && nukeRitual.owner==='black'){
+          setTimeout(aiFireNuclear, 400);
+          return;
+        }
+        // if nuclear in hand but ritual not started, start or wait
+        const idx=aiSlots.findIndex(s=>s&&s.type==='nuclear');
+        if(idx>=0 && (!nukeRitual || nukeRitual.owner!=='black')){
+          // shouldn't craft as AI often — if somehow has card, force fire aim after short delay
+          setTimeout(()=>{
+            if(!nukeRitual) startNukeRitual('black');
+            else if(nukeRitual.phase==='fire') aiFireNuclear();
+          }, 500);
+          return;
+        }
+        return;
+      }
+
       const decision = aiChooseCard();
       if(decision){
         aiPlayCard(decision, () => {
@@ -1094,8 +1453,36 @@
       for(const m of moves){
         const piece=board[m.fy][m.fx],cap=board[m.ty][m.tx];
         board[m.ty][m.tx]=piece; board[m.fy][m.fx]=null;
-        let score=minimax(depth-1,false,-Infinity,Infinity);
-        if(cap&&pieceChar(cap).toUpperCase()==='K') score=50000;
+        let score;
+        if(bossMode){
+          // Hold distance; attack only if within 2 blocks and the move is a real hit.
+          // King always flees as far as possible.
+          const distAfter=bossDistTo(m.tx,m.ty);
+          const distBefore=bossDistTo(m.fx,m.fy);
+          const isKing=pieceChar(piece).toUpperCase()==='K';
+          const canHit=!!(m.bossHit || isBossCell(m.tx,m.ty) || (cap&&(cap.boss||cap.red||cap.redMinion)));
+          if(isKing){
+            // maximize distance from boss
+            score = distAfter*25;
+            if(canHit) score -= 80; // king should not tank the boss
+            if(distAfter < distBefore) score -= 30;
+            if(distAfter <= 2) score -= 50;
+          } else {
+            // prefer safer distance (~4–6), never stand adjacent
+            score = distAfter*8;
+            if(distAfter <= 1) score -= 70;
+            else if(distAfter === 2) score -= 10;
+            else if(distAfter >= 3 && distAfter <= 6) score += 25;
+            // attack only if already in range ≤2 and this move hits
+            if(canHit && distBefore <= 2) score += 140;
+            else if(canHit && distBefore > 2) score -= 20; // don't dive in just to poke
+            if(distAfter < distBefore && !canHit) score -= 15; // don't wander closer without a hit
+          }
+          score += Math.random()*4;
+        } else {
+          score=minimax(depth-1,false,-Infinity,Infinity);
+          if(cap&&pieceChar(cap).toUpperCase()==='K') score=50000;
+        }
         board[m.fy][m.fx]=piece; board[m.ty][m.tx]=cap;
         if(score>bestScore){ bestScore=score; best=[m]; }
         else if(score===bestScore) best.push(m);
@@ -1228,6 +1615,10 @@
         }
         return null;
       }
+      if(type==='chaos'){
+        const rx=Math.floor(Math.random()*boardW), ry=Math.floor(Math.random()*boardH);
+        return {item, idx, score: 14, cells:[{x:rx,y:ry}], tx:rx, ty:ry, type};
+      }
       return null;
     }
 
@@ -1266,6 +1657,9 @@
             if(!board[ry][rx]){ board[ry][rx]='P'; placed++; }
           }
           log('ИИ: поддержка +'+placed);
+        } else if(type==='chaos'){
+          applyChaosEffect(decision.tx||0, decision.ty||0);
+          log('ИИ: хаос');
         }
         aiSlots[idx]=null;
         haptic('medium');
@@ -1274,6 +1668,35 @@
       }, { fromAI: true, slotIndex: idx });
     }
 
+
+    function pieceSideLabel(p){
+      const o=pieceOwner(p);
+      if(o==='white') return 'белый';
+      if(o==='black') return 'чёрный';
+      return 'нейтральный';
+    }
+    function pieceTypeLabel(p){
+      const m={K:'король',Q:'ферзь',R:'ладья',B:'слон',N:'конь',P:'пешка'};
+      return m[String(pieceChar(p)||'').toUpperCase()]||'фигура';
+    }
+    function describePiece(p){
+      if(!p) return 'неизвестно';
+      return pieceSideLabel(p)+' '+pieceTypeLabel(p);
+    }
+    function cellLabel(x,y){
+      const file=String.fromCharCode(97+Math.max(0, Math.min(25, x|0)));
+      return file+(boardH-y);
+    }
+    function nextTurn(t){
+      if(t==='white') return 'black';
+      if(t==='black') return 'neutral';
+      return 'white';
+    }
+    function turnLabel(t){
+      if(t==='white') return 'белые';
+      if(t==='black') return 'чёрные';
+      return 'нейтралы';
+    }
 
     function animateAndMove(fx,fy,tx,ty,castle,cb){
       if(moving){ setTimeout(()=>{ moving=false; animateAndMove(fx,fy,tx,ty,castle,cb); }, 50); return; }
@@ -1294,7 +1717,7 @@
       const y1 = tr.top - wrap.top + tr.height/2;
       const fly=document.getElementById('fly');
       fly.textContent=SYM[pieceChar(piece)]||'?';
-      fly.className='piece '+(isWhite(piece)?'white':'black');
+      fly.className='piece '+(isNeutral(piece)?'neutral':(isWhite(piece)?'white':'black'));
       fly.style.transition = 'none';
       fly.style.display='flex';
       fly.style.left = x0 + 'px';
@@ -1318,7 +1741,7 @@
         } catch(e) {
           console.error(e);
           moving=false;
-          turn = turn==='white'?'black':'white';
+          turn = nextTurn(turn);
           render();
           if(turn==='black') setTimeout(aiTurn, 300);
         }
@@ -1359,10 +1782,11 @@ function applyCam(){
         const div=document.createElement('div');
         if(!item){ div.className='card empty ai-card'; div.textContent='—'; }
         else {
-          div.className='card ai-card';
-          div.innerHTML=`<div class="corner">${CARD_CORNER[item.type]||'?'}</div>
-            <div class="icon">${CARD_ICON[item.type]||'?'}</div>
-            <div class="cname">${item.name}</div>`;
+          div.className='card ai-card'+(item.type==='chaos'?' chaos-flash':'')+(item.type==='nuclear'?' nuclear-card':'');
+          const showType = item.type==='chaos' ? CHAOS_FLASH_TYPES[0] : item.type;
+          div.innerHTML=`<div class="corner">${CARD_CORNER[showType]||'?'}</div>
+            <div class="icon">${CARD_ICON[showType]||'?'}</div>
+            <div class="cname">${item.type==='chaos'?'…':item.name}</div>`;
         }
         aiEl.appendChild(div);
       }
@@ -1385,20 +1809,36 @@ function applyCam(){
 
       const plEl=document.getElementById('player-cards');
       plEl.innerHTML='';
+      // during nuke fire phase, only nuclear is usable
+      const onlyNuke = nukeRitual && nukeRitual.phase==='fire' && nukeRitual.owner==='white';
       for(let i=0;i<3;i++){
         const item=slots[i];
         const div=document.createElement('div');
         if(!item){ div.className='card empty player'; div.textContent='Пусто'; }
         else {
-          div.className='card player'+(selectedSlot===i?' active':'')+(item.deal?' deal-in':'');
+          let cls='card player'+(selectedSlot===i?' active':'')+(item.deal?' deal-in':'');
+          if(item.type==='chaos') cls+=' chaos-flash';
+          if(item.type==='nuclear') cls+=' nuclear-card';
+          div.className=cls;
           if(item.deal) setTimeout(()=>{ item.deal=false; }, 500);
-          div.innerHTML=`<div class="corner">${CARD_CORNER[item.type]||'?'}</div>
-            <div class="icon">${CARD_ICON[item.type]||'?'}</div>
-            <div class="cname">${item.name}</div>`;
+          const showType = item.type==='chaos' ? CHAOS_FLASH_TYPES[Math.floor(Math.random()*CHAOS_FLASH_TYPES.length)] : item.type;
+          const showName = item.type==='chaos' ? (ITEM_DEFS[showType]?.name||'…') : item.name;
+          div.innerHTML=`<div class="corner">${CARD_CORNER[showType]||'?'}</div>
+            <div class="icon">${CARD_ICON[showType]||'?'}</div>
+            <div class="cname">${showName}</div>`;
+          if(item.type==='chaos') div.dataset.chaos='1';
           div.onclick=()=>{
             if(gameOver||tutActive||window._cardBusy) return;
-            // tip BEFORE using
+            if((onlyNuke || hasNuclearCard('white')) && item.type!=='nuclear'){
+              log('Пока есть ядерка — можно только её');
+              return;
+            }
             if(item && item.type) showTip(item.type);
+            if(item && item.type==='chaos' && turn==='white' && !nukeRitual && !hasNuclearCard('white')){
+              selectedSlot=i; selected=null; possibleMoves=[];
+              useItem(item, Math.floor(boardW/2), Math.floor(boardH/2), false);
+              return;
+            }
             selectedSlot=selectedSlot===i?null:i;
             selected=null; possibleMoves=[];
             haptic('light'); render();
@@ -1427,9 +1867,92 @@ function applyCam(){
           else resEl.removeAttribute('data-lock');
         }
       }
+
+      // Craft slot ?
+      const craftEl=document.getElementById('craft-slot');
+      if(craftEl){
+        craftEl.onclick = onCraftSlotClick;
+        if(!craftPile.length){
+          craftEl.className='card craft-slot empty';
+          craftEl.innerHTML='<div class="craft-q">?</div>';
+        } else {
+          craftEl.className='card craft-slot craft-filled';
+          const icons=craftPile.map(c=>CARD_ICON[c.type]||'?').join('');
+          craftEl.innerHTML=`<div class="icon" style="font-size:13px;letter-spacing:1px">${icons}</div>
+            <div class="cname">${craftPile.length}/3</div>`;
+        }
+      }
+    }
+
+    // Chaos card face flash 0.1–1s
+    setInterval(()=>{
+      document.querySelectorAll('.card.chaos-flash').forEach(div=>{
+        const t=CHAOS_FLASH_TYPES[Math.floor(Math.random()*CHAOS_FLASH_TYPES.length)];
+        const icon=div.querySelector('.icon');
+        const name=div.querySelector('.cname');
+        const corner=div.querySelector('.corner');
+        if(icon) icon.textContent=CARD_ICON[t]||'?';
+        if(name) name.textContent=ITEM_DEFS[t]?.name||'…';
+        if(corner) corner.textContent=CARD_CORNER[t]||'?';
+      });
+    }, 100);
+    // randomize interval feel: occasionally skip frames via opacity tick
+    setInterval(()=>{
+      document.querySelectorAll('.card.chaos-flash').forEach(div=>{
+        if(Math.random()<0.35) return; // skip → up to ~1s perceived
+        const t=CHAOS_FLASH_TYPES[Math.floor(Math.random()*CHAOS_FLASH_TYPES.length)];
+        const icon=div.querySelector('.icon');
+        const name=div.querySelector('.cname');
+        const corner=div.querySelector('.corner');
+        if(icon) icon.textContent=CARD_ICON[t]||'?';
+        if(name) name.textContent=ITEM_DEFS[t]?.name||'…';
+        if(corner) corner.textContent=CARD_CORNER[t]||'?';
+      });
+    }, 280);
+
+    function onCraftSlotClick(){
+      if(gameOver||tutActive||window._cardBusy) return;
+      if(turn!=='white'){ log('Крафт только на своём ходу'); return; }
+      if(nukeRitual){ log('Сейчас идёт ядерный ритуал'); return; }
+      if(selectedSlot===null || selectedSlot==='reserve' || typeof selectedSlot!=='number'){
+        log('Выбери карту из руки, затем слот «?»');
+        return;
+      }
+      const item=slots[selectedSlot];
+      if(!item) return;
+      if(item.type==='nuclear'){ log('Ядерку в крафт не кладут'); return; }
+      if(craftTurnId!==turnCount){ craftPile=[]; craftTurnId=turnCount; }
+      if(craftPile.length>=3){ log('Крафт уже заполнен'); return; }
+      craftPile.push({type:item.type, name:item.name, id:item.id});
+      slots[selectedSlot]=null;
+      selectedSlot=null;
+      log('В крафт: '+item.name+' ('+craftPile.length+'/3)');
+      haptic('medium');
+      checkCraftComplete();
+      render();
+    }
+    function checkCraftComplete(){
+      if(craftPile.length<3) return;
+      const types=craftPile.map(c=>c.type);
+      const counts={};
+      types.forEach(t=>counts[t]=(counts[t]||0)+1);
+      const hasPair=Object.values(counts).some(n=>n>=2);
+      if(!hasPair){
+        log('Нужны 2 одинаковые + 1 любая. Крафт сброшен.');
+        craftPile=[];
+        return;
+      }
+      // success → nuclear
+      craftPile=[];
+      giveItem('nuclear', false);
+      log('Собрана ЯДЕРКА!');
+      haptic('success');
+      showTip('nuclear', true);
+      startNukeRitual('white');
     }
     function onPlayerReserveClick(){
       if(gameOver||tutActive||window._cardBusy) return;
+      if(hasNuclearCard('white')){ log('Пока есть ядерка — резерв недоступен'); return; }
       // Put hand card into reserve only on your turn
       if(turn==='white' && selectedSlot!==null && selectedSlot!=='reserve' && typeof selectedSlot==='number'){
         const item = slots[selectedSlot];
@@ -1468,11 +1991,15 @@ function applyCam(){
     function render(){
       const boardEl=document.getElementById('board');
       boardEl.style.gridTemplateColumns=`repeat(${boardW},40px)`;
+      boardEl.style.position='relative';
       boardEl.innerHTML='';
       for(let y=0;y<boardH;y++) for(let x=0;x<boardW;x++){
         const cell=document.createElement('div');
         cell.className='cell '+((x+y)%2===0?'light':'dark');
         if(angelZones.some(z=>z.x===x&&z.y===y)) cell.classList.add('angel-glow');
+        if(inDemonAura(x,y)) cell.classList.add('demon-aura');
+        if(nukeRitual && nukeRitual.protected.some(c=>c.x===x&&c.y===y)) cell.classList.add('protected-mark');
+        if(nukeRitual && nukeRitual.phase==='protect' && nukeRitual.owner==='black') cell.classList.add('protect-pick');
         if(gameOver){
           const hl=lastEndHighlight.find(h=>h.x===x&&h.y===y);
           if(hl) cell.classList.add(hl.cls||'result-hot');
@@ -1481,24 +2008,73 @@ function applyCam(){
         const isPos=possibleMoves.find(m=>m.x===x&&m.y===y);
         if(isPos){ cell.classList.add('possible'); if(board[y][x]) cell.classList.add('has-enemy'); }
         const p=board[y][x];
+        if(isBossCell(x,y)) cell.classList.add('boss-foot');
         if(p){
-          const span=document.createElement('div');
-          let cls='piece '+(isWhite(p)?'white':'black');
-          if(isMerged(p)) cls+=' merged';
-          if(p&&p.shield) cls+=' shielded';
-          if(p&&p.angel) cls+=' angel';
-          span.className=cls;
-          span.textContent=SYM[pieceChar(p)]||'?';
-          cell.appendChild(span);
+          // never draw glyph on boss footprint — sprite covers 3×3
+          if(p.boss || isBossCell(x,y)){
+            // empty cell visual under sprite
+          } else {
+            const span=document.createElement('div');
+            let cls='piece '+(isNeutral(p)?'neutral':(isWhite(p)?'white':'black'));
+            if(isMerged(p)) cls+=' merged';
+            if(p&&p.shield) cls+=' shielded';
+            if(p&&p.angel && !inDemonAura(x,y)) cls+=' angel';
+            if(p&&p.demon) cls+=' demon';
+            if(p&&(p.mega||p.radio)) cls+=' mega-pawn';
+            if(p&&p.red) cls+=' red-boss';
+            span.className=cls;
+            span.textContent=SYM[pieceChar(p)]||'?';
+            cell.appendChild(span);
+          }
         }
         cell.onclick=e=>{ e.stopPropagation(); if(!tutActive) onCellClick(x,y); };
         boardEl.appendChild(cell);
       }
+      // boss sprites stretched over exact 3×3 cells
+      megaPawns.forEach(m=>{
+        const sz=m.size||3;
+        const p=board[m.y]&&board[m.y][m.x];
+        if(!p || !p.boss) return;
+        const originCell=boardEl.children[m.y*boardW+m.x];
+        const farCell=boardEl.children[(m.y+sz-1)*boardW+(m.x+sz-1)];
+        let left=m.x*40, top=m.y*40, w=sz*40, h=sz*40;
+        if(originCell && farCell){
+          // positions relative to boardEl
+          left=originCell.offsetLeft;
+          top=originCell.offsetTop;
+          w=(farCell.offsetLeft+farCell.offsetWidth)-originCell.offsetLeft;
+          h=(farCell.offsetTop+farCell.offsetHeight)-originCell.offsetTop;
+        }
+        if(bossTexture){
+          const img=document.createElement('img');
+          img.src=bossTexture;
+          img.className='boss-sprite';
+          img.alt='boss';
+          img.style.left=left+'px';
+          img.style.top=top+'px';
+          img.style.width=w+'px';
+          img.style.height=h+'px';
+          boardEl.appendChild(img);
+        } else {
+          const div=document.createElement('div');
+          div.className='boss-sprite boss-fallback';
+          div.style.left=left+'px';
+          div.style.top=top+'px';
+          div.style.width=w+'px';
+          div.style.height=h+'px';
+          div.style.fontSize=Math.floor(Math.min(w,h)*0.72)+'px';
+          div.textContent=bossPhase2?'♝':'♟';
+          boardEl.appendChild(div);
+        }
+      });
       applyPendingHighlights();
       renderCards();
       updateSkipBtn();
+      updateUndoBtn();
       document.getElementById('status').innerHTML=
-        gameOver?'Игра окончена':`Ход: <b>${turn==='white'?'белые':'чёрные'}</b>`;
+        gameOver?'Игра окончена':`Ход: <b>${turnLabel(turn)}</b>`
+        +(bossMode?` · <b style="color:#ff6b6b">Босс ${bossHP}/${bossMaxHP}${bossPhase2?' · офицер':''}</b>`:'')
+        +(bossMode&&turn==='white'&&!whiteAIControl?` · ходов ${bossBudget.movesLeft}/4`: '');
       document.getElementById('info').textContent=`${boardW}×${boardH} · #${turnCount}`;
     }
 
@@ -1508,33 +2084,118 @@ function applyCam(){
       document.getElementById('log').textContent=gameLog[0]||'';
     }
 
+    function stepsToReenter(x,y,piece){
+      let dx=0, dy=0;
+      if(x<0) dx=-x; else if(x>=boardW) dx=x-(boardW-1);
+      if(y<0) dy=-y; else if(y>=boardH) dy=y-(boardH-1);
+      const manh=dx+dy;
+      const isPawn=pieceChar(piece).toUpperCase()==='P';
+      // pawns outside step 2 in any direction → fewer half-moves
+      const walk=isPawn ? Math.ceil(manh/2) : manh;
+      return walk+2;
+    }
+    function pushOffboard(x,y,piece){
+      const owner=pieceOwner(piece);
+      const stepsLeft=stepsToReenter(x,y,piece);
+      frozen.push({x,y,piece,owner,stepsLeft});
+      showTip('offboard');
+    }
+    function stepOffboardToward(f){
+      const isPawn=pieceChar(f.piece).toUpperCase()==='P';
+      const step=isPawn?2:1;
+      // move toward the nearest edge of the board (into play)
+      if(f.x<0) f.x=Math.min(0, f.x+step);
+      else if(f.x>=boardW) f.x=Math.max(boardW-1, f.x-step);
+      if(f.y<0) f.y=Math.min(0, f.y+step);
+      else if(f.y>=boardH) f.y=Math.max(boardH-1, f.y-step);
+    }
+    /** Off-board units walk back: need N steps + 2 turns. */
+    function processOffboard(){
+      if(!frozen.length) return;
+      const still=[];
+      frozen.forEach(f=>{
+        if(f.stepsLeft==null) f.stepsLeft=stepsToReenter(f.x,f.y,f.piece);
+        stepOffboardToward(f);
+        f.stepsLeft--;
+        if(f.stepsLeft>0){ still.push(f); return; }
+        // try to enter board
+        let tx=f.x, ty=f.y;
+        if(!inBounds(tx,ty)){
+          // clamp to nearest in-bounds
+          tx=Math.max(0, Math.min(boardW-1, tx));
+          ty=Math.max(0, Math.min(boardH-1, ty));
+        }
+        if(!board[ty][tx]){
+          board[ty][tx]=f.piece;
+          log('Фигура вернулась с края поля');
+          haptic('medium');
+        } else if(pieceOwner(board[ty][tx])!==f.owner && pieceOwner(board[ty][tx])!=='neutral'){
+          // capture enemy / be blocked by ally
+          if(pieceOwner(board[ty][tx])!==f.owner){
+            const existing=board[ty][tx];
+            if(pieceChar(existing).toUpperCase()==='K'){
+              const def=pieceOwner(existing);
+              if(!tryKingFutureSave(def,tx,ty,existing)){
+                board[ty][tx]=f.piece;
+                endGame(f.owner==='neutral'?'white':f.owner, 'Король съеден фигурой с края.', [{x:tx,y:ty,cls:'result-hot'}]);
+                return;
+              }
+            }
+            board[ty][tx]=f.piece;
+            log('Вернулась с края и атаковала');
+          } else {
+            still.push({...f, x:tx, y:ty, stepsLeft:1});
+          }
+        } else if(pieceOwner(board[ty][tx])===f.owner){
+          // merge with ally
+          board[ty][tx]=mergePieces(f.piece, board[ty][tx]);
+          log('Вернулась с края — слияние');
+        } else {
+          still.push({...f, x:tx, y:ty, stepsLeft:1});
+        }
+      });
+      frozen=still;
+    }
+
     function maybeRandomResize(){
+      if(bossMode) return; // never resize during boss fight
       if(turnCount>0 && turnCount%2===0 && Math.random()<0.20){
         const newW=Math.max(4, Math.min(20, 4+Math.floor(Math.random()*17)));
         const newH=Math.max(8, Math.min(20, 8+Math.floor(Math.random()*13)));
         if(newW===boardW && newH===boardH) return;
-        // expand/shrink from center: insert/remove space evenly on both sides
         const offX = Math.floor((newW - boardW) / 2);
         const offY = Math.floor((newH - boardH) / 2);
         const nb=createEmpty(newW,newH);
+        const newFrozen=[];
+        // shift already-offboard units
+        frozen.forEach(f=>{
+          newFrozen.push({
+            x:f.x+offX, y:f.y+offY, piece:f.piece, owner:f.owner,
+            stepsLeft: f.stepsLeft
+          });
+        });
         for(let y=0;y<boardH;y++) for(let x=0;x<boardW;x++){
           if(!board[y][x]) continue;
           const nx=x+offX, ny=y+offY;
           if(nx>=0&&ny>=0&&nx<newW&&ny<newH) nb[ny][nx]=board[y][x];
-          else frozen.push({x:nx,y:ny,piece:board[y][x],owner:pieceOwner(board[y][x])});
+          else newFrozen.push({x:nx,y:ny,piece:board[y][x],owner:pieceOwner(board[y][x]),stepsLeft:null});
         }
-        const still=[];
-        frozen.forEach(f=>{
-          // shift frozen coords by same offset relative to old system — already absolute
-          if(f.x>=0&&f.y>=0&&f.x<newW&&f.y<newH){
-            if(!nb[f.y][f.x]) nb[f.y][f.x]=f.piece; else still.push(f);
-          } else still.push(f);
-        });
-        // also shift future queue positions
         futureQueue.forEach(f=>{ f.x+=offX; f.y+=offY; });
-        frozen=still; boardW=newW; boardH=newH; board=nb;
+        boardW=newW; boardH=newH; board=nb;
+        const nextF=[];
+        newFrozen.forEach(f=>{
+          if(f.x>=0&&f.y>=0&&f.x<boardW&&f.y<boardH){
+            if(!board[f.y][f.x]) board[f.y][f.x]=f.piece;
+            else nextF.push({...f, stepsLeft: f.stepsLeft==null?2:Math.max(1,f.stepsLeft)});
+          } else {
+            if(f.stepsLeft==null) f.stepsLeft=stepsToReenter(f.x,f.y,f.piece);
+            nextF.push(f);
+          }
+        });
+        frozen=nextF;
         log(`Поле → ${boardW}×${boardH}`);
         showTip('board_resize');
+        if(frozen.length) showTip('offboard');
         haptic('medium');
         camScale=Math.min(camScale, 1.1); applyCam();
       }
@@ -1543,24 +2204,24 @@ function applyCam(){
 
     function ensureObj(p){
       if(!p) return null;
-      if(typeof p==='string') return {base:p, extra:[], merged:false, shield:false, angel:false};
-      // clone so callers can safely mutate result
+      if(typeof p==='string') return {base:p, extra:[], merged:false, shield:false, angel:false, demon:false, neutral:false};
       return {
         base: p.base,
         extra: Array.isArray(p.extra) ? p.extra.slice() : [],
         merged: !!p.merged,
         shield: !!p.shield,
-        angel: !!p.angel
+        angel: !!p.angel,
+        demon: !!p.demon,
+        neutral: !!p.neutral
       };
     }
     function withFlags(p, flags){
       const o = ensureObj(p);
       if(!o) return null;
-      // stack flags: true wins if either side has it (unless explicitly set false)
       const out = Object.assign({}, o);
       if(flags){
         Object.keys(flags).forEach(k=>{
-          if(k==='shield' || k==='angel'){
+          if(k==='shield' || k==='angel' || k==='demon' || k==='neutral'){
             if(flags[k]===false) out[k]=false;
             else if(flags[k]) out[k]=true;
           } else if(flags[k]!==undefined){
@@ -1580,8 +2241,17 @@ function applyCam(){
         extra,
         merged: true,
         shield: !!(a && a.shield) || !!(b && b.shield),
-        angel: !!(a && a.angel) || !!(b && b.angel)
+        angel: !!(a && a.angel) || !!(b && b.angel),
+        demon: !!(a && a.demon) || !!(b && b.demon),
+        neutral: !!(a && a.neutral) || !!(b && b.neutral)
       };
+    }
+    function inDemonAura(x,y){
+      for(let yy=0;yy<boardH;yy++) for(let xx=0;xx<boardW;xx++){
+        const p=board[yy][xx];
+        if(p && p.demon && Math.abs(xx-x)<=2 && Math.abs(yy-y)<=2) return true;
+      }
+      return false;
     }
     /** Promote pawn at last rank; keep extras and buffs. */
     function maybePromote(piece, x, y){
@@ -1607,19 +2277,22 @@ function applyCam(){
       angelZones = [];
       for(let y=0;y<boardH;y++) for(let x=0;x<boardW;x++){
         const p=board[y][x];
-        if(!p || !p.angel) continue;
+        if(!p || !p.angel || p.demon) continue;
+        // angel disabled while standing in demon aura
+        if(inDemonAura(x,y)) continue;
         const owner=pieceOwner(p);
+        if(owner==='neutral') continue;
         const dir = owner==='white' ? -1 : 1;
-        // 3 wide x 4 forward
         for(let dy=1; dy<=4; dy++){
           for(let dx=-1; dx<=1; dx++){
             const nx=x+dx, ny=y+dir*dy;
-            if(inBounds(nx,ny)) angelZones.push({x:nx,y:ny,owner});
+            if(inBounds(nx,ny) && !inDemonAura(nx,ny)) angelZones.push({x:nx,y:ny,owner});
           }
         }
       }
     }
     function inAngelGlow(x,y, forOwner){
+      if(inDemonAura(x,y)) return false;
       return angelZones.some(z => z.x===x && z.y===y && z.owner===forOwner);
     }
     const HL_MS = 4500; // highlight duration
@@ -1804,11 +2477,13 @@ function applyCam(){
       shield:{name:'Щит',type:'shield'},
       extra:{name:'2-й ход',type:'extra'},
       angel:{name:'Ангел',type:'angel'},
-      reset:{name:'Сброс',type:'reset', rare:true}
+      reset:{name:'Сброс',type:'reset', rare:true},
+      chaos:{name:'Мигание',type:'chaos'},
+      nuclear:{name:'Ядерка',type:'nuclear', rare:true}
     };
-    // weighted card drops (reset is rare)
+    // weighted card drops (reset is rare, chaos uncommon; nuclear not in random pool)
     const CARD_WEIGHTS = {
-      future:12, spawn:14, airstrike:12, support:14, shield:12, extra:10, angel:10, reset:3
+      future:12, spawn:14, airstrike:12, support:14, shield:12, extra:10, angel:10, reset:3, chaos:8
     };
     function pickRandomCardId(){
       const entries=Object.entries(CARD_WEIGHTS);
@@ -1825,11 +2500,12 @@ function applyCam(){
       return {shield:true, angel:true};
     }
     function softResetBoard(){
-      // collect all living pieces (board + frozen + future)
+      // collect all living pieces (board + frozen + future); neutrals vanish
       const pool={white:{K:[],Q:[],R:[],B:[],N:[],P:[]}, black:{K:[],Q:[],R:[],B:[],N:[],P:[]}};
       function addP(p){
         if(!p) return;
         const o=pieceOwner(p);
+        if(o==='neutral') return;
         const t=pieceChar(p).toUpperCase();
         if(!pool[o][t]) pool[o][t]=[];
         pool[o][t].push(p);
@@ -1941,23 +2617,45 @@ function applyCam(){
         playerReserve=null;
       } else {
         const i=slots.findIndex(s=>s===item); if(i!==-1) slots[i]=null;
+        // also by reference miss: clear first matching type if still present
+        if(item && slots.every(s=>s!==item)){
+          /* already cleared */
+        }
       }
       selectedSlot=null;
     }
+    /** Consume card immediately so it can't be double-fired during animation */
+    function consumeCardNow(item, fromReserve){
+      clearSlot(item, fromReserve);
+      selected=null; possibleMoves=[];
+      renderCards();
+    }
 
     function useItem(item,x,y,fromReserve){
-      if(window._cardBusy) return false;
+      if(window._cardBusy || moving) return false;
+      if(!item) return false;
+      // already removed from hand?
+      if(!fromReserve && selectedSlot!=='reserve'){
+        const still=slots.some(s=>s===item);
+        if(!still && selectedSlot!=null && slots[selectedSlot]!==item) return false;
+      }
+      const markUndo=()=>{ if(turn==='white') pushUndoSnapshot(); };
       if(item.type==='future'){
         if(!inBounds(x,y)||!board[y][x]||pieceOwner(board[y][x])!=='white'){ log('Выбери свою фигуру'); return false; }
+        if(window._cardBusy) return false;
+        markUndo();
         pendingFuture={x,y,piece:board[y][x],item, fromReserve:!!fromReserve};
+        // don't consume until confirmed in picker
         document.getElementById('future-picker').classList.add('show');
         return true;
       }
       if(item.type==='spawn'){
         if(!inBounds(x,y)||board[y][x]){ log('Нужна пустая клетка'); return false; }
+        markUndo();
+        consumeCardNow(item, fromReserve);
         playCardUseAnim(item, [{x,y}], ()=>{
           board[y][x]=['n','b','r','p','q'][Math.floor(Math.random()*5)];
-          clearSlot(item, fromReserve); log('Спавн!'); haptic('medium'); showTip('spawn');
+          log('Спавн!'); haptic('medium'); showTip('spawn');
         });
         return true;
       }
@@ -1968,10 +2666,11 @@ function applyCam(){
           const nx=x+dx, ny=y+dy;
           if(inBounds(nx,ny)) zone.push({x:nx,y:ny});
         }
+        markUndo();
+        consumeCardNow(item, fromReserve);
         playCardUseAnim(item, zone, ()=>{
           showCrosshairOnCell(x,y, HL_MS);
           scatterArea(x,y);
-          clearSlot(item, fromReserve);
           log('Авиаудар! Фигуры разлетелись');
           haptic('medium'); showTip('airstrike');
           rebuildAngelZones();
@@ -1981,6 +2680,8 @@ function applyCam(){
       if(item.type==='support'){
         const boardEl=document.getElementById('board');
         const mid = boardEl ? [{x:Math.floor(boardW/2), y:Math.floor(boardH/2)}] : [];
+        markUndo();
+        consumeCardNow(item, fromReserve);
         playCardUseAnim(item, mid, ()=>{
           const forWhite=Math.random()<0.6; const pawn=forWhite?'p':'P';
           let placed=0; const cells=[];
@@ -1989,7 +2690,6 @@ function applyCam(){
             if(!board[ry][rx]){ board[ry][rx]=pawn; cells.push({x:rx,y:ry}); placed++; }
           }
           highlightCells(cells, 'effect-hl', HL_MS);
-          clearSlot(item, fromReserve);
           log(forWhite?`+${placed} твоих пешек`:`Врагу +${placed}`);
           haptic(forWhite?'success':'error'); showTip('support');
         });
@@ -1997,30 +2697,34 @@ function applyCam(){
       }
       if(item.type==='shield'){
         if(!inBounds(x,y)||!board[y][x]||pieceOwner(board[y][x])!=='white'){ log('Выбери свою фигуру'); return false; }
+        markUndo();
+        consumeCardNow(item, fromReserve);
         playCardUseAnim(item, [{x,y}], ()=>{
           board[y][x]=withFlags(board[y][x], {shield:true});
-          clearSlot(item, fromReserve); log('Щит наложен'); haptic('success'); showTip('shield');
+          log('Щит наложен'); haptic('success'); showTip('shield');
         });
         return true;
       }
       if(item.type==='extra'){
         const mid=[{x:Math.floor(boardW/2), y:Math.floor(boardH/2)}];
+        markUndo();
+        consumeCardNow(item, fromReserve);
         playCardUseAnim(item, mid, ()=>{
           extraMove=true;
-          clearSlot(item, fromReserve); log('2-й ход активен — походи ещё раз после хода');
+          log('2-й ход активен — походи ещё раз после хода');
           haptic('success'); showTip('extra');
         });
         return true;
       }
       if(item.type==='reset'){
         const mid=[{x:Math.floor(boardW/2), y:Math.floor(boardH/2)}];
-        // all cells flash lightly
         const all=[];
         for(let yy=0;yy<boardH;yy++) for(let xx=0;xx<boardW;xx++) all.push({x:xx,y:yy});
+        markUndo();
+        consumeCardNow(item, fromReserve);
         playCardUseAnim(item, mid, ()=>{
           const r=softResetBoard();
           highlightCells(all.slice(0, Math.min(all.length, 32)), 'effect-hl', HL_MS);
-          clearSlot(item, fromReserve);
           log('Сброс =) лишние → бафы ('+((r.exW||0)+(r.exB||0))+')');
           haptic('success'); showTip('reset');
         });
@@ -2028,20 +2732,824 @@ function applyCam(){
       }
       if(item.type==='angel'){
         if(!inBounds(x,y)||!board[y][x]||pieceOwner(board[y][x])!=='white'){ log('Выбери свою фигуру'); return false; }
-        // preview glow cells
         const glow=[{x,y}];
         for(let dy=1; dy<=4; dy++) for(let dx=-1; dx<=1; dx++){
           const nx=x+dx, ny=y-dy;
           if(inBounds(nx,ny)) glow.push({x:nx,y:ny});
         }
+        markUndo();
+        consumeCardNow(item, fromReserve);
         playCardUseAnim(item, glow, ()=>{
           board[y][x]=withFlags(board[y][x], {angel:true});
-          clearSlot(item, fromReserve); log('Ангел! Крылья и нимб');
+          log('Ангел! Крылья и нимб');
           haptic('success'); showTip('angel'); rebuildAngelZones();
         });
         return true;
       }
+      if(item.type==='chaos'){
+        const rx=Math.floor(Math.random()*boardW), ry=Math.floor(Math.random()*boardH);
+        markUndo();
+        consumeCardNow(item, fromReserve);
+        playCardUseAnim(item, [{x:rx,y:ry}], ()=>{
+          applyChaosEffect(rx, ry);
+          haptic('medium');
+        });
+        return true;
+      }
+      if(item.type==='nuclear'){
+        if(!nukeRitual || nukeRitual.phase!=='fire' || nukeRitual.owner!=='white'){
+          log('Ядерку можно выстрелить только после ритуала защиты');
+          return false;
+        }
+        if(!inBounds(x,y)){ log('Укажи клетку удара'); return false; }
+        markUndo();
+        const zone=nuclearZone(x,y);
+        consumeCardNow(item, fromReserve);
+        playCardUseAnim(item, zone, ()=>{
+          resolveNuclearStrike(x,y,'white');
+          haptic('error');
+        });
+        return true;
+      }
       return false;
+    }
+
+    function applyChaosEffect(x, y){
+      // random effect among: bang, demon, airstrike, spawn, shield
+      const pool=['bang','bang','demon','airstrike','spawn','shield'];
+      const eff=pool[Math.floor(Math.random()*pool.length)];
+      highlightCells([{x,y}], 'effect-hl', HL_MS);
+      if(eff==='airstrike'){
+        showCrosshairOnCell(x,y, HL_MS);
+        scatterArea(x,y);
+        log('Хаос → авиаудар!');
+        showTip('airstrike');
+        rebuildAngelZones();
+        return;
+      }
+      if(eff==='spawn'){
+        if(!board[y][x]){
+          board[y][x]=['n','b','r','p','q'][Math.floor(Math.random()*5)];
+          log('Хаос → спавн!');
+        } else {
+          log('Хаос → спавн мимо (клетка занята)');
+        }
+        showTip('spawn');
+        return;
+      }
+      if(eff==='shield'){
+        if(board[y][x] && pieceOwner(board[y][x])!=='neutral'){
+          board[y][x]=withFlags(board[y][x], {shield:true});
+          log('Хаос → щит на фигуре');
+          showTip('shield');
+        } else if(!board[y][x]){
+          // bang-like neutral instead
+          spawnNeutralAt(x,y);
+        } else {
+          board[y][x]=withFlags(board[y][x], {shield:true});
+          log('Хаос → щит');
+        }
+        return;
+      }
+      if(eff==='demon'){
+        if(board[y][x]){
+          board[y][x]=withFlags(board[y][x], {demon:true, angel:false});
+          log('Хаос → демон!');
+        } else {
+          // empty: spawn neutral demon knight
+          board[y][x]={base:'n', extra:[], merged:false, neutral:true, demon:true, shield:false, angel:false};
+          log('Хаос → нейтральный демон!');
+          showTip('neutral_unit');
+        }
+        showTip('demon');
+        rebuildAngelZones();
+        return;
+      }
+      // bang
+      if(!board[y][x]){
+        spawnNeutralAt(x,y);
+      } else {
+        // scatter that cell
+        showCrosshairOnCell(x,y, HL_MS);
+        const p=board[y][x];
+        board[y][x]=null;
+        // try place nearby or offboard
+        let placed=false;
+        for(let r=1;r<=3&&!placed;r++){
+          for(let dy=-r;dy<=r&&!placed;dy++) for(let dx=-r;dx<=r&&!placed;dx++){
+            if(Math.abs(dx)!==r && Math.abs(dy)!==r) continue;
+            const nx=x+dx, ny=y+dy;
+            if(inBounds(nx,ny)&&!board[ny][nx]){ board[ny][nx]=p; placed=true; }
+          }
+        }
+        if(!placed) pushOffboard(x-1,y,p);
+        log('Хаос → бах!');
+        showTip('airstrike');
+      }
+    }
+    function spawnNeutralAt(x,y){
+      const types=['p','n','b','r','q'];
+      const base=types[Math.floor(Math.random()*types.length)];
+      const buff=pickWeightedBuff();
+      board[y][x]={
+        base, extra:[], merged:false, neutral:true,
+        shield:!!buff.shield, angel:false, demon:false
+      };
+      log('Хаос → нейтральный юнит!');
+      showTip('neutral_unit');
+      haptic('success');
+    }
+
+    function nuclearZone(cx,cy){
+      // 3 width × 4 height, centered on impact
+      const cells=[];
+      for(let dy=-2;dy<=1;dy++) for(let dx=-1;dx<=1;dx++){
+        const x=cx+dx, y=cy+dy;
+        if(inBounds(x,y)) cells.push({x,y});
+      }
+      return cells;
+    }
+
+    function startNukeRitual(owner){
+      nukeRitual={ owner, phase:'equalize', protected:[], futuresGiven:false };
+      window._cardBusy=true;
+      document.getElementById('nuke-ritual-ui').classList.add('show');
+      // Teto splash covers nuclear owner's cards
+      const splash=document.getElementById('nuke-teto-splash');
+      if(splash){
+        splash.classList.add('show');
+        splash.style.right = owner==='white' ? '4%' : 'auto';
+        splash.style.left = owner==='black' ? '4%' : 'auto';
+      }
+      // custom Teto line
+      forceTetoSay('Давайте уравняем шансы…', ()=>{
+        if(splash) splash.classList.remove('show');
+        animateOppFutureCards(owner==='white'?'black':'white', ()=>{
+          nukeRitual.phase='protect';
+          forceTetoSay('Выбери 3 фигуры, которые хочешь защитить.', ()=>{
+            document.getElementById('nuke-protect-hint').textContent=
+              (owner==='white'?'Противник':'Ты')+': выбери 3 фигуры для защиты (тап по клетке)';
+            document.getElementById('nuke-protect-hint').classList.add('show');
+            if(owner==='white'){
+              // AI protects 3 valuable pieces
+              aiPickProtect();
+            } else {
+              // player protects
+              log('Выбери 3 свои фигуры для защиты от ядерки');
+              render();
+            }
+          });
+        });
+      });
+    }
+
+    function forceTetoSay(msg, then){
+      // temporary tip without localStorage lock
+      const tut=document.getElementById('tutorial');
+      const text=tut && tut.querySelector('.text');
+      if(text) text.textContent=msg;
+      if(tut){ tut.classList.add('show'); tut.classList.remove('hiding'); }
+      tutActive=true;
+      const next=document.getElementById('tut-next');
+      const skip=document.getElementById('tut-skip');
+      const finish=()=>{
+        tutActive=false;
+        if(tut){ tut.classList.add('hiding'); setTimeout(()=>tut.classList.remove('show','hiding'), 350); }
+        if(next) next.onclick=closeTip;
+        if(skip) skip.onclick=closeTip;
+        if(then) then();
+      };
+      if(next) next.onclick=finish;
+      if(skip) skip.onclick=finish;
+      // auto-continue if user slow
+      setTimeout(()=>{ if(tutActive) finish(); }, 5200);
+    }
+
+    function animateOppFutureCards(side, done){
+      const hand=document.getElementById('nuke-opp-hand');
+      if(!hand){ if(done) done(); return; }
+      hand.innerHTML='';
+      // main slots of the side WITHOUT nuclear slide off-screen
+      const zoneEl = side==='white'
+        ? document.getElementById('player-zone')
+        : document.getElementById('ai-zone');
+      if(zoneEl) zoneEl.classList.add('slide-off');
+
+      // clear their hand → will refill with futures
+      if(side==='white') slots=[null,null,null];
+      else aiSlots=[null,null,null];
+      renderCards();
+
+      const cards=[];
+      for(let i=0;i<3;i++){
+        const el=document.createElement('div');
+        el.className='mini-card';
+        el.innerHTML='⏳';
+        hand.appendChild(el);
+        cards.push(el);
+      }
+      setTimeout(()=>{ cards[1].classList.add('show'); }, 80);
+      setTimeout(()=>{ cards[0].classList.add('show'); cards[2].classList.add('show'); }, 420);
+      setTimeout(()=>{
+        if(side==='white') for(let i=0;i<3;i++) giveItem('future', false);
+        else for(let i=0;i<3;i++) giveItem('future', true);
+        if(zoneEl) zoneEl.classList.remove('slide-off');
+        renderCards();
+        if(done) done();
+      }, 1100);
+    }
+
+    function aiPickProtect(){
+      const side = nukeRitual.owner==='white'?'black':'white';
+      const pieces=[];
+      for(let y=0;y<boardH;y++) for(let x=0;x<boardW;x++){
+        const p=board[y][x];
+        if(p && pieceOwner(p)===side){
+          const v=VAL[String(pieceChar(p)).toLowerCase()]||1;
+          pieces.push({x,y,v});
+        }
+      }
+      pieces.sort((a,b)=>b.v-a.v);
+      nukeRitual.protected = pieces.slice(0,3).map(p=>({x:p.x,y:p.y}));
+      finishProtectPhase();
+    }
+
+    function tryPickProtect(x,y){
+      if(!nukeRitual || nukeRitual.phase!=='protect') return false;
+      // defender is the side WITHOUT nuclear
+      const def = nukeRitual.owner==='white'?'black':'white';
+      if(nukeRitual.owner==='black'){
+        // player is defender
+        const p=board[y][x];
+        if(!p || pieceOwner(p)!=='white'){ log('Выбери свою фигуру'); return true; }
+        if(nukeRitual.protected.some(c=>c.x===x&&c.y===y)) return true;
+        nukeRitual.protected.push({x,y});
+        log('Защита '+nukeRitual.protected.length+'/3: '+cellLabel(x,y));
+        render();
+        if(nukeRitual.protected.length>=3) finishProtectPhase();
+        return true;
+      }
+      return false;
+    }
+
+    function finishProtectPhase(){
+      document.getElementById('nuke-protect-hint').classList.remove('show');
+      forceTetoSay('На этом всё. Держитесь.', ()=>{
+        document.getElementById('nuke-ritual-ui').classList.remove('show');
+        nukeRitual.phase='fire';
+        window._cardBusy=false;
+        log(nukeRitual.owner==='white'
+          ? 'Только ядерка: выбери клетку удара'
+          : 'ИИ может только выстрелить ядеркой…');
+        render();
+        if(nukeRitual.owner==='black'){
+          setTimeout(aiFireNuclear, 600);
+        }
+      });
+    }
+
+    function aiFireNuclear(){
+      if(!nukeRitual || nukeRitual.owner!=='black') return;
+      // aim near white king or center
+      const wk=findKing('white');
+      let tx=Math.floor(boardW/2), ty=Math.floor(boardH/2);
+      if(wk && !wk.frozen && !wk.future){ tx=wk.x; ty=wk.y; }
+      // consume nuclear from AI hand
+      const idx=aiSlots.findIndex(s=>s&&s.type==='nuclear');
+      if(idx>=0) aiSlots[idx]=null;
+      resolveNuclearStrike(tx,ty,'black');
+    }
+
+    function resolveNuclearStrike(cx,cy,owner){
+      // protected → future for 2 pairs of turns (4 half-moves) — guaranteed survival
+      (nukeRitual?.protected||[]).forEach(c=>{
+        if(!inBounds(c.x,c.y) || !board[c.y][c.x]) return;
+        const p=board[c.y][c.x];
+        board[c.y][c.x]=null;
+        futureQueue.push({turnsLeft:4, x:c.x, y:c.y, piece:p, owner:pieceOwner(p)});
+      });
+      const zone=nuclearZone(cx,cy);
+      highlightCells(zone, 'nuke-blast', 9000);
+      showCrosshairOnCell(cx,cy, 8500);
+      nukeRitual=null;
+      window._cardBusy=true;
+      document.getElementById('nuke-ritual-ui').classList.remove('show');
+      log('Ядерка запущена… 8 секунд до удара');
+      render();
+
+      // 8s silence, then rocket
+      let left=8;
+      const tick=setInterval(()=>{
+        left--;
+        if(left>0) log('До удара: '+left+'…');
+      }, 1000);
+
+      setTimeout(()=>{
+        clearInterval(tick);
+        // rocket from sky
+        playRocketAnim(cx,cy, ()=>{
+          // impact: wipe zone
+          const victims=[];
+          zone.forEach(({x,y})=>{
+            const p=board[y][x];
+            if(p){ victims.push({x,y}); board[y][x]=null; }
+          });
+          log('УДАР! Зона очищена');
+          haptic('error');
+          rebuildAngelZones();
+          render();
+
+          setTimeout(()=>{
+            // rebirth as red at same cells
+            const reds=victims.map(v=>{
+              board[v.y][v.x]={
+                base:'p', extra:[], merged:false, neutral:false,
+                red:true, shield:false, angel:false, demon:false
+              };
+              return {x:v.x,y:v.y};
+            });
+            log('Перерождение… красные сходятся к эпицентру');
+            render();
+            convergeReds(reds, cx, cy, ()=>{
+              spawnBoss3x3(cx, cy);
+              enterBossMode();
+              window._cardBusy=false;
+              afterMove();
+            });
+          }, 1000);
+        });
+      }, 8000);
+    }
+
+    function playRocketAnim(tx,ty, done){
+      const boardEl=document.getElementById('board');
+      const cell=boardEl && boardEl.children[ty*boardW+tx];
+      const fly=document.getElementById('fly');
+      const vp=document.getElementById('viewport');
+      if(!cell||!fly||!vp){ if(done) done(); return; }
+      const wrap=vp.getBoundingClientRect();
+      const tr=cell.getBoundingClientRect();
+      const x1=tr.left-wrap.left+tr.width/2;
+      const y1=tr.top-wrap.top+tr.height/2;
+      fly.innerHTML='';
+      fly.className='piece';
+      fly.style.display='flex';
+      fly.style.transition='none';
+      fly.style.left=(x1)+'px';
+      fly.style.top='-48px';
+      fly.style.transform='translate(-50%,0) scale(1.35)';
+      {
+        // by default the texture lives next to Teto's layers; custom ROCKET texture overrides it
+        const img=document.createElement('img');
+        img.src=rocketTexture || 'teto-layers/Rocket.png';
+        img.alt='rocket';
+        img.style.width='48px';
+        img.style.height='64px';
+        img.style.objectFit='contain';
+        img.style.pointerEvents='none';
+        img.onerror=()=>{ img.remove(); fly.textContent='🚀'; };
+        fly.appendChild(img);
+      }
+      void fly.offsetWidth;
+      fly.style.transition='transform 0.85s cubic-bezier(0.4,0,0.2,1)';
+      requestAnimationFrame(()=>{
+        fly.style.transform=`translate(-50%, ${y1+48}px) scale(1.05)`;
+      });
+      setTimeout(()=>{
+        fly.style.display='none';
+        fly.style.transition='none';
+        fly.innerHTML='';
+        if(done) done();
+      }, 900);
+    }
+
+    function convergeReds(reds, cx, cy, done){
+      if(!reds.length){ if(done) done(); return; }
+      const step=()=>{
+        let moved=false;
+        reds.forEach(r=>{
+          if(!board[r.y]||!board[r.y][r.x]||!board[r.y][r.x].red) return;
+          const dx=Math.sign(cx-r.x), dy=Math.sign(cy-r.y);
+          // prefer axis toward epicenter, one cell
+          let nx=r.x, ny=r.y;
+          if(dx!==0) nx=r.x+dx;
+          else if(dy!==0) ny=r.y+dy;
+          if(nx===r.x && ny===r.y) return;
+          if(!inBounds(nx,ny)) return;
+          // if target occupied by another red, still try alternate
+          if(board[ny][nx] && !(board[ny][nx].red && nx===cx && ny===cy)){
+            if(dy!==0 && inBounds(r.x, r.y+dy) && !board[r.y+dy][r.x]){ ny=r.y+dy; nx=r.x; }
+            else if(dx!==0 && inBounds(r.x+dx, r.y) && !board[r.y][r.x+dx]){ nx=r.x+dx; ny=r.y; }
+            else return;
+          }
+          board[ny][nx]=board[r.y][r.x];
+          board[r.y][r.x]=null;
+          r.x=nx; r.y=ny;
+          moved=true;
+        });
+        render();
+        const allClose=reds.every(r=>Math.abs(r.x-cx)+Math.abs(r.y-cy)<=1);
+        if(!moved || allClose){
+          // clear remaining reds into boss
+          reds.forEach(r=>{ if(board[r.y]&&board[r.y][r.x]&&board[r.y][r.x].red) board[r.y][r.x]=null; });
+          if(done) done();
+          return;
+        }
+        setTimeout(step, 1000);
+      };
+      setTimeout(step, 1000);
+    }
+
+    function spawnBoss3x3(cx,cy){
+      let mx=Math.max(0, Math.min(boardW-3, cx-1));
+      let my=Math.max(0, Math.min(boardH-3, cy-1));
+      // clear all leftover red walkers everywhere
+      for(let y=0;y<boardH;y++) for(let x=0;x<boardW;x++){
+        const p=board[y][x];
+        if(p && p.red && !p.boss) board[y][x]=null;
+      }
+      for(let dy=0;dy<3;dy++) for(let dx=0;dx<3;dx++){
+        if(inBounds(mx+dx,my+dy)) board[my+dy][mx+dx]=null;
+      }
+      const boss={
+        base:'P', extra:[], merged:true, mega:true, boss:true, radio:true,
+        neutral:false, red:true, shield:false, angel:false, demon:false
+      };
+      board[my][mx]=boss;
+      megaPawns=[{x:mx,y:my,size:3}];
+      log('Босс-пешка 3×3 явилась!');
+      summonBossMinions(mx, my);
+      render();
+    }
+
+    function makeRedMinion(){
+      return {
+        base:'p', extra:[], merged:false, red:true, redMinion:true,
+        boss:false, neutral:false, shield:false, angel:false, demon:false,
+        oneshot:true
+      };
+    }
+    function summonBossMinions(bx, by){
+      // up to 2 red pawns near boss, normal size, oneshot, move like boss
+      const spots=[];
+      for(let dy=-2;dy<=4;dy++) for(let dx=-2;dx<=4;dx++){
+        const x=bx+dx, y=by+dy;
+        if(!inBounds(x,y)) continue;
+        if(isBossCell(x,y)) continue;
+        if(board[y][x]) continue;
+        spots.push({x,y});
+      }
+      spots.sort(()=>Math.random()-0.5);
+      let n=0;
+      for(const s of spots){
+        if(n>=2) break;
+        board[s.y][s.x]=makeRedMinion();
+        n++;
+      }
+      if(n) log('Босс призвал '+n+' красных пешек-миньонов');
+    }
+    function countRedMinions(){
+      let c=0;
+      for(let y=0;y<boardH;y++) for(let x=0;x<boardW;x++){
+        const p=board[y][x];
+        if(p && p.redMinion) c++;
+      }
+      return c;
+    }
+    /** Kill every non-boss piece standing on boss 3×3 footprint (including kings) */
+    function bossDigest(){
+      const m=megaPawns.find(mm=>{
+        const p=board[mm.y]&&board[mm.y][mm.x];
+        return p&&p.boss;
+      });
+      if(!m) return;
+      const sz=m.size||3;
+      for(let dy=0;dy<sz;dy++) for(let dx=0;dx<sz;dx++){
+        const x=m.x+dx, y=m.y+dy;
+        if(!inBounds(x,y)) continue;
+        const t=board[y][x];
+        if(!t || t.boss) continue;
+        // oneshot minions of boss shouldn't be on footprint anyway
+        if(t.redMinion){ board[y][x]=null; continue; }
+        if(pieceChar(t).toUpperCase()==='K'){
+          const def=pieceOwner(t);
+          board[y][x]=null;
+          if(def==='white') transferWhiteToAI('Босс раздавил белого короля');
+          else if(def==='black') log('Босс раздавил чёрного короля');
+          else log('Босс раздавил короля');
+        } else {
+          board[y][x]=null;
+          log('Босс раздавил фигуру на '+cellLabel(x,y));
+        }
+      }
+    }
+    function moveRedMinions(dx, dy){
+      // move all minions one step same direction as boss (if free)
+      const list=[];
+      for(let y=0;y<boardH;y++) for(let x=0;x<boardW;x++){
+        const p=board[y][x];
+        if(p && p.redMinion) list.push({x,y,p});
+      }
+      // move from far side first to avoid collisions
+      list.sort((a,b)=>(b.x*dx+b.y*dy)-(a.x*dx+a.y*dy));
+      list.forEach(({x,y,p})=>{
+        const nx=x+dx, ny=y+dy;
+        if(!inBounds(nx,ny)) return;
+        if(isBossCell(nx,ny)) return;
+        const t=board[ny][nx];
+        if(t){
+          if(t.boss || t.redMinion) return;
+          // oneshot capture anything they step on
+          if(pieceChar(t).toUpperCase()==='K'){
+            const def=pieceOwner(t);
+            board[ny][nx]=null;
+            if(def==='white') transferWhiteToAI('Миньон босса съел белого короля');
+            else log('Миньон босса съел фигуру');
+          } else {
+            board[ny][nx]=null;
+          }
+        }
+        board[y][x]=null;
+        board[ny][nx]=p;
+      });
+    }
+
+    function transferWhiteToAI(reason){
+      if(whiteAIControl) return;
+      whiteAIControl=true;
+      log(reason||'Белый король пал — армия белых под контролем ИИ');
+      // strip any remaining white kings just in case
+      for(let y=0;y<boardH;y++) for(let x=0;x<boardW;x++){
+        const p=board[y][x];
+        if(p && pieceOwner(p)==='white' && pieceChar(p).toUpperCase()==='K') board[y][x]=null;
+      }
+      render();
+    }
+
+    function enterBossMode(){
+      bossMode=true;
+      bossHP=bossMaxHP;
+      // expand board to 13×13, keep pieces centered
+      const newW=13, newH=13;
+      const offX=Math.floor((newW-boardW)/2);
+      const offY=Math.floor((newH-boardH)/2);
+      const nb=createEmpty(newW,newH);
+      for(let y=0;y<boardH;y++) for(let x=0;x<boardW;x++){
+        if(board[y][x]) nb[y+offY][x+offX]=board[y][x];
+      }
+      megaPawns=megaPawns.map(m=>({x:m.x+offX,y:m.y+offY,size:m.size||3}));
+      futureQueue.forEach(f=>{ f.x+=offX; f.y+=offY; });
+      frozen.forEach(f=>{ f.x+=offX; f.y+=offY; });
+      boardW=newW; boardH=newH; board=nb;
+      bossBudget={ movesLeft:4, attacksLeft:1, pieceUsed:{} };
+      log('БОСС-ФАЙТ! Поле 13×13. 4 хода / макс 2 одной фигурой / 1 атака. Цель: 20 ударов по боссу.');
+      forceTetoSay('После ядерного удара трупы поднялись и начали двигаться. Будьте осторожны и попытайтесь выжить — победить чёрных уже не имеет смысла.', ()=>{});
+      camScale=Math.min(camScale, 0.85); applyCam();
+      rebuildAngelZones();
+      render();
+    }
+
+    function isBossCell(x,y){
+      const m=getMegaAt(x,y);
+      if(!m) return false;
+      // footprint always counts in boss mode even if glyph missing
+      if(bossMode) return true;
+      const p=board[m.y]&&board[m.y][m.x];
+      return !!(p && p.boss);
+    }
+    function isMegaCell(x,y){
+      return !!getMegaAt(x,y);
+    }
+    function getMegaAt(x,y){
+      return megaPawns.find(m=>{
+        const sz=m.size||3;
+        return x>=m.x&&x<m.x+sz&&y>=m.y&&y<m.y+sz;
+      });
+    }
+    function findBossPiece(){
+      for(let y=0;y<boardH;y++) for(let x=0;x<boardW;x++){
+        const p=board[y][x];
+        if(p && p.boss) return {x,y,p};
+      }
+      return null;
+    }
+    /** If boss vanished — slide in from board edge and take an extra turn */
+    function ensureBossPresent(then){
+      if(!bossMode || gameOver){ if(then) then(); return; }
+      const found=findBossPiece();
+      if(found){
+        // resync mega origin to actual piece
+        const sz=3;
+        let mx=Math.max(0, Math.min(boardW-sz, found.x));
+        let my=Math.max(0, Math.min(boardH-sz, found.y));
+        // if piece not at top-left of footprint, move reference
+        if(!megaPawns.some(m=>m.x===found.x&&m.y===found.y)){
+          megaPawns=[{x:found.x,y:found.y,size:sz}];
+        }
+        if(then) then();
+        return;
+      }
+      // respawn from edge
+      log('Босс исчез… возвращается с края поля!');
+      const sz=3;
+      const side=Math.floor(Math.random()*4);
+      let mx, my;
+      if(side===0){ mx=0; my=Math.floor(Math.random()*(boardH-sz)); }
+      else if(side===1){ mx=boardW-sz; my=Math.floor(Math.random()*(boardH-sz)); }
+      else if(side===2){ my=0; mx=Math.floor(Math.random()*(boardW-sz)); }
+      else { my=boardH-sz; mx=Math.floor(Math.random()*(boardW-sz)); }
+      for(let dy=0;dy<sz;dy++) for(let dx=0;dx<sz;dx++){
+        if(inBounds(mx+dx,my+dy)) board[my+dy][mx+dx]=null;
+      }
+      const boss={
+        base: bossPhase2?'B':'P', extra:[], merged:true, mega:true, boss:true, radio:true,
+        neutral:false, red:true, officer:!!bossPhase2, shield:false, angel:false, demon:false
+      };
+      board[my][mx]=boss;
+      megaPawns=[{x:mx,y:my,size:sz}];
+      highlightCells(
+        [{x:mx,y:my},{x:mx+1,y:my},{x:mx+2,y:my},{x:mx,y:my+1},{x:mx+1,y:my+1},{x:mx+2,y:my+1},{x:mx,y:my+2},{x:mx+1,y:my+2},{x:mx+2,y:my+2}],
+        'nuke-blast', 1200
+      );
+      render();
+      // out-of-turn boss move
+      setTimeout(()=>{
+        bossAITurn(()=>{
+          log('Босс снова на поле');
+          if(then) then();
+        });
+      }, 600);
+    }
+
+    function hitBoss(fromLabel){
+      bossHP--;
+      log('Удар по боссу! HP '+bossHP+'/'+bossMaxHP+(fromLabel?' ('+fromLabel+')':''));
+      haptic('medium');
+      // Phase 2 at 5 HP: becomes officer (bishop), 5 diagonal moves
+      if(!bossPhase2 && bossHP>0 && bossHP<=5){
+        bossPhase2=true;
+        const m=megaPawns.find(mm=>{
+          const p=board[mm.y]&&board[mm.y][mm.x];
+          return p&&p.boss;
+        });
+        if(m){
+          const bp=board[m.y][m.x];
+          if(bp){
+            bp.officer=true;
+            bp.base='B';
+            bp.extra=[];
+          }
+        }
+        log('2-я фаза! Босс стал ОФИЦЕРОМ (ходит только по диагонали, 5 раз за ход)');
+        forceTetoSay('Босс ослаб и стал офицером! Он ходит по диагонали, но уже 5 раз за ход. Черным лучше держаться подальше.', ()=>{});
+        render();
+      }
+      if(bossHP<=0){
+        // remove boss
+        megaPawns.forEach(m=>{
+          const sz=m.size||3;
+          for(let dy=0;dy<sz;dy++) for(let dx=0;dx<sz;dx++){
+            if(inBounds(m.x+dx,m.y+dy)) board[m.y+dy][m.x+dx]=null;
+          }
+        });
+        megaPawns=[];
+        bossMode=false;
+        endGame('white', 'Примирение: обе стороны конфликта заключили мирное соглашение, хоть и не без потерь…', [], {
+          how:'Босс уничтожен. Война окончена миром.'
+        });
+        document.getElementById('go-text').textContent='Примирение';
+        return true;
+      }
+      return false;
+    }
+
+    function bossDistTo(x,y){
+      const m=megaPawns.find(mm=>{
+        const p=board[mm.y]&&board[mm.y][mm.x];
+        return p&&p.boss;
+      });
+      if(!m) return 99;
+      const sz=m.size||3;
+      // distance to nearest cell of footprint
+      let best=99;
+      for(let dy=0;dy<sz;dy++) for(let dx=0;dx<sz;dx++){
+        best=Math.min(best, Math.abs(x-(m.x+dx))+Math.abs(y-(m.y+dy)));
+      }
+      return best;
+    }
+
+    // Boss fight: loss if not a single white piece is left (on board or waiting in the future)
+    function bossWipedOut(){
+      if(!bossMode || gameOver) return false;
+      for(let y=0;y<boardH;y++) for(let x=0;x<boardW;x++){
+        const p=board[y][x];
+        if(p && pieceOwner(p)==='white') return false;
+      }
+      if(futureQueue.some(f=>f && f.owner==='white' && f.piece)) return false;
+      endGame('black','Босс съел все белые фигуры.',[],{how:'Ты проиграл: на доске не осталось ни одной белой фигуры.'});
+      return true;
+    }
+
+    function bossAITurn(done){
+      if(!bossMode || gameOver){ if(done) done(); return; }
+      let m=megaPawns.find(mm=>{
+        const p=board[mm.y]&&board[mm.y][mm.x];
+        return p&&p.boss;
+      });
+      if(!m || !(board[m.y]&&board[m.y][m.x]&&board[m.y][m.x].boss)){
+        ensureBossPresent(()=>{ if(done) done(); });
+        return;
+      }
+      // crush anyone already standing inside
+      bossDigest();
+      // refill minions up to 2
+      if(countRedMinions()<2){
+        const cur=megaPawns[0];
+        if(cur) summonBossMinions(cur.x, cur.y);
+      }
+      // aggro: nearest non-boss, non-red piece
+      let best=null, bestD=999;
+      for(let y=0;y<boardH;y++) for(let x=0;x<boardW;x++){
+        const p=board[y][x];
+        if(!p || p.boss || p.red || p.redMinion) continue;
+        const d=bossDistTo(x,y);
+        if(d<bestD){ bestD=d; best={x,y}; }
+        else if(d===bestD && best){
+          const v=VAL[String(pieceChar(p)).toLowerCase()]||1;
+          const bv=VAL[String(pieceChar(board[best.y][best.x])).toLowerCase()]||1;
+          if(v>bv) best={x,y};
+        }
+      }
+      const steps=bossPhase2?5:2;
+      let step=0;
+      const doStep=()=>{
+        if(bossWipedOut()) return;
+        if(gameOver || step>=steps){
+          bossDigest();
+          if(bossWipedOut()) return;
+          if(done) done();
+          return;
+        }
+        step++;
+        const cur=megaPawns.find(mm=>board[mm.y]&&board[mm.y][mm.x]&&board[mm.y][mm.x].boss);
+        if(!cur){ if(done) done(); return; }
+        const sz=cur.size||3;
+        const cx=cur.x+Math.floor(sz/2), cy=cur.y+Math.floor(sz/2);
+        let tdx=0, tdy=0;
+        if(best){
+          tdx=Math.sign(best.x-cx);
+          tdy=Math.sign(best.y-cy);
+        } else {
+          tdx=Math.random()<0.5?1:-1;
+          tdy=Math.random()<0.5?1:-1;
+        }
+        let dx=0, dy=0;
+        if(bossPhase2){
+          dx=tdx|| (Math.random()<0.5?1:-1);
+          dy=tdy|| (Math.random()<0.5?1:-1);
+          if(dx===0) dx=Math.random()<0.5?1:-1;
+          if(dy===0) dy=Math.random()<0.5?1:-1;
+        } else {
+          if(Math.abs(tdx)>=Math.abs(tdy) && tdx) dx=tdx;
+          else if(tdy) dy=tdy;
+          else if(tdx) dx=tdx;
+          else { dx=Math.random()<0.5?1:-1; dy=0; }
+        }
+        const nx=cur.x+dx, ny=cur.y+dy;
+        if(nx<0||ny<0||nx+sz>boardW||ny+sz>boardH){
+          setTimeout(doStep, 280);
+          return;
+        }
+        // clear NEW footprint completely (no skip — was letting kings live inside)
+        for(let yy=0;yy<sz;yy++) for(let xx=0;xx<sz;xx++){
+          const tx=nx+xx, ty=ny+yy;
+          if(!inBounds(tx,ty)) continue;
+          const t=board[ty][tx];
+          if(!t || t.boss) continue;
+          if(pieceChar(t).toUpperCase()==='K'){
+            const def=pieceOwner(t);
+            board[ty][tx]=null;
+            if(def==='white') transferWhiteToAI('Босс съел белого короля — армия белых под ИИ');
+            else if(def==='black') log('Босс съел чёрного короля');
+            else log('Босс съел короля');
+          } else if(!t.redMinion){
+            board[ty][tx]=null;
+          } else {
+            board[ty][tx]=null; // minions shouldn't block
+          }
+        }
+        const piece=board[cur.y][cur.x];
+        board[cur.y][cur.x]=null;
+        board[ny][nx]=piece;
+        cur.x=nx; cur.y=ny;
+        moveRedMinions(dx, dy);
+        bossDigest();
+        if(bossWipedOut()) return;
+        log('Босс ходит ('+step+'/'+steps+')'+(bossPhase2?' [офицер]':''));
+        render();
+        setTimeout(doStep, 360);
+      };
+      doStep();
     }
 
     document.querySelectorAll('#future-box button[data-t]').forEach(btn=>{
@@ -2068,8 +3576,76 @@ function applyCam(){
       document.getElementById('future-picker').classList.remove('show');
     };
 
+    function aiPlayWhiteBoss(){
+      if(!bossMode || gameOver || turn!=='white' || !whiteAIControl) return;
+      // spend remaining white budget attacking boss / repositioning
+      const tryOnce=()=>{
+        if(gameOver || bossBudget.movesLeft<=0){ afterMove(); return; }
+        let best=null, bestScore=-1;
+        for(let y=0;y<boardH;y++) for(let x=0;x<boardW;x++){
+          const p=board[y][x];
+          if(!p || pieceOwner(p)!=='white') continue;
+          if(!p._uid) ensurePieceUid(p,x,y);
+          if((bossBudget.pieceUsed[p._uid]||0)>=2) continue;
+          const moves=getLegalMoves(x,y);
+          moves.forEach(m=>{
+            let sc=1;
+            if(m.bossHit || isBossCell(m.x,m.y)) sc=100;
+            if(sc>bestScore){ bestScore=sc; best={fx:x,fy:y,tx:m.x,ty:m.y,castle:m.castle,hit:sc>=100}; }
+          });
+        }
+        if(!best){ afterMove(); return; }
+        if(best.hit && bossBudget.attacksLeft<=0){
+          // only non-attacks left
+          best=null; bestScore=-1;
+          for(let y=0;y<boardH;y++) for(let x=0;x<boardW;x++){
+            const p=board[y][x];
+            if(!p || pieceOwner(p)!=='white') continue;
+            if((bossBudget.pieceUsed[p._uid]||0)>=2) continue;
+            getLegalMoves(x,y).forEach(m=>{
+              if(m.bossHit || isBossCell(m.x,m.y)) return;
+              if(1>bestScore){ bestScore=1; best={fx:x,fy:y,tx:m.x,ty:m.y}; }
+            });
+          }
+          if(!best){ afterMove(); return; }
+        }
+        doMove(best.fx,best.fy,best.tx,best.ty,best.castle||null);
+        // doMove may afterMove or leave budget
+        if(turn==='white' && bossMode && !gameOver && bossBudget.movesLeft>0){
+          setTimeout(tryOnce, 320);
+        }
+      };
+      tryOnce();
+    }
+
     function onCellClick(x,y){
-      if(gameOver||moving||tutActive||window._cardBusy) return;
+      if(gameOver||moving) return;
+      if(whiteAIControl && bossMode){ log('Белыми управляет ИИ'); return; }
+      if(nukeRitual && nukeRitual.phase==='protect'){
+        if(tryPickProtect(x,y)) return;
+      }
+      if(tutActive||window._cardBusy) return;
+      // With nuclear in hand — only nuclear actions allowed
+      if(hasNuclearCard('white') && turn==='white'){
+        if(selectedSlot!==null){
+          let item=null;
+          const fromRes = selectedSlot==='reserve';
+          if(fromRes) item=playerReserve&&playerReserve.item;
+          else item=slots[selectedSlot];
+          if(item && item.type==='nuclear'){ useItem(item,x,y, fromRes); return; }
+          log('Пока есть ядерка — можно только выстрелить ей');
+          return;
+        }
+        // auto-select nuclear if present
+        const ni=slots.findIndex(s=>s&&s.type==='nuclear');
+        if(ni>=0){
+          selectedSlot=ni; selected=null; possibleMoves=[];
+          useItem(slots[ni], x, y, false);
+          return;
+        }
+        log('Пока есть ядерка — ходы фигурами недоступны');
+        return;
+      }
       if(selectedSlot!==null){
         let item=null;
         const fromRes = selectedSlot==='reserve';
@@ -2133,9 +3709,81 @@ function applyCam(){
       return true;
     }
 
+    function ensurePieceUid(p, x, y){
+      // strings can't hold _uid — promote to object on the board
+      if(!p) return null;
+      if(typeof p==='string'){
+        p={base:p, extra:[], merged:false, shield:false, angel:false, demon:false, neutral:false};
+        if(inBounds(x,y)) board[y][x]=p;
+      } else if(typeof p!=='object'){
+        return null;
+      }
+      if(!p._uid){
+        ensurePieceUid._seq=(ensurePieceUid._seq||0)+1;
+        p._uid='p'+ensurePieceUid._seq+'_'+Math.random().toString(36).slice(2,7);
+      }
+      return p;
+    }
     function doMove(fx,fy,tx,ty,castle){
+      if(turn==='white') pushUndoSnapshot();
       let piece=board[fy][fx];
       let captured=board[ty][tx];
+      // boss-mode budgets for white: 4 moves total, max 2 per unique piece, 1 attack
+      if(bossMode && turn==='white'){
+        piece=ensurePieceUid(piece, fx, fy);
+        if(!piece){ log('Нет фигуры'); return; }
+        const key=piece._uid;
+        const used=bossBudget.pieceUsed[key]||0;
+        if(bossBudget.movesLeft<=0){ log('Лимит ходов в босс-фазе (4)'); return; }
+        if(used>=2){ log('Этой фигурой уже 2 раза в этот ход'); return; }
+        const isAtk=!!(captured&&(captured.boss||captured.red||isBossCell(tx,ty))) || isBossCell(tx,ty);
+        if(isAtk && bossBudget.attacksLeft<=0){ log('Атака уже была в этот ход'); return; }
+        bossBudget.movesLeft--;
+        bossBudget.pieceUsed[key]=used+1;
+        if(isAtk) bossBudget.attacksLeft--;
+      }
+      // oneshot red minions: any hit kills them
+      if(bossMode && captured && captured.redMinion){
+        board[ty][tx]=null;
+        board[fy][fx]=null;
+        piece = maybePromote(piece, tx, ty);
+        board[ty][tx]=piece;
+        log('Миньон уничтожен с одного удара');
+        selected=null; possibleMoves=[];
+        rebuildAngelZones();
+        if(bossMode && turn==='white' && bossBudget.movesLeft>0){ render(); return; }
+        afterMove();
+        return;
+      }
+      // boss hit: damage instead of capturing block
+      if(bossMode && piece && !piece.boss && (isBossCell(tx,ty) || (captured&&(captured.boss||captured.red)))){
+        // if somehow standing on footprint after — digest next
+        if(hitBoss(describePiece(piece))) return;
+        selected=null; possibleMoves=[];
+        rebuildAngelZones();
+        bossDigest();
+        if(bossMode && turn==='white' && bossBudget.movesLeft>0){
+          render();
+          return;
+        }
+        afterMove();
+        return;
+      }
+      // mega slide (non-boss controlled rare)
+      if(piece && (piece.mega||piece.radio) && !piece.boss){
+        const origin=getMegaAt(fx,fy)||{x:fx,y:fy,size:3};
+        const sz=origin.size||3;
+        for(let yy=0;yy<sz;yy++) for(let xx=0;xx<sz;xx++){
+          if(inBounds(origin.x+xx,origin.y+yy)) board[origin.y+yy][origin.x+xx]=null;
+        }
+        megaPawns=megaPawns.filter(m=>!(m.x===origin.x&&m.y===origin.y));
+        megaPawns.push({x:tx,y:ty,size:sz});
+        board[ty][tx]=piece;
+        selected=null; possibleMoves=[];
+        rebuildAngelZones();
+        afterMove();
+        return;
+      }
       if(castle){
         if(castle==='K'){ board[fy][5]=board[fy][7]; board[fy][7]=null; }
         else { board[fy][3]=board[fy][0]; board[fy][0]=null; }
@@ -2188,7 +3836,25 @@ function applyCam(){
             return;
           }
           board[fy][fx]=null;
-          endGame(pieceOwner(piece), 'Король взят на клетке '+(String.fromCharCode(97+tx))+(boardH-ty)+'.', [{x:tx,y:ty,cls:'result-hot'}]);
+          board[ty][tx]=piece; // attacker stays on kill square for visual
+          const winner = pieceOwner(piece)==='neutral'
+            ? (defOwner==='white'?'black':'white')
+            : pieceOwner(piece);
+          const killInfo={
+            kingLabel: cellLabel(tx,ty),
+            killerLabel: describePiece(piece),
+            fromLabel: cellLabel(fx,fy),
+            how: defOwner==='white'
+              ? 'Ты проиграл: твоего короля взяли.'
+              : 'Чёрный король уничтожен.'
+          };
+          const reason = (defOwner==='white'?'Поражение: ':'Победа: ')
+            + describePiece(piece)+' взял '+describePiece(captured)
+            +' на '+cellLabel(tx,ty)+' (ход с '+cellLabel(fx,fy)+').';
+          endGame(winner, reason, [
+            {x:tx,y:ty,cls:'result-hot'},
+            {x:fx,y:fy,cls:'result-ok'}
+          ], killInfo);
           return;
         }
         piece = maybePromote(piece, tx, ty);
@@ -2198,6 +3864,11 @@ function applyCam(){
       if(board[ty][tx]) board[ty][tx]=maybePromote(board[ty][tx], tx, ty);
       board[fy][fx]=null; selected=null; possibleMoves=[];
       rebuildAngelZones();
+      if(bossMode && turn==='white' && bossBudget.movesLeft>0){
+        log('Босс-фаза: ещё ходов '+bossBudget.movesLeft+', атак '+bossBudget.attacksLeft);
+        render();
+        return;
+      }
       afterMove();
     }
 
@@ -2208,11 +3879,20 @@ function applyCam(){
         f.turnsLeft--;
         if(f.turnsLeft>0){ next.push(f); return; }
         if(!inBounds(f.x,f.y)){ frozen.push({x:f.x,y:f.y,piece:f.piece,owner:f.owner}); return; }
+        // Returning into boss footprint → boss eats the piece (never overwrite boss)
+        if(bossMode && (isBossCell(f.x,f.y) || (board[f.y][f.x]&&(board[f.y][f.x].boss||board[f.y][f.x].red)))){
+          log('Босс уничтожил фигуру, вернувшуюся из будущего на '+cellLabel(f.x,f.y));
+          return;
+        }
         const existing=board[f.y][f.x];
         if(!existing){
           board[f.y][f.x]=maybePromote(f.piece, f.x, f.y);
           log('Вернулась из будущего');
         } else if(pieceOwner(existing)!==f.owner){
+          if(existing.boss || existing.red){
+            log('Босс уничтожил вернувшуюся фигуру');
+            return;
+          }
           board[f.y][f.x]=f.piece;
           log('Вернулась и съела');
           if(pieceChar(existing).toUpperCase()==='K'){
@@ -2220,7 +3900,17 @@ function applyCam(){
             if(tryKingFutureSave(defOwner, f.x, f.y, existing)){
               board[f.y][f.x]=f.piece;
             } else {
-              endGame(f.owner, 'Король съеден фигурой из будущего.', [{x:f.x,y:f.y,cls:'result-hot'}]);
+              const winner = f.owner==='neutral'
+                ? (defOwner==='white'?'black':'white')
+                : f.owner;
+              const reason = describePiece(f.piece)+' вернулся из будущего и взял '
+                +describePiece(existing)+' на '+cellLabel(f.x,f.y)+'.';
+              endGame(winner, reason, [{x:f.x,y:f.y,cls:'result-hot'}], {
+                kingLabel: cellLabel(f.x,f.y),
+                killerLabel: describePiece(f.piece)+' (из будущего)',
+                fromLabel: 'будущее',
+                how: defOwner==='white'?'Ты проиграл: короля съела фигура из будущего.':'Чёрный король съеден из будущего.'
+              });
             }
           }
           if(board[f.y][f.x]) board[f.y][f.x]=maybePromote(board[f.y][f.x], f.x, f.y);
@@ -2237,14 +3927,26 @@ function applyCam(){
 
     function checkEnd(){
       const wk=findKing('white'), bk=findKing('black');
+      if(bossMode){
+        // in boss fight kings dying doesn't end the game (white army → AI)
+        if(!wk && !whiteAIControl) transferWhiteToAI('Белый король пал — ИИ ведёт белых дальше');
+        if(bossWipedOut()) return true;
+        // black king death also doesn't end boss fight
+        return false;
+      }
       if(!wk){
-        endGame('black', 'Белый король уничтожен или исчез с доски.', []);
+        endGame('black', 'Белый король уничтожен или исчез с доски.', [], {
+          how: 'Ты проиграл: белый король больше не на поле (уничтожен / вне доски без возврата).'
+        });
         return true;
       }
       if(!bk){
-        endGame('white', 'Чёрный король уничтожен или исчез с доски.', []);
+        endGame('white', 'Чёрный король уничтожен или исчез с доски.', [], {
+          how: 'Победа: чёрный король исчез с доски.'
+        });
         return true;
       }
+      if(turn==='neutral') return false;
       if(!hasAnyLegalMove(turn)){
         const k = turn==='white' ? wk : bk;
         // King away (future/frozen) or pieces blocked — do NOT softlock: skip turn
@@ -2269,31 +3971,108 @@ function applyCam(){
       return !gameOver && turn==='white';
     }
     /** @param alreadyAdvanced if true — processFuture/turnCount уже сделаны в afterMove */
+    function clonePiece(p){
+      if(!p) return null;
+      if(typeof p==='string') return p;
+      return {
+        base:p.base,
+        extra:Array.isArray(p.extra)?p.extra.slice():[],
+        merged:!!p.merged, shield:!!p.shield, angel:!!p.angel,
+        demon:!!p.demon, neutral:!!p.neutral
+      };
+    }
+    function snapshotState(){
+      return {
+        board: board.map(row=>row.map(clonePiece)),
+        boardW, boardH,
+        frozen: frozen.map(f=>({x:f.x,y:f.y,owner:f.owner,stepsLeft:f.stepsLeft,piece:clonePiece(f.piece)})),
+        futureQueue: futureQueue.map(f=>({turnsLeft:f.turnsLeft,x:f.x,y:f.y,owner:f.owner,piece:clonePiece(f.piece)})),
+        slots: slots.map(s=>s?{...s}:null),
+        aiSlots: aiSlots.map(s=>s?{...s}:null),
+        playerReserve: playerReserve?{...playerReserve, item:playerReserve.item?{...playerReserve.item}:null}:null,
+        aiReserve: aiReserve?{...aiReserve, item:aiReserve.item?{...aiReserve.item}:null}:null,
+        turn, turnCount, extraMove,
+        whiteKingMoved, blackKingMoved, whiteRookA, whiteRookH, blackRookA, blackRookH,
+        gameOver
+      };
+    }
+    function pushUndoSnapshot(){
+      // only store player-turn checkpoints
+      undoStack.push(snapshotState());
+      if(undoStack.length>8) undoStack.shift();
+      consecutiveUndos=0;
+      updateUndoBtn();
+    }
+    function restoreState(s){
+      board=s.board.map(row=>row.map(clonePiece));
+      boardW=s.boardW; boardH=s.boardH;
+      frozen=s.frozen.map(f=>({...f, piece:clonePiece(f.piece)}));
+      futureQueue=s.futureQueue.map(f=>({...f, piece:clonePiece(f.piece)}));
+      slots=s.slots.map(x=>x?{...x}:null);
+      aiSlots=s.aiSlots.map(x=>x?{...x}:null);
+      playerReserve=s.playerReserve?{...s.playerReserve, item:s.playerReserve.item?{...s.playerReserve.item}:null}:null;
+      aiReserve=s.aiReserve?{...s.aiReserve, item:s.aiReserve.item?{...s.aiReserve.item}:null}:null;
+      turn=s.turn; turnCount=s.turnCount; extraMove=!!s.extraMove;
+      whiteKingMoved=s.whiteKingMoved; blackKingMoved=s.blackKingMoved;
+      whiteRookA=s.whiteRookA; whiteRookH=s.whiteRookH;
+      blackRookA=s.blackRookA; blackRookH=s.blackRookH;
+      gameOver=!!s.gameOver;
+      selected=null; possibleMoves=[]; selectedSlot=null; pendingFuture=null;
+      window._cardBusy=false; moving=false;
+      rebuildAngelZones();
+    }
+    function undoMove(){
+      if(gameOver){ log('Игра окончена'); return; }
+      if(consecutiveUndos>=2){ log('Не больше 2 отмен подряд'); return; }
+      if(!undoStack.length){ log('Нечего отменять'); return; }
+      if(window._cardBusy||moving){ window._cardBusy=false; moving=false; }
+      const s=undoStack.pop();
+      restoreState(s);
+      consecutiveUndos++;
+      document.getElementById('game-over').classList.remove('show');
+      log('Ход отменён ('+consecutiveUndos+'/2)');
+      haptic('medium');
+      render();
+      updateUndoBtn();
+    }
+    function updateUndoBtn(){
+      const btn=document.getElementById('undo-btn');
+      if(!btn) return;
+      const can=!gameOver && undoStack.length>0 && consecutiveUndos<2;
+      btn.disabled=!can;
+      btn.style.opacity=can?'1':'0.35';
+      btn.textContent= consecutiveUndos>0 ? `Отмена (${consecutiveUndos}/2)` : 'Отмена';
+    }
+
     function passTurn(reason, alreadyAdvanced){
       if(gameOver) return;
       window._cardBusy=false; moving=false;
       log(reason||'Ход пропущен');
       selected=null; possibleMoves=[]; selectedSlot=null;
-      // cancel pending card UI
       try { document.getElementById('future-picker').classList.remove('show'); } catch(e){}
       pendingFuture=null;
       if(!alreadyAdvanced){
         processFuture();
+        processOffboard();
         turnCount++;
-        maybeRandomResize();
+        if(!bossMode) maybeRandomResize();
         if(checkEnd()) return;
-        if(turnCount>0 && turnCount%3===0){
+        if(turnCount>0 && turnCount%3===0 && !bossMode){
           const id=pickRandomCardId();
-          // карта стороне, которая будет ходить следующей
-          if(turn==='white') giveItem(id, true);
-          else giveItem(id, false);
+          const next=nextTurn(turn);
+          if(next==='white') giveItem(id, false);
+          else if(next==='black') giveItem(id, true);
         }
       }
-      turn = turn==='white' ? 'black' : 'white';
+      turn = nextTurn(turn);
       rebuildAngelZones();
       window._cardBusy=false; moving=false;
       render();
       if(gameOver) return;
+      if(turn==='neutral'){
+        setTimeout(()=>{ try{ neutralTurn(); }catch(e){ turn='white'; render(); } }, 350);
+        return;
+      }
       if(!hasAnyLegalMove(turn)){
         const k=findKing(turn);
         if(k && (k.frozen || k.future)){
@@ -2303,7 +4082,7 @@ function applyCam(){
         if(checkEnd()) return;
       }
       if(turn==='black' && !gameOver){
-        setTimeout(()=>{ try{ aiTurn(); }catch(e){ turn='white'; moving=false; window._cardBusy=false; render(); } }, 400);
+        setTimeout(()=>{ try{ aiTurn(); }catch(e){ turn='neutral'; moving=false; window._cardBusy=false; render(); setTimeout(neutralTurn, 300); } }, 400);
       } else {
         updateSkipBtn();
       }
@@ -2318,10 +4097,18 @@ function applyCam(){
       btn.textContent = 'Пропуск хода';
     }
 
-    function endGame(winner, reason, highlights){
+    function endGame(winner, reason, highlights, killInfo){
       gameOver=true;
       lastEndWinner=winner;
-      lastEndReason=reason||'';
+      const lines=[];
+      if(reason) lines.push(reason);
+      if(killInfo){
+        if(killInfo.how) lines.push(killInfo.how);
+        if(killInfo.kingLabel) lines.push('Клетка короля: '+killInfo.kingLabel);
+        if(killInfo.killerLabel) lines.push('Кто убил: '+killInfo.killerLabel);
+        if(killInfo.fromLabel) lines.push('Откуда ход: '+killInfo.fromLabel+(killInfo.kingLabel?' → '+killInfo.kingLabel:''));
+      }
+      lastEndReason=lines.filter(Boolean).join('\n');
       lastEndHighlight=highlights||[];
       // also highlight remaining kings
       const wk=findKing('white'), bk=findKing('black');
@@ -2330,23 +4117,25 @@ function applyCam(){
       if(bk && !bk.frozen && !bk.future && !lastEndHighlight.some(h=>h.x===bk.x&&h.y===bk.y))
         lastEndHighlight.push({x:bk.x,y:bk.y,cls: winner==='black'?'result-ok':'result-hot'});
 
-      document.getElementById('go-text').textContent=winner==='white'?'Победа!':'Поражение...';
+      const isPeace = /Примирение|мирное соглашение/i.test(lastEndReason||reason||'');
+      document.getElementById('go-text').textContent=
+        isPeace ? 'Примирение' : (winner==='white'?'Победа!':'Поражение...');
       const gr=document.getElementById('go-reason');
       if(gr) gr.textContent=lastEndReason;
       document.getElementById('game-over').classList.add('show');
       log(winner==='white'?'Победа!':'Поражение...');
+      if(lastEndReason) log(lastEndReason.split('\n')[0]);
       haptic(winner==='white'?'success':'error'); render();
     }
     function showResultOnBoard(){
       document.getElementById('game-over').classList.remove('show');
-      const rb=document.getElementById('result-banner'); if(rb) rb.classList.remove('show');
-      lastEndReason=''; lastEndHighlight=[];
       const ban=document.getElementById('result-banner');
       if(ban){
-        ban.innerHTML = (lastEndWinner==='white'?'<b>Победа</b>':'<b>Поражение</b>') + '<br>' + (lastEndReason||'');
+        ban.innerHTML = (lastEndWinner==='white'?'<b>Победа</b>':'<b>Поражение</b>')
+          + '<br>' + (lastEndReason||'').replace(/\n/g,'<br>');
         ban.classList.add('show');
       }
-      // re-render with highlights
+      // re-render with kill highlights
       render();
       lastEndHighlight.forEach(h=>{
         const boardEl=document.getElementById('board');
@@ -2357,21 +4146,68 @@ function applyCam(){
     }
     document.getElementById('btn-show-result').onclick = showResultOnBoard;
 
+    /** Neutral phase: one animated move, then afterMove continues the cycle. */
+    function neutralTurn(){
+      if(gameOver) return;
+      turn='neutral';
+      window._cardBusy=false; moving=false;
+      const list=[];
+      for(let y=0;y<boardH;y++) for(let x=0;x<boardW;x++){
+        const p=board[y][x];
+        if(p && isNeutral(p) && !p.boss && !p.red) list.push({x,y,p});
+      }
+      if(!list.length){
+        if(bossMode) log('Нейтралов нет — дальше босс');
+        else log('Нейтралов нет — пропуск');
+        afterMove();
+        return;
+      }
+      let chosen=null, pick=null, bestSc=-1;
+      const shuffled=list.slice().sort(()=>Math.random()-0.5);
+      for(const unit of shuffled){
+        const moves=bossMode?getLegalMoves(unit.x,unit.y):getRawMoves(unit.x,unit.y);
+        if(!moves.length) continue;
+        for(const m of moves){
+          let sc=1;
+          if(bossMode){
+            if(m.bossHit || isBossCell(m.x,m.y)) sc=100;
+            else {
+              const d=bossDistTo(m.x,m.y);
+              sc=30-Math.abs(d-3)*5; // approach medium range / boss
+            }
+          } else {
+            if(board[m.y][m.x]) sc=50;
+          }
+          if(sc>bestSc){ bestSc=sc; chosen=unit; pick=m; }
+        }
+        if(bestSc>=100) break;
+      }
+      if(!chosen||!pick){
+        log('Нейтралы не могут ходить — пропуск');
+        afterMove();
+        return;
+      }
+      log('Ход нейтралов: '+describePiece(chosen.p)+' '+cellLabel(chosen.x,chosen.y)+' → '+cellLabel(pick.x,pick.y));
+      render();
+      animateAndMove(chosen.x, chosen.y, pick.x, pick.y, null);
+    }
 
     function afterMove(){
-      processFuture(); turnCount++;
+      processFuture();
+      processOffboard();
+      turnCount++;
       if(turnCount===1){ showTip('first_move'); setTimeout(()=>showTip('camera'), 600); }
-      maybeRandomResize();
+      if(!bossMode) maybeRandomResize();
       if(checkEnd()) return;
 
-      // every 3 half-moves give a random card to current player about to play? after move -> give to next
-      if(turnCount>0 && turnCount%3===0){
+      if(turnCount>0 && turnCount%3===0 && !bossMode){
         const id=pickRandomCardId();
-        if(turn==='white') giveItem(id, false);
-        else giveItem(id, true);
+        const next=nextTurn(turn);
+        if(next==='white') giveItem(id, false);
+        else if(next==='black') giveItem(id, true);
       }
 
-      if(extraMove && turn==='white'){
+      if(extraMove && turn==='white' && !bossMode){
         extraMove=false;
         log('Доп. ход!');
         turn='white';
@@ -2381,23 +4217,74 @@ function applyCam(){
         return;
       }
 
-      turn=turn==='white'?'black':'white';
+      // Boss mode: white → black → neutral → boss → white
+      if(bossMode){
+        selected=null; possibleMoves=[];
+        window._cardBusy=false; moving=false;
+        // recover missing boss before continuing cycle
+        if(!findBossPiece()){
+          ensureBossPresent(()=>afterMove());
+          return;
+        }
+        if(turn==='white'){
+          turn='black';
+          bossBudget={ movesLeft:4, attacksLeft:1, pieceUsed:{} };
+          render();
+          setTimeout(()=>{ try{ aiTurn(); }catch(e){ turn='neutral'; render(); setTimeout(neutralTurn, 300); } }, 400);
+          return;
+        }
+        if(turn==='black'){
+          turn='neutral';
+          render();
+          setTimeout(()=>{ try{ neutralTurn(); }catch(e){ console.error(e); afterMove(); } }, 350);
+          return;
+        }
+        if(turn==='neutral'){
+          // after neutral move, boss acts
+          render();
+          setTimeout(()=>{
+            bossAITurn(()=>{
+              if(gameOver) return;
+              turn='white';
+              bossBudget={ movesLeft:4, attacksLeft:1, pieceUsed:{} };
+              rebuildAngelZones();
+              render();
+              if(whiteAIControl) setTimeout(()=>aiPlayWhiteBoss(), 400);
+              else updateSkipBtn();
+            });
+          }, 300);
+          return;
+        }
+        turn='white';
+        bossBudget={ movesLeft:4, attacksLeft:1, pieceUsed:{} };
+        render();
+        if(whiteAIControl) setTimeout(()=>aiPlayWhiteBoss(), 400);
+        else updateSkipBtn();
+        return;
+      }
+
+      turn=nextTurn(turn);
       selected=null; possibleMoves=[];
       rebuildAngelZones();
       window._cardBusy=false; moving=false;
       render();
       if(gameOver) return;
+
+      if(turn==='neutral'){
+        setTimeout(()=>{ try{ neutralTurn(); }catch(e){ console.error(e); turn='white'; render(); } }, 380);
+        return;
+      }
+
       if(!hasAnyLegalMove(turn)){
         const k=findKing(turn);
         if(k && (k.frozen || k.future)){
-          // alreadyAdvanced: processFuture/turnCount уже в afterMove
           setTimeout(()=>passTurn(turn==='white'?'Белый король вне поля — пропуск':'Король ИИ вне поля — пропуск', true), 500);
           return;
         }
         if(checkEnd()) return;
       }
       if(turn==='black'){
-        setTimeout(()=>{ try{ aiTurn(); }catch(e){ console.error(e); turn='white'; moving=false; window._cardBusy=false; render(); } }, 420);
+        setTimeout(()=>{ try{ aiTurn(); }catch(e){ console.error(e); turn='neutral'; moving=false; window._cardBusy=false; render(); setTimeout(neutralTurn, 300); } }, 420);
       } else {
         updateSkipBtn();
       }
@@ -2417,6 +4304,7 @@ function applyCam(){
         moving=false;
         if(gameOver){ log('Игра уже окончена'); return; }
         if(turn!=='white'){ log('Сейчас ход противника'); return; }
+        pushUndoSnapshot();
         selected=null; possibleMoves=[]; selectedSlot=null;
         passTurn('Ход пропущен');
       };
@@ -2424,6 +4312,18 @@ function applyCam(){
       btn.addEventListener('pointerup', (e)=>{
         // mobile: prefer pointerup so tap isn't swallowed
         if(e.pointerType==='touch' || e.pointerType==='pen') doSkip(e);
+      });
+    })();
+    (function bindUndoBtn(){
+      const btn=document.getElementById('undo-btn');
+      if(!btn) return;
+      const doUndo=(e)=>{
+        if(e){ e.preventDefault(); e.stopPropagation(); }
+        undoMove();
+      };
+      btn.onclick=doUndo;
+      btn.addEventListener('pointerup', (e)=>{
+        if(e.pointerType==='touch'||e.pointerType==='pen') doUndo(e);
       });
     })();
     // failsafe: unstick UI locks and refresh skip button
@@ -2463,6 +4363,19 @@ function applyCam(){
         playerReserve={item:{...def,id}, readyAt: id==='future'?999999:turnCount+6, autoOnly:id==='future'};
         render(); return;
       }
+      // custom textures: BOSS <url> | ROCKET <url> | BOSS clear | ROCKET clear
+      if(cmd==='BOSS'){
+        const url=parts.slice(1).join(' ').trim();
+        if(!url || url.toLowerCase()==='clear'){ setBossTexture(null); log('Текстура босса сброшена'); }
+        else { setBossTexture(url); log('Текстура босса установлена'); }
+        return;
+      }
+      if(cmd==='ROCKET'){
+        const url=parts.slice(1).join(' ').trim();
+        if(!url || url.toLowerCase()==='clear'){ setRocketTexture(null); log('Текстура ракеты сброшена'); }
+        else { setRocketTexture(url); log('Текстура ракеты установлена'); }
+        return;
+      }
     }
     document.getElementById('debug-btn').onclick=()=>{
       runDebug(document.getElementById('debug-input').value);
@@ -2486,18 +4399,29 @@ function applyCam(){
       whiteKingMoved=blackKingMoved=false;
       whiteRookA=whiteRookH=blackRookA=blackRookH=false;
       camScale=1; camX=0; camY=0; applyCam();
-      giveItem('airstrike'); giveItem('shield'); giveItem('spawn');
-      giveItem('support',true); giveItem('airstrike',true);
+      // стартовые карты — полностью случайные (по 3 на сторону)
+      for(let i=0;i<3;i++) giveItem(pickRandomCardId(), false);
+      for(let i=0;i<3;i++) giveItem(pickRandomCardId(), true);
       // player starts without free future in hand; can put future in reserve later
       // AI: 70% future already in reserve (auto king-save)
       if(Math.random() < 0.70){
         aiReserve = { item: {...ITEM_DEFS.future, id:'future'}, readyAt: 999999, autoOnly: true };
       }
+      undoStack=[]; consecutiveUndos=0;
+      craftPile=[]; craftTurnId=-1;
+      megaPawns=[]; nukeRitual=null;
+      bossMode=false; bossHP=20; bossPhase2=false; bossBudget={ movesLeft:4, attacksLeft:1, pieceUsed:{} };
+      whiteAIControl=false;
+      try {
+        document.getElementById('nuke-ritual-ui').classList.remove('show');
+        document.getElementById('nuke-protect-hint').classList.remove('show');
+        document.getElementById('nuke-teto-splash').classList.remove('show');
+      } catch(e){}
       // player can receive future in normal rotation
       gameLog=[]; log('Игра началась');
       window._cardBusy=false;
       render();
-      requestAnimationFrame(()=>{ render(); updateSkipBtn(); });
+      requestAnimationFrame(()=>{ render(); updateSkipBtn(); updateUndoBtn(); });
     }
 
     setupStartPosition();
