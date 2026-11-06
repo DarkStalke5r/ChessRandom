@@ -338,16 +338,15 @@
     }
     #fp-cancel { background: #444 !important; }
 
-    #dbg-btn {
+    #dbg-btn, #cmd-btn, #inspect-btn, #spell-btn, #shop-btn {
       position: fixed;
       top: 6px;
-      right: 8px;
-      z-index: 55;
-      width: 28px;
-      height: 28px;
+      z-index: 70;
+      width: 30px;
+      height: 30px;
       border-radius: 50%;
-      border: 1px solid rgba(255,255,255,0.18);
-      background: rgba(30,30,34,0.88);
+      border: 1px solid rgba(255,255,255,0.22);
+      background: rgba(30,30,34,0.92);
       color: var(--text);
       font-size: 14px;
       line-height: 1;
@@ -358,6 +357,52 @@
       cursor: pointer;
       padding: 0;
     }
+    #dbg-btn { right: 8px; }
+    #cmd-btn { right: 44px; }
+    #inspect-btn { right: 80px; }
+    #spell-btn { right: 116px; }
+    #shop-btn { right: 152px; }
+    #inspect-btn.on {
+      outline: 2px solid #e8b84a;
+      box-shadow: 0 0 0 2px rgba(232,184,74,0.35);
+    }
+    #cmd-panel, #dbg-panel {
+      display: none; position: fixed; top: 42px; right: 8px;
+      z-index: 75;
+      background: var(--secondary, #1c1c1e); border-radius: 10px; padding: 10px;
+      border: 1px solid rgba(255,255,255,0.12); width: min(280px, 92vw);
+      box-shadow: 0 8px 28px rgba(0,0,0,0.45);
+    }
+    #cmd-panel.show, #dbg-panel.show { display: block; }
+    #cmd-panel .cmd-title, #dbg-panel .cmd-title {
+      font-size: 11px; color: var(--hint, #8e8e93); text-transform: uppercase;
+      letter-spacing: 0.04em; margin-bottom: 8px;
+    }
+    #cmd-panel input, #dbg-panel input {
+      width: 100%; padding: 6px 8px; border-radius: 6px;
+      border: 1px solid rgba(255,255,255,0.15);
+      background: var(--bg, #121214); color: var(--text, #f2f2f7); font-size: 12px; margin-bottom: 6px;
+    }
+    #cmd-panel .cmd-run, #dbg-panel button {
+      width: 100%; padding: 6px; border-radius: 6px; border: none;
+      background: var(--btn, #2aabee); color: var(--btn-text, #fff); font-size: 12px; font-weight: 600;
+      margin-bottom: 8px; cursor: pointer;
+    }
+    #cmd-panel .cmd-hints { display: flex; flex-wrap: wrap; gap: 4px; }
+    #cmd-panel .cmd-hints button {
+      padding: 5px 8px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.15);
+      background: rgba(255,255,255,0.08); color: var(--text, #fff); font-size: 11px; cursor: pointer;
+      width: auto; margin: 0;
+    }
+    #cmd-panel .cmd-help {
+      margin-top: 8px; font-size: 10px; color: var(--hint, #8e8e93); line-height: 1.35;
+    }
+    #online-badge {
+      position: fixed; top: 40px; right: 8px; z-index: 70;
+      font-size: 10px; padding: 3px 8px; border-radius: 8px;
+      background: rgba(42,171,238,0.9); color: #fff; display: none;
+    }
+    #online-badge.show { display: block; }
     #skip-btn, #undo-btn {
       padding: 6px 12px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.22);
       background: rgba(255,255,255,0.12); color: var(--text);
@@ -717,11 +762,29 @@
   </style>
 </head>
 <body>
-  <button id="dbg-btn" title="debug">⚙</button>
+  <button id="inspect-btn" title="Осмотр фигур и карт">🔍</button>
+  <button id="cmd-btn" title="Коды игры (не читы)">⌘</button>
+  <div id="cmd-panel">
+    <div class="cmd-title">Коды игры</div>
+    <input id="cmd-input" placeholder="HELP, TUT, BUY S…" />
+    <button type="button" class="cmd-run" id="cmd-run-btn">Выполнить</button>
+    <div class="cmd-hints">
+      <button type="button" data-cmd="HELP">HELP</button>
+      <button type="button" data-cmd="TUT">TUT</button>
+      <button type="button" data-cmd="LOG">LOG</button>
+      <button type="button" data-cmd="BUY S">BUY S</button>
+      <button type="button" data-cmd="BUY C">BUY C</button>
+      <button type="button" data-cmd="BUY O">BUY O</button>
+    </div>
+    <div class="cmd-help">Магазин за медали, обучение, лог. Читы — ⚙ справа.</div>
+  </div>
+  <button id="dbg-btn" title="debug / читы">⚙</button>
   <div id="dbg-panel">
-    <input id="debug-input" placeholder="" />
+    <div class="cmd-title">Читы / debug</div>
+    <input id="debug-input" placeholder="A1, CE, MEDAL…" />
     <button id="debug-btn">Run</button>
   </div>
+  <div id="online-badge">ONLINE</div>
 
   <div id="ai-zone">
     <div id="ai-label">Карты противника</div>
@@ -4305,8 +4368,61 @@ function applyCam(){
 
 
     document.getElementById('dbg-btn').onclick = () => {
+      try{ document.getElementById('cmd-panel').classList.remove('show'); }catch(e){}
       document.getElementById('dbg-panel').classList.toggle('show');
     };
+    (function bindCmdAndInspect(){
+      if(typeof inspectMode==='undefined') window.inspectMode=false;
+      const cmdBtn=document.getElementById('cmd-btn');
+      const cmdPanel=document.getElementById('cmd-panel');
+      const cmdInput=document.getElementById('cmd-input');
+      const cmdRun=document.getElementById('cmd-run-btn');
+      const insp=document.getElementById('inspect-btn');
+      if(insp){
+        insp.onclick=()=>{
+          inspectMode=!inspectMode;
+          insp.classList.toggle('on', inspectMode);
+          try{ log(inspectMode?'Осмотр ВКЛ: тап по фигуре или карте':'Осмотр выкл'); }catch(e){}
+        };
+      }
+      if(cmdBtn&&cmdPanel){
+        cmdBtn.onclick=()=>{
+          try{ document.getElementById('dbg-panel').classList.remove('show'); }catch(e){}
+          cmdPanel.classList.toggle('show');
+          if(cmdPanel.classList.contains('show')&&cmdInput) setTimeout(()=>cmdInput.focus(),40);
+        };
+        function submit(){
+          const code=(cmdInput&&cmdInput.value||'').trim();
+          if(code && typeof runPlayerCode==='function') runPlayerCode(code);
+          else if(code && typeof runDebug==='function') runDebug(code);
+          if(cmdInput) cmdInput.value='';
+          cmdPanel.classList.remove('show');
+        }
+        if(cmdRun) cmdRun.onclick=submit;
+        if(cmdInput) cmdInput.addEventListener('keydown',e=>{ if(e.key==='Enter'){ e.preventDefault(); submit(); }});
+        cmdPanel.querySelectorAll('.cmd-hints [data-cmd]').forEach(b=>{
+          b.onclick=()=>{
+            const c=b.getAttribute('data-cmd');
+            if(typeof runPlayerCode==='function') runPlayerCode(c);
+            cmdPanel.classList.remove('show');
+          };
+        });
+      }
+      // ensure runPlayerCode exists
+      if(typeof runPlayerCode!=='function'){
+        window.runPlayerCode=function(code){
+          const parts=(code||'').trim().split(/\s+/); const cmd=(parts[0]||'').toUpperCase();
+          if(cmd==='HELP'||cmd==='?'){
+            alert('HELP / TUT / LOG / BUY S|C|H|T|Y|O');
+            return;
+          }
+          if(cmd==='TUT'){ try{ localStorage.removeItem('chaos_chess_tut_off'); }catch(e){} log('TUT'); return; }
+          if(cmd==='LOG' && typeof exportMatchLog==='function'){ exportMatchLog(); return; }
+          if(cmd==='BUY' && typeof tryShopSpawn==='function'){ tryShopSpawn((parts[1]||'S').toUpperCase()); return; }
+          if(typeof runDebug==='function') runDebug(code);
+        };
+      }
+    })();
     (function bindSkipBtn(){
       const btn=document.getElementById('skip-btn');
       if(!btn) return;
@@ -4452,9 +4568,9 @@ const O=[[1,0],[-1,0],[0,1],[0,-1]],D=[[1,1],[1,-1],[-1,1],[-1,-1]];
 const KN=[[1,2],[2,1],[-1,2],[-2,1],[1,-2],[2,-1],[-1,-2],[-2,-1]];
 let CFG={shape:'p',army:'mixed',teams:4},RULE,FW,ARMY,SL,B,G,ti,over,sel,moves,round,extra,skipT,selSlot,CS,fut,R,fresh,busy=false,chain=false,hl=[],undoSt=[],undos=0,ritual=null,bossSt=null,pile=[],craftRound=0,nukeDone=false;
 const PC={
-  shield:{n:'Щит',i:'🔵',c:'H',target:1},future:{n:'Будущее',i:'⏳',c:'F',target:1},spawn:{n:'Спавн',i:'✨',c:'S',target:1},
-  support:{n:'Поддержка',i:'🛡',c:'P'},nuclear:{n:'Ядерка',i:'☢',c:'N',target:1},
-  trump:{n:'Козырь',i:'♠',c:'♠',target:1},dummy:{n:'Болван',i:'♥',c:'♥',target:1},bid:{n:'Торги',i:'♦',c:'♦'},slam:{n:'Шлем',i:'♣',c:'♣'},double:{n:'Контра',i:'🂡',c:'2×',target:1},extra:{n:'2-й ход',i:'2️⃣',c:'2'},err:{n:'Err.MDXphrzVPLAJ',i:'⚠',c:'E'}
+  shield:{n:'Щит',i:'🔵',c:'H',desc:'Ставит щит на твою фигуру.',target:1},future:{n:'Будущее',i:'⏳',c:'F',desc:'Твоя фигура (кроме короля) уходит в будущее и возвращается на то же место через 2 круга, если клетка свободна.',target:1},spawn:{n:'Спавн',i:'✨',c:'S',desc:'Создаёт твою новую фигуру на выбранной пустой клетке.',target:1},
+  support:{n:'Поддержка',i:'🛡',c:'P',desc:'Подкрепление: твои новые фигуры появляются на двух случайных свободных клетках.'},nuclear:{n:'Ядерка',i:'☢',c:'N',desc:'Через 8 секунд бьёт по зоне 3×4 вокруг выбранной клетки. Фигуры без защиты уничтожаются и перерождаются красными.',target:1},
+  trump:{n:'Козырь',i:'♠',c:'♠',desc:'Козырь: твоя фигура становится неуязвимой на 3 круга.',target:1},dummy:{n:'Болван',i:'♥',c:'♥',desc:'Болван: забираешь чужую фигуру того же типа (не короля) на 2 круга.',target:1},bid:{n:'Торги',i:'♦',c:'♦',desc:'Торги: сразу получаешь 2 новые карты.'},slam:{n:'Шлем',i:'♣',c:'♣',desc:'Шлем: следующее твоё взятие заберёт ещё одну фигуру.'},double:{n:'Контра',i:'🂡',c:'2×',desc:'Контра: за взятие выбранной чужой фигуры (не короля) получишь 2 карты.',target:1},extra:{n:'2-й ход',i:'2️⃣',c:'2',desc:'Второй ход: сходи ещё раз подряд.'},err:{n:'Err.MDXphrzVPLAJ',i:'⚠',c:'E',desc:'Случайный эффект: может появиться, исчезнуть, телепортироваться или возвыситься любая фигура.'}
 };
 const CPOOL=['err','err','err','shield','shield','future','future','spawn','spawn','support','support','extra','extra','trump','dummy','bid','slam','double'];
 const pick=a=>a[Math.floor(Math.random()*a.length)];
@@ -4463,17 +4579,50 @@ const inW=(x,y)=>x>=0&&y>=0&&x<WN&&y<WN;
 // центр [x0,x1)×[y0,y1); вертикальные руки — по x центра от ay0 до ay1; горизонтальные — по y центра от ax0 до ax1
 const valid=(x,y)=>{
   if(!inW(x,y))return false;
+  if(G.shape==='m')return x>=G.x0&&x<G.x1&&y>=G.y0&&y<G.y1;
   if(G.shape==='s')return x>=G.ax0&&x<G.ax1&&y>=G.ay0&&y<G.ay1;
   if(G.shape==='x'){const u=x-4,v=y-4;return u>=0&&v>=0&&u<32&&v<32&&(Math.abs(u-v)<=G.w||Math.abs(u+v-31)<=G.w);}
   return (x>=G.x0&&x<G.x1&&y>=G.ay0&&y<G.ay1)||(y>=G.y0&&y<G.y1&&x>=G.ax0&&x<G.ax1);
 };
+/** Следующая клетка с учётом топологии Мёбиуса (склейка левого и правого края с переворотом по y). */
+function mobiusStep(x,y,dx,dy){
+  if(G.shape!=='m')return null;
+  let nx=x+dx, ny=y+dy;
+  const W=G.x1-G.x0, H=G.y1-G.y0;
+  let rx=nx-G.x0, ry=ny-G.y0;
+  let fdx=dx, fdy=dy;
+  if(rx<0){
+    rx=((rx%W)+W)%W;
+    ry=H-1-ry;
+    fdy=-fdy;
+  }else if(rx>=W){
+    rx=rx%W;
+    ry=H-1-ry;
+    fdy=-fdy;
+  }
+  if(ry<0||ry>=H)return null;
+  return {x:G.x0+rx, y:G.y0+ry, dx:fdx, dy:fdy};
+}
 const enemy=(q,p)=>q&&q.t!==p.t&&!q.prot;
 function configure(){
   const a=CFG.army,nt=CFG.teams||4;
   ORDER=nt===2?['white','black']:nt===3?['white','blue','black']:ALL4.slice();
   RULE=a==='chess'?{white:'chess',black:'chess',pink:'chess',blue:'chess'}:a==='eur'?{white:'eur',black:'eur',pink:'eur',blue:'eur'}:a==='arm'?{white:'arm',black:'arm',pink:'arm',blue:'arm'}:{white:'chess',black:'chess',pink:'eur',blue:'arm'};
   FW={white:[0,-1],black:[0,1],pink:[-1,0],blue:[1,0]};
-  if(CFG.shape==='x'){
+  if(CFG.shape==='m'){
+    // Мёбиус ∞: лента 16×4 (8 секторов на кольцо × 4 дорожки) — сплошная восьмёрка
+    G={shape:'m',x0:14,x1:26,y0:17,y1:22};
+    ARMY={
+      white:(d,i)=>[14+(i%6), 21-Math.min(d,1)],
+      black:(d,i)=>[20+(i%6), 17+Math.min(d,1)],
+      pink:(d,i)=>[14+(i%6), 20-Math.min(d,1)],
+      blue:(d,i)=>[20+(i%6), 18+Math.min(d,1)]
+    };
+    if(nt===2){
+      ARMY.white=(d,i)=>[14+(i%6), 21-Math.min(d,1)];
+      ARMY.black=(d,i)=>[20+(i%6), 17+Math.min(d,1)];
+    }
+  }else if(CFG.shape==='x'){
     G={shape:'x',w:7};
     ARMY={white:(d,i)=>[4+i,35-d],black:(d,i)=>[28+i,4+d],pink:(d,i)=>[35-d,28+i],blue:(d,i)=>[4+d,4+i]};
   }else{
@@ -4489,24 +4638,74 @@ function setup(){
   B=[];for(let y=0;y<WN;y++)B.push(Array(WN).fill(null));
   ORDER.forEach(t=>{
     const rule=RULE[t];
+    // ширина поля (для Мёбиуса 7, иначе 8)
+    const files=(G.shape==='m')?(G.x1-G.x0):8;
     if(rule==='chess'){
-      'RNBQKBNR'.split('').forEach((k,i)=>{let [x,y]=ARMY[t](0,i);B[y][x]={t,k};[x,y]=ARMY[t](1,i);B[y][x]={t,k:'P',st:1};});
+      // для 7 клеток: R N B Q K B N  (без второй ладьи) или R N B K B N R
+      const back=files>=8?'RNBQKBNR':(files===7?'RNBqkBN'.replace('q','Q').replace('k','K'):'RNBKBNR'.slice(0,files));
+      // гарантируем короля в центре-ish
+      const row='RNBQKBNR';
+      const n=Math.min(8, files);
+      row.slice(0,n).split('').forEach((k,i)=>{
+        let [x,y]=ARMY[t](0,i); if(valid(x,y)) B[y][x]={t,k};
+        [x,y]=ARMY[t](1,i); if(valid(x,y)) B[y][x]={t,k:'P',st:1};
+      });
     }else{
-      (rule==='arm'?[1,2]:[0,1,2]).forEach(d=>{for(let i=0;i<8;i++){const [x,y]=ARMY[t](d,i);if(rule==='arm'||(x+y)%2===1)B[y][x]={t,k:'m'};}});
+      (rule==='arm'?[1,2]:[0,1,2]).forEach(d=>{
+        for(let i=0;i<files;i++){
+          const [x,y]=ARMY[t](d,i);
+          if(!valid(x,y)) continue;
+          if(rule==='arm'||(x+y)%2===1)B[y][x]={t,k:'m'};
+        }
+      });
     }
   });
 }
 function gen(x,y,capOnly){
   const p=B[y][x],r=[],rule=RULE[p.t],[fx,fy]=FW[p.t],px=-fy,py=fx;
   const add=(a,b,cap)=>r.push(cap?{x:a,y:b,cap}:{x:a,y:b});
+  // Универсальный шаг: на Мёбиусе учитывает переворот через шов
+  const nextCell=(cx,cy,dx,dy)=>{
+    if(G.shape==='m'){
+      const s=mobiusStep(cx,cy,dx,dy);
+      return s?{a:s.x,b:s.y,dx:s.dx,dy:s.dy}:null;
+    }
+    const a=cx+dx,b=cy+dy;
+    return valid(a,b)?{a,b,dx,dy}:null;
+  };
   if(rule==='chess'){
-    const slide=ds=>ds.forEach(([dx,dy])=>{let a=x+dx,b=y+dy;while(valid(a,b)){const q=B[b][a];if(q){if(enemy(q,p))add(a,b,{x:a,y:b});break;}add(a,b);a+=dx;b+=dy;}});
-    const step=ds=>ds.forEach(([dx,dy])=>{const a=x+dx,b=y+dy;if(!valid(a,b))return;const q=B[b][a];if(!q)add(a,b);else if(enemy(q,p))add(a,b,{x:a,y:b});});
+    const slide=ds=>ds.forEach(([odx,ody])=>{
+      let a=x,b=y,dx=odx,dy=ody,steps=0;
+      while(steps++<40){
+        const n=nextCell(a,b,dx,dy); if(!n)break;
+        a=n.a;b=n.b;dx=n.dx;dy=n.dy;
+        const q=B[b][a];
+        if(q){if(enemy(q,p))add(a,b,{x:a,y:b});break;}
+        add(a,b);
+      }
+    });
+    const step=ds=>ds.forEach(([odx,ody])=>{
+      const n=nextCell(x,y,odx,ody); if(!n)return;
+      const q=B[n.b][n.a];
+      if(!q)add(n.a,n.b); else if(enemy(q,p))add(n.a,n.b,{x:n.a,y:n.b});
+    });
     if(p.k==='R')slide(O);else if(p.k==='B')slide(D);else if(p.k==='Q')slide(O.concat(D));
     else if(p.k==='K')step(O.concat(D));else if(p.k==='N')step(KN);
-    else{const a=x+fx,b=y+fy;
-      if(valid(a,b)&&!B[b][a]){add(a,b);const a2=a+fx,b2=b+fy;if(p.st&&valid(a2,b2)&&!B[b2][a2])add(a2,b2);}
-      [1,-1].forEach(sg=>{const ca=a+px*sg,cb=b+py*sg;if(valid(ca,cb)&&enemy(B[cb][ca],p))add(ca,cb,{x:ca,y:cb});});}
+    else{
+      // пешка: вперёд (с возможным двойным) и взятие по диагонали
+      const n1=nextCell(x,y,fx,fy);
+      if(n1&&!B[n1.b][n1.a]){
+        add(n1.a,n1.b);
+        if(p.st){
+          const n2=nextCell(n1.a,n1.b,n1.dx,n1.dy);
+          if(n2&&!B[n2.b][n2.a])add(n2.a,n2.b);
+        }
+      }
+      [1,-1].forEach(sg=>{
+        const n=nextCell(x,y,fx+px*sg,fy+py*sg);
+        if(n&&enemy(B[n.b][n.a],p))add(n.a,n.b,{x:n.a,y:n.b});
+      });
+    }
     return r;
   }
   const eur=rule==='eur',all=eur?D:O;
@@ -4514,14 +4713,33 @@ function gen(x,y,capOnly){
   if(p.k==='m'){
     const cd=eur?D:[[fx,fy],[px,py],[-px,-py]];
     const md=eur?[[fx+px,fy+py],[fx-px,fy-py]]:cd;
-    cd.forEach(([dx,dy])=>{const a=x+dx,b=y+dy,c=x+2*dx,d=y+2*dy;
-      if(valid(a,b)&&valid(c,d)&&enemy(B[b][a],p)&&!B[d][c])r.push({x:c,y:d,cap:{x:a,y:b},jump:1});});
-    if(!capOnly){md.forEach(([dx,dy])=>{const a=x+dx,b=y+dy;if(valid(a,b)&&!B[b][a])add(a,b);});cd.forEach(([dx,dy])=>hitB(x+dx,y+dy));}
-  }else all.forEach(([dx,dy])=>{
-    let a=x+dx,b=y+dy;
-    while(valid(a,b)&&!B[b][a]){if(!capOnly)add(a,b);a+=dx;b+=dy;}
+    cd.forEach(([dx,dy])=>{
+      const n1=nextCell(x,y,dx,dy); if(!n1)return;
+      const n2=nextCell(n1.a,n1.b,n1.dx,n1.dy); if(!n2)return;
+      if(enemy(B[n1.b][n1.a],p)&&!B[n2.b][n2.a])r.push({x:n2.a,y:n2.b,cap:{x:n1.a,y:n1.b},jump:1});
+    });
+    if(!capOnly){
+      md.forEach(([dx,dy])=>{const n=nextCell(x,y,dx,dy);if(n&&!B[n.b][n.a])add(n.a,n.b);});
+      cd.forEach(([dx,dy])=>{const n=nextCell(x,y,dx,dy);if(n)hitB(n.a,n.b);});
+    }
+  }else all.forEach(([odx,ody])=>{
+    let a=x,b=y,dx=odx,dy=ody,steps=0;
+    while(steps++<40){
+      const n=nextCell(a,b,dx,dy); if(!n)break;
+      a=n.a;b=n.b;dx=n.dx;dy=n.dy;
+      if(B[b][a])break;
+      if(!capOnly)add(a,b);
+    }
     hitB(a,b);
-    if(valid(a,b)&&enemy(B[b][a],p)){let c=a+dx,d=b+dy;while(valid(c,d)&&!B[d][c]){r.push({x:c,y:d,cap:{x:a,y:b},jump:1});c+=dx;d+=dy;}}
+    if(valid(a,b)&&enemy(B[b][a],p)){
+      let c=a,d=b,cdx=dx,cdy=dy,j=0;
+      while(j++<40){
+        const n=nextCell(c,d,cdx,cdy); if(!n)break;
+        c=n.a;d=n.b;cdx=n.dx;cdy=n.dy;
+        if(B[d][c])break;
+        r.push({x:c,y:d,cap:{x:a,y:b},jump:1});
+      }
+    }
   });
   return r;
 }
@@ -4568,6 +4786,19 @@ function walk(t){
 }
 function mutate(){
   if(bossSt)return 'Поле не меняется во время босса';
+  if(G.shape==='m'){
+    // Мёбиус ∞: слегка меняем число секторов / дорожек
+    const nw=clamp((G.x1-G.x0)+pick([-2,0,2]),10,16);
+    const nh=clamp((G.y1-G.y0)+pick([-1,0,1]),3,6);
+    const cx=Math.floor((G.x0+G.x1)/2), cy=Math.floor((G.y0+G.y1)/2);
+    G.x0=clamp(cx-Math.floor(nw/2),2,WN-nw-2);
+    G.x1=G.x0+nw;
+    G.y0=clamp(cy-Math.floor(nh/2),2,WN-nh-2);
+    G.y1=G.y0+nh;
+    sel=null;moves=null;
+    const t='Мёбиус ∞: поле '+(G.x1-G.x0)+'×'+(G.y1-G.y0)+' (края с переворотом)';
+    log(t);showTip('plus_resize');return t;
+  }
   if(G.shape==='s'){
     const two=ORDER.length===2,lo=two?[10,16]:[2,12],hi=two?[24,30]:[28,38];
     const ops=[()=>{G.ax0=clamp(G.ax0+pick([-4,-2,2,4]),lo[0],lo[1]);},()=>{G.ax1=clamp(G.ax1+pick([-4,-2,2,4]),hi[0],hi[1]);},()=>{G.ay0=clamp(G.ay0+pick([-4,-2,2,4]),lo[0],lo[1]);},()=>{G.ay1=clamp(G.ay1+pick([-4,-2,2,4]),hi[0],hi[1]);}].sort(()=>Math.random()-0.5).slice(0,1+Math.floor(Math.random()*3));
@@ -4658,12 +4889,14 @@ function doMove(fx,fy,m,cb){animMove(fx,fy,m.x,m.y,()=>{apply(fx,fy,m);cb();});}
 // отмена / пропуск
 function pushUndo(){undoSt.push(JSON.stringify({B,G,ti,round,extra,skipT,CS,R,fut,SL}));if(undoSt.length>12)undoSt.shift();undos=0;}
 function undo(){
-  if(over||busy||ritual||ORDER[ti]!=='white'||!undoSt.length||undos>=2)return;
+  const my=(onlineMode&&onlineSeat)?onlineSeat:'white';
+  if(over||busy||ritual||ORDER[ti]!==my||!undoSt.length||undos>=2)return;
   const st=JSON.parse(undoSt.pop());({B,G,ti,round,extra,skipT,CS,R,fut,SL}=st);
   sel=null;moves=null;selSlot=null;chain=false;undos++;fresh={white:[],black:[],pink:[],blue:[]};log('Ход отменён');draw();
 }
 function skip(){
-  if(over||busy||ritual||ORDER[ti]!=='white')return;
+  const my=(onlineMode&&onlineSeat)?onlineSeat:'white';
+  if(over||busy||ritual||ORDER[ti]!==my)return;
   pushUndo();sel=null;moves=null;selSlot=null;chain=false;log('Ход пропущен');advance();
 }
 function playCard(t,type,x,y){
@@ -4934,7 +5167,389 @@ function makeTeto(h){
   return w;
 }
 function saveCfg(){try{localStorage.setItem('chaos_plus_cfg',JSON.stringify(CFG));}catch(e){}}
-function loadCfg(){try{const c=JSON.parse(localStorage.getItem('chaos_plus_cfg'));if(c&&(c.shape==='p'||c.shape==='x'||c.shape==='s')&&['chess','eur','arm','mixed'].includes(c.army)){c.teams=[2,3,4].includes(c.teams)?c.teams:4;CFG=c;return true;}}catch(e){}return false;}
+function loadCfg(){try{const c=JSON.parse(localStorage.getItem('chaos_plus_cfg'));if(c&&(c.shape==='p'||c.shape==='x'||c.shape==='s'||c.shape==='m')&&['chess','eur','arm','mixed'].includes(c.army)){c.teams=[2,3,4].includes(c.teams)?c.teams:4;CFG=c;return true;}}catch(e){}return false;}
+/* ========== Онлайн через PeerJS (WebRTC) — без аккаунтов, ключей и регистрации ========== */
+/* Хост создаёт комнату, гости подключаются по 6-значному коду напрямую (peer-to-peer).
+   Публичный брокер PeerJS нужен только на момент соединения; сами ходы идут напрямую между игроками. */
+const PEER_PREFIX = 'chaoschess-';
+const PEER_OPTS = {
+  debug: 0,
+  // Свой брокер (необязательно): host:'my-peer.example.com', port:443, path:'/', secure:true
+  config: { iceServers: [
+    { urls: 'stun:stun.l.google.com:19302' },
+    { urls: 'stun:stun.cloudflare.com:3478' },
+    { urls: 'stun:global.stun.twilio.com:3478' }
+  ] }
+};
+let onlineMode = false;
+function showInspectModal(text){
+  let el=document.getElementById('inspect-modal');
+  if(!el){
+    el=document.createElement('div'); el.id='inspect-modal';
+    el.style.cssText='position:fixed;inset:0;z-index:200;background:rgba(0,0,0,.7);display:flex;align-items:center;justify-content:center;padding:16px';
+    el.innerHTML='<div style="background:#1c1c1e;color:#f2f2f7;border-radius:14px;padding:16px 18px;max-width:360px;width:100%;border:1px solid rgba(255,255,255,.12);white-space:pre-wrap;font-size:13px;line-height:1.45"></div>';
+    el.onclick=()=>{el.style.display='none';};
+    document.body.appendChild(el);
+  }
+  el.querySelector('div').textContent=text;
+  el.style.display='flex';
+}
+
+
+let onlineRole = null; // 'host' | 'guest'
+let onlineRoomCode = null;
+let onlinePlayerId = null;
+let onlineSeat = null; // white/black/pink/blue
+let onlineApplying = false; // true while applying remote snapshot
+let onlineStateSeq = 0;
+let onlineHumanSeats = {white:true}; // seats controlled by humans
+let netPeer = null, netConns = {}, netHostConn = null, netRoom = null, netLobbyCb = null;
+let netPending = null, netGameOn = false, netAiTimer = null, netSess = 0;
+
+function loadPeerSDK(){
+  return new Promise((resolve, reject)=>{
+    if(window.Peer){ resolve(); return; }
+    const urls = [
+      'https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js',
+      'https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js'
+    ];
+    let i = 0;
+    const next = ()=>{
+      if(i >= urls.length){ reject(new Error('Не удалось загрузить PeerJS. Проверь интернет.')); return; }
+      const s = document.createElement('script');
+      s.src = urls[i++];
+      s.onload = ()=> window.Peer ? resolve() : next();
+      s.onerror = ()=>{ s.remove(); next(); };
+      document.head.appendChild(s);
+    };
+    next();
+  });
+}
+function netErr(e){
+  if(e instanceof Error && !e.type) return e;
+  const t = e && e.type;
+  if(t === 'peer-unavailable') return new Error('Комната не найдена (проверь код)');
+  if(t === 'unavailable-id') return new Error('Код занят, попробуй ещё раз');
+  if(t === 'network' || t === 'server-error' || t === 'socket-error' || t === 'socket-closed') return new Error('Нет связи с сервером PeerJS. Проверь интернет и повтори.');
+  if(t === 'browser-incompatible') return new Error('Браузер не поддерживает WebRTC');
+  return new Error((e && (e.message || e.type)) || 'Ошибка сети');
+}
+function openPeer(id){
+  return new Promise((resolve, reject)=>{
+    let done = false;
+    const p = id ? new Peer(id, PEER_OPTS) : new Peer(PEER_OPTS);
+    const to = setTimeout(()=>{ if(done) return; done = true; try{ p.destroy(); }catch(e){} reject(new Error('Сервер соединения не отвечает. Повтори позже.')); }, 12000);
+    p.on('open', ()=>{ if(done) return; done = true; clearTimeout(to); resolve(p); });
+    p.on('error', err=>{ if(done){ console.warn('peer', err); return; } done = true; clearTimeout(to); try{ p.destroy(); }catch(e){} reject(err); });
+  });
+}
+function seatOrderFor(nt){
+  return nt===2 ? ['white','black'] : nt===3 ? ['white','blue','black'] : ['white','blue','black','pink'];
+}
+function genRoomCode(){
+  const chars='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let s='';
+  for(let i=0;i<6;i++) s+=chars[Math.floor(Math.random()*chars.length)];
+  return s;
+}
+function netSend(conn, msg){ try{ if(conn && conn.open) conn.send(msg); }catch(e){ console.warn('send', e); } }
+function netBroadcast(msg, exceptId){
+  Object.keys(netConns).forEach(id=>{ if(id !== exceptId) netSend(netConns[id], msg); });
+}
+function netCleanup(){
+  netSess++;
+  clearTimeout(netAiTimer);
+  try{ Object.values(netConns).forEach(c=>{ try{ c.close(); }catch(e){} }); }catch(e){}
+  netConns = {};
+  try{ if(netHostConn) netHostConn.close(); }catch(e){}
+  netHostConn = null;
+  try{ if(netPeer) netPeer.destroy(); }catch(e){}
+  netPeer = null; netRoom = null; netLobbyCb = null; netPending = null; netGameOn = false;
+}
+
+/* ---------- хост ---------- */
+function hostPublishLobby(){
+  if(!netRoom) return;
+  netBroadcast({ t:'lobby', room:netRoom });
+  if(netLobbyCb) netLobbyCb(netRoom);
+}
+function hostOnData(conn, msg){
+  if(!msg || typeof msg !== 'object' || !netRoom) return;
+  if(msg.t === 'hello'){
+    const n = Object.keys(netRoom.players).length;
+    if(netRoom.status !== 'lobby'){ netSend(conn, {t:'reject', reason:'Игра уже идёт'}); setTimeout(()=>{ try{ conn.close(); }catch(e){} }, 400); return; }
+    if(n >= netRoom.maxPlayers){ netSend(conn, {t:'reject', reason:'Комната полная'}); setTimeout(()=>{ try{ conn.close(); }catch(e){} }, 400); return; }
+    const id = conn.peer;
+    netConns[id] = conn;
+    netRoom.players[id] = { id, name:'Игрок '+(n+1), seat:null, joinedAt:Date.now() };
+    netSend(conn, { t:'welcome', id, code:netRoom.code });
+    hostPublishLobby();
+    return;
+  }
+  if(!netConns[conn.peer]) return;
+  if(msg.t === 'state' && msg.snap){
+    netBroadcast(msg, conn.peer); // переслать остальным гостям
+    netGotState(msg);
+  }
+}
+function hostDropConn(conn){
+  const id = conn.peer;
+  if(!netConns[id] || !netRoom) return;
+  delete netConns[id];
+  const p = netRoom.players[id];
+  delete netRoom.players[id];
+  if(netRoom.status === 'playing'){
+    if(p && p.seat){
+      delete onlineHumanSeats[p.seat];
+      try{ log('Игрок ('+(NAME[p.seat]||p.seat)+') вышел — теперь ходит ИИ'); }catch(e){}
+      netBroadcast({ t:'seats', seats:onlineHumanSeats });
+      onlineMaybeAI();
+    }
+  } else hostPublishLobby();
+}
+async function onlineCreateRoom(maxPlayers){
+  await loadPeerSDK();
+  netCleanup();
+  const sess = netSess;
+  let code, peer = null, tries = 0;
+  while(!peer){
+    code = genRoomCode();
+    try{ peer = await openPeer(PEER_PREFIX+code); }
+    catch(e){
+      if(e && e.type === 'unavailable-id' && ++tries < 6) continue;
+      throw netErr(e);
+    }
+  }
+  if(sess !== netSess){ try{ peer.destroy(); }catch(e){} throw new Error('Отменено'); }
+  netPeer = peer;
+  onlinePlayerId = peer.id;
+  onlineRole = 'host';
+  onlineRoomCode = code;
+  onlineSeat = 'white';
+  onlineHumanSeats = {white:true};
+  netRoom = {
+    code, hostId:onlinePlayerId,
+    maxPlayers: Math.min(4, Math.max(2, maxPlayers||2)),
+    status:'lobby', cfg:null, createdAt:Date.now(),
+    players:{ [onlinePlayerId]:{ id:onlinePlayerId, name:'Хост', seat:'white', joinedAt:Date.now() } }
+  };
+  peer.on('connection', conn=>{
+    conn.on('data', msg=>{ if(sess === netSess) hostOnData(conn, msg); });
+    conn.on('close', ()=>{ if(sess === netSess) hostDropConn(conn); });
+    conn.on('error', ()=>{ if(sess === netSess) hostDropConn(conn); });
+  });
+  peer.on('disconnected', ()=>{ try{ if(sess === netSess) peer.reconnect(); }catch(e){} });
+  peer.on('error', e=>console.warn('peer', e));
+  return code;
+}
+async function onlineStartGame(cfg){
+  if(onlineRole !== 'host' || !netRoom) return;
+  const nt = [2,3,4].includes(cfg.teams) ? cfg.teams : 4;
+  const order = seatOrderFor(nt);
+  const guests = Object.keys(netRoom.players).filter(id=>id !== onlinePlayerId);
+  if(guests.length + 1 > order.length){
+    throw new Error('Игроков ('+(guests.length+1)+') больше, чем команд ('+order.length+'). Выбери больше команд при настройке.');
+  }
+  const seats = {};
+  seats[onlinePlayerId] = order[0];
+  guests.forEach((id,i)=>{ seats[id] = order[i+1]; });
+  Object.keys(seats).forEach(id=>{ netRoom.players[id].seat = seats[id]; });
+  onlineSeat = order[0];
+  onlineHumanSeats = {};
+  Object.values(seats).forEach(s=>{ onlineHumanSeats[s] = true; });
+  netRoom.status = 'playing';
+  netRoom.cfg = cfg;
+  netBroadcast({ t:'start', cfg, seats });
+}
+
+/* ---------- гость ---------- */
+function guestOnData(msg){
+  if(!msg || typeof msg !== 'object') return;
+  if(msg.t === 'lobby'){
+    netRoom = msg.room;
+    if(netLobbyCb) netLobbyCb(netRoom);
+  } else if(msg.t === 'start'){
+    onlineSeat = msg.seats[onlinePlayerId] || null;
+    onlineHumanSeats = {};
+    Object.values(msg.seats).forEach(s=>{ onlineHumanSeats[s] = true; });
+    if(!netRoom) netRoom = { players:{} };
+    netRoom.status = 'playing';
+    netRoom.cfg = msg.cfg;
+    if(netLobbyCb) netLobbyCb(netRoom);
+  } else if(msg.t === 'seats'){
+    onlineHumanSeats = msg.seats || {};
+  } else if(msg.t === 'state'){
+    netGotState(msg);
+  }
+}
+function guestLost(){
+  try{ log('Связь с хостом потеряна'); }catch(e){}
+  try{ showInspectModal('Связь с хостом потеряна. Игра остановлена — вернись в меню (Тето в углу) и создай новую комнату.'); }catch(e){}
+  const el = document.getElementById('online-badge');
+  if(el) el.textContent = 'ONLINE · нет связи';
+}
+async function onlineJoinRoom(code){
+  code = String(code||'').trim().toUpperCase();
+  if(code.length < 4) throw new Error('Короткий код');
+  await loadPeerSDK();
+  netCleanup();
+  const sess = netSess;
+  let peer;
+  try{ peer = await openPeer(null); } catch(e){ throw netErr(e); }
+  netPeer = peer;
+  onlinePlayerId = peer.id;
+  onlineRole = 'guest';
+  onlineRoomCode = code;
+  onlineSeat = null;
+  onlineHumanSeats = {};
+  netRoom = { players:{}, status:'lobby' };
+  const conn = peer.connect(PEER_PREFIX+code, { reliable:true });
+  netHostConn = conn;
+  await new Promise((resolve, reject)=>{
+    let done = false;
+    const to = setTimeout(()=>fail(new Error('Комната не отвечает (проверь код)')), 15000);
+    const fail = e=>{ if(done) return; done = true; clearTimeout(to); reject(e instanceof Error ? e : netErr(e)); };
+    peer.on('error', e=>{ if(!done) fail(netErr(e)); else console.warn('peer', e); });
+    conn.on('error', fail);
+    conn.on('open', ()=>{ conn.send({ t:'hello' }); });
+    conn.on('data', msg=>{
+      if(sess !== netSess || !msg) return;
+      if(msg.t === 'welcome' && !done){ done = true; clearTimeout(to); resolve(); return; }
+      if(msg.t === 'reject'){ if(!done) fail(new Error(msg.reason || 'Отказано')); return; }
+      guestOnData(msg);
+    });
+    conn.on('close', ()=>{ if(!done) fail(new Error('Соединение закрыто')); else if(sess === netSess) guestLost(); });
+  });
+  return { code };
+}
+
+/* ---------- общее: лобби, состояние игры, ИИ ---------- */
+function onlineListenLobby(onUpdate){
+  netLobbyCb = onUpdate;
+  if(netRoom) onUpdate(netRoom);
+}
+function onlineSnapshot(){
+  // Полный снимок Plus-партии для синхронизации
+  return {
+    seq: ++onlineStateSeq,
+    B: B,
+    G: G,
+    ti: ti,
+    round: round,
+    extra: !!extra,
+    skipT: skipT||null,
+    CS: CS,
+    R: R,
+    fut: fut,
+    SL: SL,
+    over: !!over,
+    ritual: ritual,
+    bossSt: bossSt,
+    pile: pile,
+    craftRound: craftRound,
+    nukeDone: !!nukeDone,
+    ORDER: ORDER,
+    CFG: CFG,
+    __plusMines: window.__plusMines||[]
+  };
+}
+function onlineApplySnapshot(st){
+  if(!st || !st.B) return;
+  onlineApplying = true;
+  try {
+    B = st.B;
+    if(st.G) G = st.G;
+    if(typeof st.ti==='number') ti = st.ti;
+    if(typeof st.round==='number') round = st.round;
+    extra = !!st.extra;
+    skipT = st.skipT||null;
+    if(st.CS) CS = st.CS;
+    if(st.R) R = st.R;
+    if(st.fut) fut = st.fut;
+    if(st.SL) SL = st.SL;
+    over = !!st.over;
+    ritual = st.ritual||null;
+    bossSt = st.bossSt||null;
+    pile = st.pile||[];
+    craftRound = st.craftRound||0;
+    nukeDone = !!st.nukeDone;
+    if(st.ORDER) ORDER = st.ORDER;
+    if(st.CFG) CFG = Object.assign(CFG, st.CFG);
+    window.__plusMines = st.__plusMines||[];
+    if(typeof st.seq==='number') onlineStateSeq = Math.max(onlineStateSeq, st.seq);
+    sel=null; moves=null; selSlot=null; chain=false; busy=false;
+    if(over){
+      document.getElementById('game-over').classList.add('show');
+    }
+    draw();
+    updateOnlineBadge();
+  } finally {
+    onlineApplying = false;
+  }
+}
+
+function netGotState(msg){
+  if(!netGameOn){ netPending = msg; return; }
+  if(msg.snap) onlineApplySnapshot(msg.snap);
+  if(onlineRole === 'host') onlineMaybeAI();
+}
+async function onlinePushState(partial){
+  if(!onlineMode || !onlineRoomCode || !netPeer || onlineApplying || !netGameOn) return;
+  try{
+    const payload = {
+      t:'state', updatedAt:Date.now(), by:onlinePlayerId, seat:onlineSeat,
+      snap: JSON.parse(JSON.stringify(onlineSnapshot()))
+    };
+    if(onlineRole === 'host') netBroadcast(payload);
+    else netSend(netHostConn, payload);
+  }catch(e){ console.warn('online push', e); }
+}
+function onlineIsMyTurn(){
+  if(!onlineMode) return ORDER[ti]==='white';
+  return ORDER[ti]===onlineSeat;
+}
+function onlineSeatHasHuman(seat){
+  return !!(onlineHumanSeats && onlineHumanSeats[seat]);
+}
+function updateOnlineBadge(){
+  const el=document.getElementById('online-badge');
+  if(!el) return;
+  if(onlineMode && onlineRoomCode){
+    el.classList.add('show');
+    el.textContent = 'ONLINE '+onlineRoomCode+' · '+(NAME[onlineSeat]||onlineSeat)+(onlineIsMyTurn()?' · ваш ход':'');
+  } else el.classList.remove('show');
+}
+
+// ИИ за пустые места считает только хост, чтобы у всех было одно и то же
+function onlineMaybeAI(tries){
+  if(!onlineMode || onlineRole !== 'host' || over) return;
+  if(onlineSeatHasHuman(ORDER[ti])) return;
+  clearTimeout(netAiTimer);
+  netAiTimer = setTimeout(()=>{
+    if(over || !onlineMode || onlineSeatHasHuman(ORDER[ti])) return;
+    if(busy){ if((tries||0) < 20) onlineMaybeAI((tries||0)+1); return; }
+    ai();
+  }, 600);
+}
+function onlineListenGame(){
+  if(!onlineMode || !onlineRoomCode || !netPeer) return;
+  netGameOn = true;
+  if(netPending){
+    const m = netPending; netPending = null;
+    if(m.snap) onlineApplySnapshot(m.snap);
+  }
+  updateOnlineBadge();
+}
+function onlineDisconnect(){
+  netCleanup();
+  try{
+    const badge = document.getElementById('online-badge');
+    if(badge) badge.classList.remove('show');
+  }catch(e){}
+  onlineMode = false; onlineRole = null; onlineRoomCode = null; onlineSeat = null;
+  onlineHumanSeats = {white:true};
+}
+
 function openSetup(first){
   const old=document.getElementById('plus-setup');if(old)old.remove();
   const ov=document.createElement('div');ov.id='plus-setup';
@@ -4953,19 +5568,147 @@ function openSetup(first){
       b.style.cssText='padding:8px 14px;border-radius:10px;border:1px solid #b9b2a0;background:'+(v===cur?'#ffd98a':'#fff')+';color:#1a1a1a;font-weight:700;font-size:14px;cursor:pointer';
       b.onclick=()=>cb(v);btns.appendChild(b);
     });
-    if(!first){const c=document.createElement('button');c.textContent='Отмена';c.style.cssText='padding:8px 12px;border-radius:10px;border:none;background:transparent;color:#666;cursor:pointer';c.onclick=()=>ov.remove();btns.appendChild(c);}
+    if(!first){const c=document.createElement('button');c.textContent='Отмена';c.style.cssText='padding:8px 12px;border-radius:10px;border:none;background:transparent;color:#666;cursor:pointer';c.onclick=()=>{onlineDisconnect();ov.remove();};btns.appendChild(c);}
   };
-  const finish=()=>{CFG=cfg;saveCfg();ov.remove();start();};
-  ask(first?'Привет! Я Тето. Какое поле выберем: +, × или ■?':'Сменим поле? Выбери: +, × или ■',[['＋ Плюс','p'],['× Икс','x'],['■ Квадрат','s']],cfg.shape,v=>{
-    cfg.shape=v;
-    ask(v==='s'?'Сколько команд? При двух поле будет обычной шахматной доской 8×8.':'Сколько команд? 2 — белые и чёрные, 3 — ещё синие, 4 — ещё и розовые.',[['2','2'],['3','3'],['4','4']],String(cfg.teams||4),vt=>{
-    cfg.teams=+vt;
-    ask('Чем будем играть?',[['♟ Шахматы','chess'],['⛀ Шашки','checkers'],['Смесь (как раньше)','mixed']],cfg.army==='eur'||cfg.army==='arm'?'checkers':cfg.army,v2=>{
-      if(v2==='checkers')ask('Какие шашки: европейские или армянские?',[['Европейские','eur'],['Армянские','arm']],cfg.army,v3=>{cfg.army=v3;finish();});
-      else{cfg.army=v2;finish();}
+  const askInput=(text, placeholder, cb)=>{
+    txt.textContent=text;btns.innerHTML='';
+    const inp=document.createElement('input');
+    inp.placeholder=placeholder||'';
+    inp.style.cssText='width:100%;padding:10px 12px;border-radius:10px;border:1px solid #b9b2a0;font-size:16px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;margin-bottom:8px';
+    inp.autocapitalize='characters';
+    const row2=document.createElement('div');row2.style.cssText='display:flex;gap:6px;flex-wrap:wrap;width:100%';
+    const ok=document.createElement('button');ok.textContent='Подключиться';
+    ok.style.cssText='padding:8px 14px;border-radius:10px;border:1px solid #b9b2a0;background:#ffd98a;color:#1a1a1a;font-weight:700;font-size:14px;cursor:pointer';
+    ok.onclick=()=>cb((inp.value||'').trim());
+    inp.addEventListener('keydown',e=>{ if(e.key==='Enter') cb((inp.value||'').trim()); });
+    const back=document.createElement('button');back.textContent='Назад';
+    back.style.cssText='padding:8px 12px;border-radius:10px;border:none;background:transparent;color:#666;cursor:pointer';
+    back.onclick=()=>askMode();
+    btns.appendChild(inp);row2.appendChild(ok);row2.appendChild(back);btns.appendChild(row2);
+    setTimeout(()=>inp.focus(), 80);
+  };
+  const boardQuestions=()=>{
+    ask(first?'Какое поле выберем: +, ×, ■ или ∞ Мёбиус?':'Сменим поле? Выбери: +, ×, ■ или ∞',[['＋ Плюс','p'],['× Икс','x'],['■ Квадрат','s'],['∞ Мёбиус','m']],cfg.shape,v=>{
+      cfg.shape=v;
+      const teamHint=v==='m'
+        ? 'Лента Мёбиуса: края с переворотом. Сколько команд? (лучше 2)'
+        : (v==='s'?'Сколько команд? При двух — обычная доска 8×8.':'Сколько команд? 2 — белые и чёрные, 3 — +синие, 4 — +розовые.');
+      ask(teamHint,[['2','2'],['3','3'],['4','4']],String(cfg.teams|| (v==='m'?2:4)),vt=>{
+        cfg.teams=+vt;
+        ask('Чем будем играть?',[['♟ Шахматы','chess'],['⛀ Шашки','checkers'],['Смесь','mixed']],cfg.army==='eur'||cfg.army==='arm'?'checkers':cfg.army,v2=>{
+          if(v2==='checkers')ask('Какие шашки?',[['Европейские','eur'],['Армянские','arm']],cfg.army,v3=>{cfg.army=v3;finishLocalOrHost();});
+          else{cfg.army=v2;finishLocalOrHost();}
+        });
+      });
     });
+  };
+  const finishLocalOrHost=()=>{
+    CFG=cfg;saveCfg();
+    if(onlineMode && onlineRole==='host'){
+      // wait for players then start
+      showHostLobby();
+      return;
+    }
+    ov.remove();start();
+  };
+  const showHostLobby=()=>{
+    txt.textContent='Комната создана. Отправь код друзьям: '+onlineRoomCode+'\nЖдём игроков (ещё можно '+((cfg.teams||2)-1)+'). Когда все готовы — «Начать».';
+    btns.innerHTML='';
+    const codeEl=document.createElement('div');
+    codeEl.style.cssText='font-size:28px;font-weight:900;letter-spacing:0.2em;text-align:center;margin:8px 0;color:#1a1a1a';
+    codeEl.textContent=onlineRoomCode;
+    btns.appendChild(codeEl);
+    const list=document.createElement('div');
+    list.id='online-lobby-list';
+    list.style.cssText='font-size:12px;margin-bottom:8px;color:#333';
+    btns.appendChild(list);
+    const startBtn=document.createElement('button');
+    startBtn.textContent='Начать игру';
+    startBtn.style.cssText='padding:8px 14px;border-radius:10px;border:1px solid #b9b2a0;background:#2aabee;color:#fff;font-weight:700;font-size:14px;cursor:pointer';
+    startBtn.onclick=async()=>{
+      try{
+        await onlineStartGame(cfg);
+        ov.remove();
+        start();
+        log('Онлайн: комната '+onlineRoomCode+' · вы '+ (NAME[onlineSeat]||onlineSeat));
+      }catch(e){ showInspectModal('Не удалось начать: '+e.message); }
+    };
+    btns.appendChild(startBtn);
+    onlineListenLobby(room=>{
+      const ps=Object.values(room.players||{});
+      list.textContent='Игроки ('+ps.length+'/'+(room.maxPlayers||cfg.teams)+'): '+ps.map(p=>(p.name||p.id)).join(', ');
+      if(room.status==='playing' && onlineRole==='guest'){
+        if(room.cfg){ CFG=Object.assign(CFG, room.cfg); saveCfg(); }
+        ov.remove(); start();
+        log('Онлайн: подключены к '+onlineRoomCode);
+      }
     });
-  });
+  };
+  const showGuestWait=()=>{
+    txt.textContent='Подключено к комнате '+onlineRoomCode+'.\nЖдём, пока хост начнёт игру…';
+    btns.innerHTML='';
+    const list=document.createElement('div');
+    list.style.cssText='font-size:12px;color:#333;margin-bottom:8px';
+    btns.appendChild(list);
+    onlineListenLobby(room=>{
+      const ps=Object.values(room.players||{});
+      list.textContent='Игроки ('+ps.length+'): '+ps.map(p=>p.name||'?').join(', ');
+      if(room.status==='playing'){
+        if(room.cfg){ CFG=Object.assign(CFG, room.cfg); saveCfg(); }
+        ov.remove(); start();
+        log('Онлайн-игра началась · '+onlineRoomCode);
+      }
+    });
+  };
+  const askOnlineAction=()=>{
+    ask('Онлайн: создать комнату или ввести код?',[['Создать','create'],['Подключиться','join']], 'create', async act=>{
+      if(act==='create'){
+        ask('Сколько игроков максимум в комнате? (ты + гости)',[['2','2'],['3','3'],['4','4']], '2', async mx=>{
+          txt.textContent='Создаю комнату…'; btns.innerHTML='';
+          try{
+            onlineMode=true;
+            const code=await onlineCreateRoom(+mx);
+            cfg.teams=+mx;
+            boardQuestions(); // host still picks board, then lobby
+          }catch(e){
+            onlineMode=false;
+            txt.textContent='Ошибка: '+e.message;
+            const b=document.createElement('button');b.textContent='Назад';
+            b.style.cssText='padding:8px 12px;border-radius:10px;border:1px solid #ccc;cursor:pointer';
+            b.onclick=askMode; btns.appendChild(b);
+          }
+        });
+      } else {
+        askInput('Введи код комнаты (6 символов):', 'ABC123', async code=>{
+          txt.textContent='Подключаюсь…'; btns.innerHTML='';
+          try{
+            onlineMode=true;
+            await onlineJoinRoom(code);
+            showGuestWait();
+          }catch(e){
+            onlineMode=false;
+            txt.textContent='Не удалось: '+e.message;
+            const b=document.createElement('button');b.textContent='Ещё раз';
+            b.style.cssText='padding:8px 14px;border-radius:10px;border:1px solid #b9b2a0;background:#ffd98a;font-weight:700;cursor:pointer';
+            b.onclick=askOnlineAction; btns.appendChild(b);
+          }
+        });
+      }
+    });
+  };
+  const askMode=()=>{
+    ask(first?'Привет! Я Тето. Онлайн или оффлайн?':'Онлайн или оффлайн?',
+      [['Оффлайн','offline'],['Онлайн','online']], 'offline', mode=>{
+      if(mode==='offline'){
+        onlineDisconnect();
+        onlineMode=false;
+        boardQuestions();
+      } else {
+        askOnlineAction();
+      }
+    });
+  };
+  askMode();
 }
 
 // ===== Отладочные коды (ввод в панели кодов) =====
@@ -5017,18 +5760,38 @@ function newRound(){
   if(round>1&&!bossSt&&Math.random()<0.2)mutate();
 }
 function advance(){
-  if(check())return;
-  if(extra){extra=false;draw();if(ORDER[ti]!=='white')setTimeout(ai,500);return;}
+  if(check()){
+    if(onlineMode) onlinePushState({full:true});
+    return;
+  }
+  if(extra){
+    extra=false;draw();
+    if(onlineMode) onlinePushState({full:true});
+    if(onlineMode){
+      onlineMaybeAI();
+    } else if(ORDER[ti]!=='white') setTimeout(ai,500);
+    updateOnlineBadge();
+    return;
+  }
   for(let i=0;i<ORDER.length;i++){
     ti=(ti+1)%ORDER.length;const t=ORDER[ti];
     if(!alive(t))continue;
     if(t==='white')newRound();
     if(skipT===t){skipT=null;log('Пропуск хода: '+NAME[t]);continue;}
-    walk(t);if(check())return;
+    walk(t);if(check()){ if(onlineMode) onlinePushState({full:true}); return; }
     if(!teamMoves(t).length)continue;
-    draw();if(t!=='white')setTimeout(ai,500);return;
+    draw();
+    if(onlineMode){
+      onlinePushState({full:true});
+      updateOnlineBadge();
+      // ИИ только если за эту сторону никто не сидит онлайн
+      onlineMaybeAI();
+      return;
+    }
+    if(t!=='white')setTimeout(ai,500);return;
   }
   end(true,'Больше никто не может ходить.');
+  if(onlineMode) onlinePushState({full:true});
 }
 function ai(){
   if(over)return;const t=ORDER[ti];
@@ -5048,11 +5811,34 @@ function aiStep(m){
   advance();
 }
 function click(x,y){
-  if(over)return;
+  if(window.inspectMode){
+    try{
+      const p=valid(x,y)&&B[y][x];
+      if(!p){ if(typeof showInspectModal==='function') showInspectModal('Пустая клетка'); return; }
+      const KN2={P:'Пешка',N:'Конь',B:'Слон',R:'Ладья',Q:'Ферзь',K:'Король',m:'Шашка',d:'Дамка',X:'Фигура'};
+      const lines=[
+        (NAME[p.t]||p.t)+' · '+(KN2[p.k]||p.k||'?')+' '+(SYM2[p.k]||''),
+        p.shield?'Щит: да':'Щит: нет',
+        p.prot?'Защита: да':'',
+        p.lying?'Лежит: '+p.lying:'',
+        p.frozen?'Лёд: '+p.frozen:'',
+        p.boss?'БОСС':'',
+        p.minion?'Миньон':''
+      ].filter(Boolean);
+      if(typeof showInspectModal==='function') showInspectModal(lines.join('\n'));
+      else log(lines.join(' | '));
+    }catch(e){ log('Осмотр: '+x+','+y); }
+    return;
+  }
+  if(onlineMode && !onlineIsMyTurn() && !(ritual&&ritual.wait)){
+    log('Сейчас ход: '+(NAME[ORDER[ti]]||ORDER[ti])+' (вы: '+(NAME[onlineSeat]||onlineSeat)+')');
+    return;
+  }
   if(ritual){
     if(ritual.phase==='protect'&&ritual.wait){
+      const mySeat = onlineMode ? onlineSeat : 'white';
       const q=valid(x,y)&&B[y][x];
-      if(!q||q.t!=='white'){log('Выбери свою фигуру');return;}
+      if(!q||q.t!==mySeat){log('Выбери свою фигуру');return;}
       if(q.prot)return;
       q.prot=true;ritual.n++;log('Вечная защита '+ritual.n+'/'+Math.min(3,ritual.avail));
       if(ritual.n>=Math.min(3,ritual.avail)){ritual.wait=false;finishProtect();}else draw();
@@ -5063,14 +5849,16 @@ function click(x,y){
       return;
     }
   }
-  if(busy||ORDER[ti]!=='white')return;
+  const my = (onlineMode && onlineSeat) ? onlineSeat : 'white';
+  if(busy||ORDER[ti]!==my)return;
   if(selSlot!==null){
-    const type=selSlot==='reserve'?R.white.type:CS.white[selSlot],msg=cardMsg('white',type,x,y);
+    const type=selSlot==='reserve'?(R[my]&&R[my].type):CS[my][selSlot],msg=cardMsg(my,type,x,y);
     if(msg){log(msg);return;}
     pushUndo();const where=selSlot;selSlot=null;
-    cardAnim('white',where,type,x,y,()=>{
-      if(where==='reserve')R.white=null;else CS.white[where]=null;
-      playCard('white',type,x,y);if(!check())draw();
+    cardAnim(my,where,type,x,y,()=>{
+      if(where==='reserve')R[my]=null;else CS[my][where]=null;
+      playCard(my,type,x,y);if(!check())draw();
+      if(onlineMode) onlinePushState({full:true});
     });
     return;
   }
@@ -5086,34 +5874,47 @@ function click(x,y){
   }
   if(chain)return;
   const p=B[y][x];
-  if(p&&p.t==='white'){sel={x,y};moves=gen(x,y);}else{sel=null;moves=null;}
+  if(p&&p.t===my){sel={x,y};moves=gen(x,y);}else{sel=null;moves=null;}
   draw();
 }
 function slotClick(i){
-  if(over||busy||ORDER[ti]!=='white')return;
-  const type=CS.white[i];if(!type)return;
-  if(ritual&&!(ritual.phase==='fire'&&ritual.owner==='white'&&type==='nuclear'))return;
+  const my=(onlineMode&&onlineSeat)?onlineSeat:'white';
+  const type=CS[my][i];
+  if(window.inspectMode){
+    if(!type)return;
+    const def=PC[type]||{n:type,desc:''};
+    let aiPct=20;
+    try{ if(typeof estimateAICardPlayChance==='function') aiPct=estimateAICardPlayChance(type);}catch(e){}
+    const msg='«'+def.n+'»\n'+(def.desc||'')+'\n\nОценка желания ИИ: ~'+aiPct+'%';
+    showInspectModal(msg);
+    return;
+  }
+  if(over||busy||ORDER[ti]!==my||!type)return;
+  const mySeat=(onlineMode&&onlineSeat)?onlineSeat:'white';
+  if(ritual&&!(ritual.phase==='fire'&&ritual.owner===mySeat&&type==='nuclear'))return;
   showTip(type);sel=null;moves=null;
   if(selSlot!==i){selSlot=i;log('«'+PC[type].n+'» выбрана: '+(PC[type].target?'нажми клетку-цель':'нажми её ещё раз, чтобы применить, либо слот резерва/крафта, чтобы убрать'));return draw();}
   if(PC[type].target){selSlot=null;return draw();}
   pushUndo();selSlot=null;
-  cardAnim('white',i,type,null,null,()=>{CS.white[i]=null;playCard('white',type);if(!check())draw();});
+  cardAnim(mySeat,i,type,null,null,()=>{CS[mySeat][i]=null;playCard(mySeat,type);if(!check())draw(); if(onlineMode) onlinePushState({full:true});});
 }
 function reserveClick(){
-  if(over||busy||ritual||ORDER[ti]!=='white')return;
+  const my=(onlineMode&&onlineSeat)?onlineSeat:'white';
+  if(window.inspectMode){ if(R[my])inspectCardType(R[my].type); return; }
+  if(over||busy||ritual||ORDER[ti]!==my)return;
   if(typeof selSlot==='number'){
-    if(CS.white[selSlot]==='nuclear'){log('Ядерку в резерв не кладут');return;}
-    if(R.white){log('Резерв занят');return;}
-    pushUndo();R.white={type:CS.white[selSlot],ready:round+3};CS.white[selSlot]=null;selSlot=null;
+    if(CS[my][selSlot]==='nuclear'){log('Ядерку в резерв не кладут');return;}
+    if(R[my]){log('Резерв занят');return;}
+    pushUndo();R[my]={type:CS[my][selSlot],ready:round+3};CS[my][selSlot]=null;selSlot=null;
     log('Карта в резерве (готова через 3 круга)');return draw();
   }
-  if(!R.white)return;
-  if(R.white.ready>round){log('Резерв ещё не готов: через '+(R.white.ready-round)+' кр.');return;}
-  const type=R.white.type;showTip(type);sel=null;moves=null;
+  if(!R[my])return;
+  if(R[my].ready>round){log('Резерв ещё не готов: через '+(R[my].ready-round)+' кр.');return;}
+  const type=R[my].type;showTip(type);sel=null;moves=null;
   if(selSlot!=='reserve'){selSlot='reserve';log('«'+PC[type].n+'» из резерва выбрана: '+(PC[type].target?'нажми клетку-цель':'нажми резерв ещё раз, чтобы применить'));return draw();}
   if(PC[type].target){selSlot=null;return draw();}
   pushUndo();selSlot=null;
-  cardAnim('white','reserve',type,null,null,()=>{R.white=null;playCard('white',type);if(!check())draw();});
+  cardAnim(my,'reserve',type,null,null,()=>{R[my]=null;playCard(my,type);if(!check())draw(); if(onlineMode) onlinePushState({full:true});});
 }
 const IMG_ICON='<svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="1.6"/><path d="M4 18l5-5 4 4 3-3 4 4"/></svg>';
 function deadEl(cls){
@@ -5127,8 +5928,15 @@ function cardEl(type,cls,fn){
   d.innerHTML='<div class="corner">'+c.c+'</div><div class="icon">'+c.i+'</div><div class="cname"'+(type==='err'?' style="font-size:6px;word-break:break-all"':'')+'>'+c.n+'</div>';
   if(fn)d.onclick=fn;return d;
 }
+function inspectCardType(tp){
+  if(!window.inspectMode||!tp)return;
+  const def=PC[tp]||{n:tp,desc:''};
+  showInspectModal('«'+def.n+'»\n'+(def.desc||''));
+}
 function drawCards(){
+  const mySeat=(typeof onlineMode!=='undefined'&&onlineMode&&onlineSeat)?onlineSeat:'white';
   ALL4.forEach(t=>{
+    const mine=(t===mySeat);
     const w=t==='white',el=document.getElementById(IDS[t]);if(!el)return;
     const blk=(t==='pink'||t==='blue')&&el.parentNode&&el.parentNode.parentNode;
     if(!ORDER.includes(t)){el.innerHTML='';const re0=document.getElementById(RIDS[t]);if(re0)re0.innerHTML='';if(blk)blk.style.display='none';return;}
@@ -5136,36 +5944,172 @@ function drawCards(){
     el.innerHTML='';
     const dead=!alive(t);
     for(let i=0;i<CS[t].length;i++){
-      if(dead&&CS[t][i]){el.appendChild(deadEl(w?'player':'ai-card'));continue;}
-      const d=cardEl(CS[t][i],w?'player'+(selSlot===i?' active':''):'ai-card',w?()=>slotClick(i):null);
-      if(w&&!CS[t][i])d.textContent='Пусто';
+      if(dead&&CS[t][i]){el.appendChild(deadEl(mine||w?'player':'ai-card'));continue;}
+      const cls=(mine||w)?'player'+(mine&&selSlot===i?' active':''):'ai-card';
+      const d=cardEl(CS[t][i],cls, mine?(idx=>()=>slotClick(idx))(i):(idx=>()=>inspectCardType(CS[t][idx]))(i));
+      if((mine||w)&&!CS[t][i])d.textContent='Пусто';
       if(fresh[t][i]&&CS[t][i]){d.classList.add('deal-in');fresh[t][i]=0;}
       el.appendChild(d);
     }
     const re=document.getElementById(RIDS[t]);if(!re)return;
-    const r=R[t],cls=w?'player':'ai-card';
+    const r=R[t],cls=mine||w?'player':'ai-card';
     re.removeAttribute('data-lock');
     if(dead&&r){re.className='card reserve dead '+cls;re.style.opacity='.65';re.innerHTML='<div class="corner">■</div><div class="icon">'+IMG_ICON+'</div><div class="cname">■■■■</div>';return;}
     re.style.opacity='';
-    if(!r){re.className='card reserve empty '+cls;re.textContent=w?'+':'—';}
+    if(!r){re.className='card reserve empty '+cls;re.textContent=mine||w?'+':'—';}
     else{
       const c=PC[r.type],lock=r.ready>round;
-      re.className='card reserve '+cls+(lock?' locked':'')+(w&&selSlot==='reserve'?' active':'');
+      re.className='card reserve '+cls+(lock?' locked':'')+(mine&&selSlot==='reserve'?' active':'');
       re.innerHTML='<div class="corner">'+c.c+'</div><div class="icon">'+c.i+'</div><div class="cname">'+c.n+'</div>';
       if(lock)re.setAttribute('data-lock','через '+(r.ready-round));
     }
-    if(w)re.onclick=reserveClick;
+    if(mine)re.onclick=reserveClick;else re.onclick=r?()=>inspectCardType(r.type):null;
   });
   const cs=document.getElementById('craft-slot');
   if(cs){const n=craftRound===round?pile.length:0;cs.innerHTML=n?'<div class="craft-q">'+n+'/3</div>':'<div class="craft-q">?</div>';cs.onclick=craftClick;}
   const hint=document.getElementById('nuke-protect-hint');
   if(hint){if(ritual&&ritual.phase==='protect'&&ritual.wait){hint.textContent='Выбери 3 фигуры для вечной защиты ('+ritual.n+'/'+Math.min(3,ritual.avail)+')';hint.classList.add('show');}else hint.classList.remove('show');}
   const sb=document.getElementById('skip-btn'),ub=document.getElementById('undo-btn');
-  if(sb)sb.disabled=over||busy||ORDER[ti]!=='white';
-  if(ub)ub.disabled=over||busy||ORDER[ti]!=='white'||!undoSt.length||undos>=2;
+  if(sb)sb.disabled=over||busy||ORDER[ti]!==mySeat;
+  if(ub)ub.disabled=over||busy||ORDER[ti]!==mySeat||!undoSt.length||undos>=2;
 }
 function draw(){
   const el=document.getElementById('board');
+  // === Мёбиус ∞: сплошная лента из кольцевых сегментов (как на референсе) ===
+  if(G.shape==='m'){
+    const W=G.x1-G.x0, H=G.y1-G.y0; // напр. 16×4
+    const vp=document.getElementById('viewport');
+    // строго в пределах видимой области viewport
+    const maxW=Math.max(200, ((vp&&vp.clientWidth)||window.innerWidth||360) - 12);
+    const maxH=Math.max(180, ((vp&&vp.clientHeight)||Math.floor(window.innerHeight*0.45)||300) - 8);
+    const R=1.0;           // радиус центра дорожки
+    const sep=1.48;        // разнос центров колец (>1 = дальше друг от друга)
+    const laneW=0.62;      // толщина всей ленты (шире клетки)
+    const modelW=(2*sep+2.4)*R;
+    const modelH=2.7*R;
+    const scale=Math.min(maxW/modelW, maxH/modelH)*0.95;
+    const bw=Math.ceil(modelW*scale);
+    const bh=Math.ceil(modelH*scale);
+    el.style.display='block';el.style.position='relative';
+    el.style.width=bw+'px';el.style.height=bh+'px';
+    el.style.background='#3a3a42';
+    el.style.borderRadius='14px';
+    el.style.border='1px solid rgba(255,255,255,0.1)';
+    el.innerHTML='';
+
+    // SVG слой клеток-сегментов
+    const svg=document.createElementNS('http://www.w3.org/2000/svg','svg');
+    svg.setAttribute('width', bw);
+    svg.setAttribute('height', bh);
+    svg.style.cssText='position:absolute;left:0;top:0;overflow:visible';
+    el.appendChild(svg);
+
+    // hit-area layer (transparent divs for clicks)
+    const hits=document.createElement('div');
+    hits.style.cssText='position:absolute;left:0;top:0;width:'+bw+'px;height:'+bh+'px;';
+    el.appendChild(hits);
+
+    function polar(cx, cy, r, ang){
+      return [(cx + Math.cos(ang)*r + modelW/2)*scale, (cy + Math.sin(ang)*r + modelH/2)*scale];
+    }
+    function sectorPath(cx, cy, r0, r1, a0, a1){
+      // annular sector path
+      const large = (a1-a0) > Math.PI ? 1 : 0;
+      const p0=polar(cx,cy,r1,a0), p1=polar(cx,cy,r1,a1);
+      const p2=polar(cx,cy,r0,a1), p3=polar(cx,cy,r0,a0);
+      // sweep
+      return 'M'+p0[0]+','+p0[1]
+        +' A'+ (r1*scale)+','+(r1*scale)+' 0 '+large+' 1 '+p1[0]+','+p1[1]
+        +' L'+p2[0]+','+p2[1]
+        +' A'+ (r0*scale)+','+(r0*scale)+' 0 '+large+' 0 '+p3[0]+','+p3[1]
+        +' Z';
+    }
+
+    // half columns → left circle, half → right
+    const halfN = Math.floor(W/2);
+
+    for(let y=G.y0;y<G.y1;y++) for(let x=G.x0;x<G.x1;x++){
+      if(!valid(x,y)) continue;
+      const rx=x-G.x0, ry=y-G.y0;
+      const left = rx < halfN;
+      const local = left ? rx : (rx - halfN);
+      const nAng = left ? halfN : (W - halfN);
+      // угол сектора
+      const a0 = -Math.PI/2 + (local / nAng) * Math.PI * 2;
+      const a1 = -Math.PI/2 + ((local+1) / nAng) * Math.PI * 2;
+      const cx = left ? -R*sep : R*sep;
+      const cy = 0;
+      // радиальные границы дорожки
+      const t0 = ry / H;
+      const t1 = (ry+1) / H;
+      const rInner = (R - laneW*0.5) + t0 * laneW;
+      const rOuter = (R - laneW*0.5) + t1 * laneW;
+
+      const light = ((rx + ry) % 2 === 0);
+      const path=document.createElementNS('http://www.w3.org/2000/svg','path');
+      path.setAttribute('d', sectorPath(cx, cy, rInner, rOuter, a0, a1));
+      path.setAttribute('fill', light ? '#e8e4d4' : '#6b8f5a');
+      path.setAttribute('stroke', 'rgba(0,0,0,0.25)');
+      path.setAttribute('stroke-width', '0.8');
+      path.style.cursor='pointer';
+      path.dataset.vx=x; path.dataset.vy=y;
+      // highlight classes via data
+      svg.appendChild(path);
+
+      // center of sector for piece + hit
+      const amid = (a0+a1)/2;
+      const rmid = (rInner+rOuter)/2;
+      const [sx,sy] = polar(cx, cy, rmid, amid);
+
+      // selection / moves overlay
+      const isSel = sel && sel.x===x && sel.y===y;
+      const isMove = moves && moves.some(z=>z.x===x&&z.y===y);
+      hl.forEach(h=>{
+        if(h.x===x&&h.y===y){
+          path.setAttribute('stroke', h.cls==='result-hot'?'#ff4d4d':'#4dff88');
+          path.setAttribute('stroke-width', '2.5');
+        }
+      });
+      if(isSel){ path.setAttribute('stroke','#f0c14b'); path.setAttribute('stroke-width','3'); }
+      if(isMove){
+        const dot=document.createElementNS('http://www.w3.org/2000/svg','circle');
+        dot.setAttribute('cx', sx); dot.setAttribute('cy', sy);
+        dot.setAttribute('r', Math.max(4, scale*0.06));
+        dot.setAttribute('fill', B[y][x] ? 'rgba(180,40,40,0.7)' : 'rgba(0,0,0,0.35)');
+        svg.appendChild(dot);
+      }
+
+      // click target
+      const hit=document.createElement('div');
+      const hs=Math.max(22, scale*laneW/H*1.05);
+      hit.style.cssText='position:absolute;left:'+(sx-hs/2)+'px;top:'+(sy-hs/2)+'px;width:'+hs+'px;height:'+hs+'px;border-radius:50%;cursor:pointer;';
+      hit.dataset.vx=x; hit.dataset.vy=y;
+      hits.appendChild(hit);
+
+      // piece
+      const p=B[y][x];
+      if(p && !p.boss){
+        const s=document.createElement('div');
+        s.className='piece';
+        s.textContent=SYM2[p.k]||'?';
+        s.style.cssText='position:absolute;left:'+(sx-hs*0.55)+'px;top:'+(sy-hs*0.55)+'px;width:'+(hs*1.1)+'px;height:'+(hs*1.1)+'px;'
+          +'display:flex;align-items:center;justify-content:center;font-size:'+Math.floor(hs*0.95)+'px;pointer-events:none;z-index:4';
+        s.style.color=COL[p.t];
+        s.style.textShadow=p.t==='black'?'0 0 2px #fff,0 0 1px #fff':'0 1px 2px #000,0 0 1px #000';
+        if(p.shield)s.classList.add('shielded');
+        if(p.prot)s.style.filter='drop-shadow(0 0 3px gold)';
+        el.appendChild(s);
+      }
+    }
+
+    // ∞ watermark
+    const mark=document.createElement('div');
+    mark.textContent='∞';
+    mark.style.cssText='position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);font-size:'+Math.floor(scale*0.55)+'px;opacity:0.15;pointer-events:none;color:#fff;font-weight:800;z-index:1';
+    el.appendChild(mark);
+
+  } else {
+  // === обычные формы (прямоугольник / + / ×) ===
   let x0=1e9,y0=1e9,x1=-1,y1=-1;
   for(let y=0;y<WN;y++)for(let x=0;x<WN;x++)if(valid(x,y)||B[y][x]){x0=Math.min(x0,x);x1=Math.max(x1,x);y0=Math.min(y0,y);y1=Math.max(y1,y);}
   el.style.display='block';el.style.position='relative';el.style.width=(x1-x0+1)*40+'px';el.style.height=(y1-y0+1)*40+'px';el.innerHTML='';
@@ -5189,8 +6133,9 @@ function draw(){
       if(!v){const w=document.createElement('span');w.textContent='🚶';w.style.cssText='position:absolute;right:0;bottom:0;font-size:13px';c.appendChild(w);}}
     el.appendChild(c);
   }
+  } // end non-möbius
   document.getElementById('status').innerHTML=over?'Игра окончена':'Ход: <b style="color:'+(ORDER[ti]==='black'?'#888':COL[ORDER[ti]])+'">'+NAME[ORDER[ti]]+'</b>';
-  document.getElementById('info').textContent=bossSt?'☠ Босс '+bossSt.hp+'/'+bossSt.max+(bossSt.p2?' (офицер)':''):(G.shape==='s'?'■ поле '+(G.ax1-G.ax0)+'×'+(G.ay1-G.ay0):G.shape==='x'?'× ширина '+(2*G.w+1):'✚ поле '+(G.x1-G.x0)+'×'+(G.y1-G.y0));
+  document.getElementById('info').textContent=bossSt?'☠ Босс '+bossSt.hp+'/'+bossSt.max+(bossSt.p2?' (офицер)':''):(G.shape==='m'?'∞ Мёбиус '+(G.x1-G.x0)+'×'+(G.y1-G.y0):G.shape==='s'?'■ поле '+(G.ax1-G.ax0)+'×'+(G.ay1-G.ay0):G.shape==='x'?'× ширина '+(2*G.w+1):'✚ поле '+(G.x1-G.x0)+'×'+(G.y1-G.y0));
   drawCards();
 }
 function start(){
@@ -5198,9 +6143,19 @@ function start(){
   gameOver=true;bossMode=false;
   document.getElementById('game-over').classList.remove('show');
   render=draw;configure();setup();SL={white:0,black:0,pink:0,blue:0};
-  try{camScale=(CFG.shape==='s'&&(CFG.teams||4)===2)?1:Math.min(camScale,0.4);camX=0;camY=0;applyCam();}catch(e){}
+  try{camScale=(CFG.shape==='m'||(CFG.shape==='s'&&(CFG.teams||4)===2))?1:Math.min(camScale,0.4);camX=0;camY=0;applyCam();}catch(e){}
   draw();
   log('Режим «Плюс»: белые — снизу. Бей любые чужие фигуры!');
+  if(typeof onlineMode!=='undefined' && onlineMode && onlineRoomCode){
+    try{
+      onlineListenGame();
+      updateOnlineBadge();
+      if(onlineRole==='host'){
+        setTimeout(()=>onlinePushState({full:true}), 400);
+      }
+      log('Онлайн: комната '+onlineRoomCode+' · вы '+(NAME[onlineSeat]||onlineSeat));
+    }catch(e){ console.warn(e); }
+  }
 }
 document.querySelectorAll('#craft-slot').forEach(e=>{e.style.display='';});
 (function(){
@@ -5223,7 +6178,32 @@ document.querySelectorAll('#craft-slot').forEach(e=>{e.style.display='';});
     #status-bar{padding:2px 8px!important}
     #bottom-ui{padding-bottom:max(2px,env(safe-area-inset-bottom,0px))!important}
     #log{font-size:10px!important;min-height:0!important}
-    #viewport{min-height:55dvh!important}
+    html,body{
+      height:100%!important;max-height:100dvh!important;width:100%!important;
+      overflow:hidden!important;margin:0!important;padding:0!important;
+      position:fixed!important;inset:0!important;
+    }
+    body{display:flex!important;flex-direction:column!important}
+    #ai-zone,#status-bar,#bottom-ui,#log{
+      flex-shrink:0!important;flex-grow:0!important;
+      position:relative!important;z-index:40!important;
+      max-width:100vw!important;overflow:hidden!important;
+    }
+    #bottom-ui{background:#121214!important;padding-bottom:max(2px,env(safe-area-inset-bottom,0px))!important}
+    #viewport{
+      flex:1 1 0!important;min-height:0!important;max-height:100%!important;
+      position:relative!important;overflow:hidden!important;
+      width:100%!important;
+    }
+    #board-stage{
+      max-width:100%!important;max-height:100%!important;
+    }
+    #player-zone,#player-hand,#player-cards,#ai-hand,#ai-cards{
+      max-width:100vw!important;overflow:hidden!important;
+      min-height:0!important;min-width:0!important;
+    }
+    #player-zone{padding:2px 4px!important}
+    #log{font-size:10px!important;max-height:16px!important}
     #fly-card{width:44px!important;height:62px!important}
     #fly-card .fc-icon{font-size:20px!important;margin-bottom:2px!important}
     #fly-card .fc-name{font-size:8px!important}
