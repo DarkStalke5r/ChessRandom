@@ -4838,7 +4838,7 @@ function cardMsg(t,type,x,y){
   return null;
 }
 // полёт карты из слота на поле, затем эффект
-function cardAnim(t,where,type,tx,ty,then){
+function cardAnim0(t,where,type,tx,ty,then){
   busy=true;
   const row=document.getElementById(IDS[t]);
   const slotEl=where==='reserve'?document.getElementById(RIDS[t]):(row&&row.children[where]);
@@ -4867,14 +4867,14 @@ function cardAnim(t,where,type,tx,ty,then){
   })();
 }
 // полёт фигуры между клетками
-function animMove(fx,fy,tx,ty,done){
+function animMove0(fx,fy,tx,ty,done){
   const p=B[fy][fx],a=cellEl(fx,fy),b=cellEl(tx,ty),fly=document.getElementById('fly'),vp=document.getElementById('viewport');
   if(!p||!a||!b||!fly){done();return;}
   busy=true;
   const wrap=vp.getBoundingClientRect(),fr=a.getBoundingClientRect(),to=b.getBoundingClientRect();
   const x0=fr.left-wrap.left+fr.width/2,y0=fr.top-wrap.top+fr.height/2,x1=to.left-wrap.left+to.width/2,y1=to.top-wrap.top+to.height/2;
   const sc=(typeof camScale==='number'?camScale:1);
-  fly.textContent=SYM2[p.k];fly.className='piece';fly.style.color=COL[p.t];
+  fly.className='piece';fillPiece(fly,p);fly.style.color=COL[p.t];
   fly.style.textShadow=p.t==='black'?'0 0 2px #fff,0 0 1px #fff':'0 0 2px #000,0 0 1px #000';
   fly.style.transition='none';fly.style.display='flex';fly.style.left=x0+'px';fly.style.top=y0+'px';
   fly.style.transform='translate(0,0) scale('+sc+')';
@@ -5030,7 +5030,7 @@ function rocketAnim(tx,ty,done){
   requestAnimationFrame(()=>{fly.style.transform='translate(-50%,'+(y1+48)+'px) scale('+Math.max(sc,0.5)+')';});
   setTimeout(()=>{fly.style.display='none';fly.style.transition='none';fly.innerHTML='';done();},900);
 }
-function fireNuke(t,cx,cy){
+function fireNuke0(t,cx,cy){
   busy=true;undoSt=[];selSlot=null;ritual=null;
   const zone=[];for(let dy=-2;dy<=1;dy++)for(let dx=-1;dx<=1;dx++)if(valid(cx+dx,cy+dy))zone.push({x:cx+dx,y:cy+dy});
   zone.forEach(z=>hl.push({x:z.x,y:z.y,cls:'nuke-blast',until:Date.now()+9500}));
@@ -5041,10 +5041,10 @@ function fireNuke(t,cx,cy){
     rocketAnim(cx,cy,()=>{
       const victims=[];
       zone.forEach(({x,y})=>{const p=B[y][x];if(p&&!p.prot&&!p.boss){victims.push({x,y});B[y][x]=null;}});
-      log('УДАР! Зона очищена (защищённые фигуры уцелели)');draw();
+      log('УДАР! Зона очищена (защищённые фигуры уцелели)');draw();if(onlineMode)onlinePushState({full:true});
       setTimeout(()=>{
         const reds=victims.map(v=>{B[v.y][v.x]={t:'boss',k:'m',red:true,minion:true};return {x:v.x,y:v.y};});
-        log('Перерождение… красные сходятся к эпицентру');draw();
+        log('Перерождение… красные сходятся к эпицентру');draw();if(onlineMode)onlinePushState({full:true});
         const stepR=()=>{
           let moved=false;
           reds.forEach(r=>{
@@ -5055,7 +5055,7 @@ function fireNuke(t,cx,cy){
               if(valid(nx,ny)&&!B[ny][nx]){B[ny][nx]=q;B[r.y][r.x]=null;r.x=nx;r.y=ny;moved=true;break;}
             }
           });
-          draw();
+          draw();if(onlineMode)onlinePushState({full:true});
           if(!moved||reds.every(r=>Math.abs(r.x-cx)+Math.abs(r.y-cy)<=1)){
             reds.forEach(r=>{if(B[r.y][r.x]&&B[r.y][r.x].red)B[r.y][r.x]=null;});
             spawnBoss(cx,cy);return;
@@ -5067,6 +5067,11 @@ function fireNuke(t,cx,cy){
     });
   },8000);
 }
+
+// --- обёртки: при онлайн-игре действие рассылается, чтобы у всех проигралась та же анимация ---
+function animMove(fx,fy,tx,ty,done){onlineSendAnim({k:'move',fx,fy,tx,ty});return animMove0(fx,fy,tx,ty,done);}
+function cardAnim(t,where,type,tx,ty,then){onlineSendAnim({k:'card',t,where,type,tx,ty});return cardAnim0(t,where,type,tx,ty,then);}
+function fireNuke(t,cx,cy){onlineSendAnim({k:'nuke',t,cx,cy});return fireNuke0(t,cx,cy);}
 function bossFits(x,y){for(let j=0;j<3;j++)for(let i=0;i<3;i++){if(!valid(x+i,y+j))return false;const q=B[y+j][x+i];if(q&&q.prot)return false;}return true;}
 function placeBoss(x,y){
   if(bossSt)for(let j=0;j<3;j++)for(let i=0;i<3;i++){const q=B[bossSt.y+j][bossSt.x+i];if(q&&q.boss)B[bossSt.y+j][bossSt.x+i]=null;}
@@ -5188,10 +5193,11 @@ function showInspectModal(text){
     el=document.createElement('div'); el.id='inspect-modal';
     el.style.cssText='position:fixed;inset:0;z-index:200;background:rgba(0,0,0,.7);display:flex;align-items:center;justify-content:center;padding:16px';
     el.innerHTML='<div style="background:#1c1c1e;color:#f2f2f7;border-radius:14px;padding:16px 18px;max-width:360px;width:100%;border:1px solid rgba(255,255,255,.12);white-space:pre-wrap;font-size:13px;line-height:1.45"></div>';
-    el.onclick=()=>{el.style.display='none';};
+    el.onclick=()=>{ if(Date.now()-(el._shownAt||0)<600) return; el.style.display='none'; };
     document.body.appendChild(el);
   }
   el.querySelector('div').textContent=text;
+  el._shownAt=Date.now();
   el.style.display='flex';
 }
 
@@ -5265,6 +5271,7 @@ function netCleanup(){
   netHostConn = null;
   try{ if(netPeer) netPeer.destroy(); }catch(e){}
   netPeer = null; netRoom = null; netLobbyCb = null; netPending = null; netGameOn = false;
+  remoteQ = []; remoteRunning = false;
 }
 
 /* ---------- хост ---------- */
@@ -5290,6 +5297,9 @@ function hostOnData(conn, msg){
   if(msg.t === 'state' && msg.snap){
     netBroadcast(msg, conn.peer); // переслать остальным гостям
     netGotState(msg);
+  } else if(msg.t === 'anim'){
+    netBroadcast(msg, conn.peer);
+    netGotAnim(msg);
   }
 }
 function hostDropConn(conn){
@@ -5380,6 +5390,8 @@ function guestOnData(msg){
     onlineHumanSeats = msg.seats || {};
   } else if(msg.t === 'state'){
     netGotState(msg);
+  } else if(msg.t === 'anim'){
+    netGotAnim(msg);
   }
 }
 function guestLost(){
@@ -5453,7 +5465,7 @@ function onlineSnapshot(){
     __plusMines: window.__plusMines||[]
   };
 }
-function onlineApplySnapshot(st){
+function onlineApplySnapshotNow(st){
   if(!st || !st.B) return;
   onlineApplying = true;
   try {
@@ -5491,8 +5503,53 @@ function onlineApplySnapshot(st){
 function netGotState(msg){
   if(!netGameOn){ netPending = msg; return; }
   if(msg.snap) onlineApplySnapshot(msg.snap);
-  if(onlineRole === 'host') onlineMaybeAI();
 }
+/* ---------- очередь: анимации и снимки состояния играются строго по порядку ---------- */
+let remoteQ=[],remoteRunning=false;
+function onlineSendAnim(a){
+  if(!onlineMode||!onlineRoomCode||!netPeer||!netGameOn)return;
+  const m={t:'anim',a,by:onlinePlayerId};
+  if(onlineRole==='host')netBroadcast(m);else netSend(netHostConn,m);
+}
+function netGotAnim(msg){
+  if(!netGameOn||!msg||!msg.a)return;
+  remoteQ.push({a:msg.a});remoteRun();
+}
+function onlineApplySnapshot(st){
+  if(!st||!st.B)return;
+  const last=remoteQ[remoteQ.length-1];
+  if(last&&last.snap)last.snap=st;else remoteQ.push({snap:st});   // подряд идущие снимки — берём последний
+  remoteRun();
+}
+function remoteRun(){
+  if(remoteRunning)return;
+  const it=remoteQ.shift();if(!it)return;
+  if(it.snap){
+    onlineApplySnapshotNow(it.snap);
+    if(onlineRole==='host')onlineMaybeAI();
+    return remoteRun();
+  }
+  const a=it.a;remoteRunning=true;
+  let finished=false,wd=null;
+  const fin=()=>{if(finished)return;finished=true;clearTimeout(wd);remoteRunning=false;remoteRun();};
+  wd=setTimeout(fin,a.k==='nuke'?12000:6000);
+  try{
+    if(over){fin();return;}
+    if(a.k==='move')animMove0(a.fx,a.fy,a.tx,a.ty,fin);
+    else if(a.k==='card')cardAnim0(a.t,a.where,a.type,a.tx,a.ty,fin);
+    else if(a.k==='nuke')remoteNuke(a,fin);
+    else fin();
+  }catch(e){console.warn('remote anim',e);fin();}
+}
+// ядерка у остальных: те же подсветка зоны, отсчёт и ракета (сами изменения придут снимками)
+function remoteNuke(a,fin){
+  const cx=a.cx,cy=a.cy;busy=true;
+  for(let dy=-2;dy<=1;dy++)for(let dx=-1;dx<=1;dx++)if(valid(cx+dx,cy+dy))hl.push({x:cx+dx,y:cy+dy,cls:'nuke-blast',until:Date.now()+9500});
+  log('Ядерка запущена… 8 секунд до удара');draw();
+  let left=8;const tick=setInterval(()=>{left--;if(left>0)log('До удара: '+left+'…');},1000);
+  setTimeout(()=>{clearInterval(tick);rocketAnim(cx,cy,()=>{busy=false;fin();});},8000);
+}
+
 async function onlinePushState(partial){
   if(!onlineMode || !onlineRoomCode || !netPeer || onlineApplying || !netGameOn) return;
   try{
@@ -5928,6 +5985,96 @@ function cardEl(type,cls,fn){
   d.innerHTML='<div class="corner">'+c.c+'</div><div class="icon">'+c.i+'</div><div class="cname"'+(type==='err'?' style="font-size:6px;word-break:break-all"':'')+'>'+c.n+'</div>';
   if(fn)d.onclick=fn;return d;
 }
+
+/* ===== Фигуры из папки figures/ (белые PNG с чёрной обводкой), окрашиваются в цвет команды ===== */
+// Если файлы названы иначе — впиши точные пути здесь, например: FIGURE_FILES.K='figures/MyKing.png'
+const FIGURE_FILES=window.FIGURE_FILES||{};
+const FIG_DIR='figures/';
+const FIG_NAMES={
+  K:['king','King','K','король','Король','korol'],
+  Q:['queen','Queen','Q','ферзь','Ферзь','королева','Королева'],
+  R:['rook','Rook','R','ладья','Ладья','башня','Башня','tower','Tower','castle'],
+  B:['bishop','Bishop','B','слон','Слон','офицер','Офицер'],
+  N:['knight','Knight','N','horse','Horse','конь','Конь','конница','Конница','лошадь','cavalry'],
+  P:['pawn','Pawn','P','пешка','Пешка','пехота','Пехота'],
+  m:['checker','Checker','checkers','man','Man','draught','piece','шашка','Шашка'],
+  d:['checker_king','checkerking','king_checker','dame','damka','Dame','crowned','checker-king','дамка','Дамка'],
+  X:['boss','Boss','босс','Босс']
+};
+const FIG_FILL={white:'#ffffff',black:'#5b5b5b',pink:'#ff6fb5',blue:'#4a90ff',boss:'#ff3333'};
+const figState={},figTint={},figTeamImg={};
+let figReady=false;
+let figTimer=null,figTries=0;
+function figSchedule(){
+  clearTimeout(figTimer);
+  figTimer=setTimeout(function again(){
+    if(busy&&figTries++<12){figTimer=setTimeout(again,300);return;}
+    figTries=0;try{draw();}catch(e){}
+  },60);
+}
+function figLoad(k){
+  if(!figReady)return {status:'loading'};
+  if(figState[k])return figState[k];
+  const st=figState[k]={status:'loading',img:null};
+  const c=[];if(FIGURE_FILES[k])c.push(FIGURE_FILES[k]);
+  (FIG_NAMES[k]||[k]).forEach(n=>['png','webp','svg'].forEach(e=>c.push(FIG_DIR+n+'.'+e)));
+  let i=0;
+  const next=()=>{
+    if(i>=c.length){st.status='none';return;}
+    const im=new Image();
+    im.onload=()=>{st.img=im;st.status='ok';figSchedule();};
+    im.onerror=next;im.src=c[i++];
+  };
+  next();return st;
+}
+// необязательный список figures/figures.json: {"N":"конница.png","R":"tower.png","Q:black":"queen_dark.png","mycustom":"x.png"}
+// запись «Вид:команда» — файл показывается как есть, без окраски (для особых фигур конкретной команды)
+function figPreload(){
+  if(figReady)return;
+  const go=()=>{figReady=true;Object.keys(FIG_NAMES).concat(Object.keys(FIGURE_FILES).filter(k=>k.indexOf(':')<0)).forEach(figLoad);figSchedule();};
+  try{
+    fetch(FIG_DIR+'figures.json',{cache:'no-cache'}).then(r=>r.ok?r.json():{}).catch(()=>({})).then(j=>{
+      Object.keys(j||{}).forEach(k=>{const v=String(j[k]);FIGURE_FILES[k]=/^(https?:)?\/|^figures\//.test(v)?v:FIG_DIR+v;});go();
+    });
+  }catch(e){go();}
+}
+function figTeamFile(k,team){
+  const path=FIGURE_FILES[k+':'+team];if(!path)return null;
+  let st=figTeamImg[path];
+  if(!st){st=figTeamImg[path]={ok:false};const im=new Image();im.onload=()=>{st.ok=true;figSchedule();};im.src=path;st.src=path;}
+  return st.ok?st.src:null;
+}
+function figRGB(team){
+  let h=(FIG_FILL[team]||COL[team]||'#ffffff').replace('#','');
+  if(h.length===3)h=h.split('').map(c=>c+c).join('');
+  return [parseInt(h.slice(0,2),16),parseInt(h.slice(2,4),16),parseInt(h.slice(4,6),16)];
+}
+// умножение на цвет команды: белое → цвет команды, чёрная обводка остаётся чёрной
+function figTinted(k,team){
+  const own=figTeamFile(k,team);if(own)return own;
+  const st=figLoad(k);if(st.status!=='ok')return null;
+  const key=k+'|'+team;if(figTint[key])return figTint[key];
+  try{
+    const im=st.img,W0=im.naturalWidth||im.width||64,H0=im.naturalHeight||im.height||64,sc=Math.min(1,256/Math.max(W0,H0));
+    const w=Math.max(1,Math.round(W0*sc)),h=Math.max(1,Math.round(H0*sc));
+    const cv=document.createElement('canvas');cv.width=w;cv.height=h;
+    const cx=cv.getContext('2d');cx.drawImage(im,0,0,w,h);
+    const d=cx.getImageData(0,0,w,h),a=d.data,c=figRGB(team);
+    for(let i=0;i<a.length;i+=4){a[i]=a[i]*c[0]/255;a[i+1]=a[i+1]*c[1]/255;a[i+2]=a[i+2]*c[2]/255;}
+    cx.putImageData(d,0,0);
+    return figTint[key]=cv.toDataURL('image/png');
+  }catch(e){st.status='none';console.warn('figures: canvas недоступен (открой по http, не file://)',e);return null;}
+}
+function fillPiece(s,p){
+  const u=figTinted(p.k,p.t);
+  if(u){
+    s.textContent='';
+    const im=document.createElement('img');im.src=u;im.alt='';im.draggable=false;
+    im.style.cssText='width:92%;height:92%;object-fit:contain;pointer-events:none;display:block';
+    s.appendChild(im);return true;
+  }
+  s.textContent=SYM2[p.k]||'?';return false;
+}
 function inspectCardType(tp){
   if(!window.inspectMode||!tp)return;
   const def=PC[tp]||{n:tp,desc:''};
@@ -6091,7 +6238,7 @@ function draw(){
       if(p && !p.boss){
         const s=document.createElement('div');
         s.className='piece';
-        s.textContent=SYM2[p.k]||'?';
+        fillPiece(s,p);
         s.style.cssText='position:absolute;left:'+(sx-hs*0.55)+'px;top:'+(sy-hs*0.55)+'px;width:'+(hs*1.1)+'px;height:'+(hs*1.1)+'px;'
           +'display:flex;align-items:center;justify-content:center;font-size:'+Math.floor(hs*0.95)+'px;pointer-events:none;z-index:4';
         s.style.color=COL[p.t];
@@ -6124,7 +6271,7 @@ function draw(){
       c.dataset.vx=x;c.dataset.vy=y;
     }
     if(p&&p.boss){c.style.background='#4a0d1a';if(p.center){const s=document.createElement('div');s.className='piece';s.textContent='☠';s.style.cssText='font-size:30px;color:#f55;position:absolute;left:-40px;top:-40px;width:120px;height:120px;display:flex;align-items:center;justify-content:center;pointer-events:none;z-index:2';c.appendChild(s);}}
-    else if(p){const s=document.createElement('div');s.className='piece';s.textContent=SYM2[p.k];
+    else if(p){const s=document.createElement('div');s.className='piece';fillPiece(s,p);
       if(p.shield)s.classList.add('shielded');
       if(p.dbl)s.style.outline='2px solid #f55';
       if(p.prot)s.style.filter='drop-shadow(0 0 3px gold) drop-shadow(0 0 2px gold)';
@@ -6142,7 +6289,7 @@ function start(){
   over=false;ti=0;sel=null;moves=null;round=1;extra=false;skipT=null;selSlot=null;fut=[];busy=false;chain=false;hl=[];undoSt=[];undos=0;ritual=null;bossSt=null;pile=[];craftRound=0;nukeDone=false;R={white:null,black:null,pink:null,blue:null};fresh={white:[],black:[],pink:[],blue:[]};CS={white:[null,null,null],black:[null,null,null],pink:[null,null,null],blue:[null,null,null]};ORDER.forEach(t=>{const n=1+Math.floor(Math.random()*3);for(let k=0;k<n;k++)giveCard(t);});
   gameOver=true;bossMode=false;
   document.getElementById('game-over').classList.remove('show');
-  render=draw;configure();setup();SL={white:0,black:0,pink:0,blue:0};
+  render=draw;configure();setup();figPreload();SL={white:0,black:0,pink:0,blue:0};
   try{camScale=(CFG.shape==='m'||(CFG.shape==='s'&&(CFG.teams||4)===2))?1:Math.min(camScale,0.4);camX=0;camY=0;applyCam();}catch(e){}
   draw();
   log('Режим «Плюс»: белые — снизу. Бей любые чужие фигуры!');
