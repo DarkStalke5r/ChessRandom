@@ -4560,19 +4560,19 @@ function applyCam(){
 /* ===== Режим «Плюс»: поле-крест из 5 частей, меняющее форму ===== */
 (function(){
 const WN=40,ALL4=['white','blue','black','pink'];let ORDER=ALL4.slice();
-const COL={white:'#fff',black:'#111',pink:'#ff6fb5',blue:'#4a90ff',boss:'#f33'};
-const NAME={white:'белые',black:'чёрные',pink:'розовые',blue:'синие'};
+const COL={white:'#fff',black:'#111',pink:'#ff6fb5',blue:'#4a90ff',boss:'#f33',neutral:'#b8b8b8'};
+const NAME={white:'белые',black:'чёрные',pink:'розовые',blue:'синие',neutral:'нейтралы'};
 const SYM2={X:'',K:'♚',Q:'♛',R:'♜',B:'♝',N:'♞',P:'♟',m:'●',d:'◉'};
 const VALS={P:1,N:3,B:3,R:5,Q:9,K:100,m:1,d:5,X:8};
 const O=[[1,0],[-1,0],[0,1],[0,-1]],D=[[1,1],[1,-1],[-1,1],[-1,-1]];
 const KN=[[1,2],[2,1],[-1,2],[-2,1],[1,-2],[2,-1],[-1,-2],[-2,-1]];
-let CFG={shape:'p',army:'mixed',teams:4},RULE,FW,ARMY,SL,B,G,ti,over,sel,moves,round,extra,skipT,selSlot,CS,fut,R,fresh,busy=false,chain=false,hl=[],undoSt=[],undos=0,ritual=null,bossSt=null,pile=[],craftRound=0,nukeDone=false;
+let CFG={shape:'p',army:'mixed',teams:4,craft:true,boss:true},grave=[],RULE,FW,ARMY,SL,B,G,ti,over,sel,moves,round,extra,skipT,selSlot,CS,fut,R,fresh,busy=false,chain=false,hl=[],undoSt=[],undos=0,ritual=null,bossSt=null,pile=[],craftRound=0,nukeDone=false;
 const PC={
   shield:{n:'Щит',i:'🔵',c:'H',desc:'Ставит щит на твою фигуру.',target:1},future:{n:'Будущее',i:'⏳',c:'F',desc:'Твоя фигура (кроме короля) уходит в будущее и возвращается на то же место через 2 круга, если клетка свободна.',target:1},spawn:{n:'Спавн',i:'✨',c:'S',desc:'Создаёт твою новую фигуру на выбранной пустой клетке.',target:1},
-  support:{n:'Поддержка',i:'🛡',c:'P',desc:'Подкрепление: твои новые фигуры появляются на двух случайных свободных клетках.'},nuclear:{n:'Ядерка',i:'☢',c:'N',desc:'Через 8 секунд бьёт по зоне 3×4 вокруг выбранной клетки. Фигуры без защиты уничтожаются и перерождаются красными.',target:1},
-  trump:{n:'Козырь',i:'♠',c:'♠',desc:'Козырь: твоя фигура становится неуязвимой на 3 круга.',target:1},dummy:{n:'Болван',i:'♥',c:'♥',desc:'Болван: забираешь чужую фигуру того же типа (не короля) на 2 круга.',target:1},bid:{n:'Торги',i:'♦',c:'♦',desc:'Торги: сразу получаешь 2 новые карты.'},slam:{n:'Шлем',i:'♣',c:'♣',desc:'Шлем: следующее твоё взятие заберёт ещё одну фигуру.'},double:{n:'Контра',i:'🂡',c:'2×',desc:'Контра: за взятие выбранной чужой фигуры (не короля) получишь 2 карты.',target:1},extra:{n:'2-й ход',i:'2️⃣',c:'2',desc:'Второй ход: сходи ещё раз подряд.'},err:{n:'Err.MDXphrzVPLAJ',i:'⚠',c:'E',desc:'Случайный эффект: может появиться, исчезнуть, телепортироваться или возвыситься любая фигура.'}
+  support:{n:'Поддержка',i:'🛡',c:'P',desc:'Подкрепление: твои новые фигуры появляются на двух случайных свободных клетках.'},nuclear:{n:'Ядерка',i:'☢',c:'N',desc:'Бьёт точно в центр поля через 8 секунд. Всё без защиты в зоне удара погибает, затем в центре появляется босс. Остальные стороны получают по 2 карты Fh:DebugTest1Q.'},
+  trump:{n:'Козырь',i:'♠',c:'♠',desc:'Козырь: твоя фигура становится неуязвимой на 3 круга.',target:1},dummy:{n:'Болван',i:'♥',c:'♥',desc:'Болван: забираешь чужую фигуру того же типа (не короля) на 2 круга.',target:1},bid:{n:'Торги',i:'♦',c:'♦',desc:'Торги: сразу получаешь 2 новые карты.'},slam:{n:'Шлем',i:'♣',c:'♣',desc:'Шлем: следующее твоё взятие заберёт ещё одну фигуру.'},double:{n:'Контра',i:'🂡',c:'2×',desc:'Контра: за взятие выбранной чужой фигуры (не короля) получишь 2 карты.',target:1},extra:{n:'2-й ход',i:'2️⃣',c:'2',desc:'Второй ход: сходи ещё раз подряд.'},airstrike:{n:'Авиаудар',i:'✈',c:'A',desc:'Авиаудар: фигуры в зоне 3×3 вокруг выбранной клетки разлетаются в случайные соседние клетки и лежат один ход (боссу всё равно).',target:1},angel:{n:'Ангел',i:'😇',c:'G',desc:'Ангел: фигура получает нимб. Клетки в 3 шириной и 4 вперёд перед ней защищены светом: удар по своим фигурам там отражается с шансом 78%. Демон рядом (в радиусе 2) гасит свет.',target:1},reset:{n:'Сброс',i:'↺',c:'Z',desc:'Сброс (редкая): живые фигуры каждой стороны возвращаются на стартовые клетки; нейтралы исчезают, лишние фигуры превращаются в щиты. Во время босса не работает.'},chaos:{n:'Мигание',i:'🌀',c:'C',desc:'Мигание: случайная клетка поля и случайный эффект: бах, демон, лёд (заморозка на 3 хода), авиаудар, спавн или щит.'},rez:{n:'Fh:DebugTest1Q',i:'⚰',c:'Fh',desc:'Воскрешает все фигуры, погибшие в радиусе 5×5 вокруг выбранной клетки (любых цветов, в том числе красных). Занятые клетки пропускаются.',target:1},err:{n:'Err.MDXphrzVPLAJ',i:'⚠',c:'E',desc:'Случайный эффект: может появиться, исчезнуть, телепортироваться или возвыситься любая фигура.'}
 };
-const CPOOL=['err','err','err','shield','shield','future','future','spawn','spawn','support','support','extra','extra','trump','dummy','bid','slam','double'];
+const CPOOL=['airstrike','airstrike','angel','angel','chaos','reset','err','err','err','shield','shield','future','future','spawn','spawn','support','support','extra','extra','trump','dummy','bid','slam','double'];
 const pick=a=>a[Math.floor(Math.random()*a.length)];
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 const inW=(x,y)=>x>=0&&y>=0&&x<WN&&y<WN;
@@ -4608,7 +4608,7 @@ function configure(){
   const a=CFG.army,nt=CFG.teams||4;
   ORDER=nt===2?['white','black']:nt===3?['white','blue','black']:ALL4.slice();
   RULE=a==='chess'?{white:'chess',black:'chess',pink:'chess',blue:'chess'}:a==='eur'?{white:'eur',black:'eur',pink:'eur',blue:'eur'}:a==='arm'?{white:'arm',black:'arm',pink:'arm',blue:'arm'}:{white:'chess',black:'chess',pink:'eur',blue:'arm'};
-  FW={white:[0,-1],black:[0,1],pink:[-1,0],blue:[1,0]};
+  FW={white:[0,-1],black:[0,1],pink:[-1,0],blue:[1,0],neutral:[0,-1]};RULE.neutral='chess';
   if(CFG.shape==='m'){
     // Мёбиус ∞: лента 16×4 (8 секторов на кольцо × 4 дорожки) — сплошная восьмёрка
     G={shape:'m',x0:14,x1:26,y0:17,y1:22};
@@ -4647,7 +4647,7 @@ function setup(){
       const row='RNBQKBNR';
       const n=Math.min(8, files);
       row.slice(0,n).split('').forEach((k,i)=>{
-        let [x,y]=ARMY[t](0,i); if(valid(x,y)) B[y][x]={t,k};
+        let [x,y]=ARMY[t](0,i); if(valid(x,y)) B[y][x]={t,k,home:(k==='K'||k==='R')?1:0};
         [x,y]=ARMY[t](1,i); if(valid(x,y)) B[y][x]={t,k:'P',st:1};
       });
     }else{
@@ -4662,6 +4662,7 @@ function setup(){
   });
 }
 function gen(x,y,capOnly){
+  {const _p=B[y][x];if(_p&&(_p.frozen>0||_p.lying>0))return [];}
   const p=B[y][x],r=[],rule=RULE[p.t],[fx,fy]=FW[p.t],px=-fy,py=fx;
   const add=(a,b,cap)=>r.push(cap?{x:a,y:b,cap}:{x:a,y:b});
   // Универсальный шаг: на Мёбиусе учитывает переворот через шов
@@ -4680,18 +4681,16 @@ function gen(x,y,capOnly){
         const n=nextCell(a,b,dx,dy); if(!n)break;
         a=n.a;b=n.b;dx=n.dx;dy=n.dy;
         const q=B[b][a];
-        if(q){if(enemy(q,p))add(a,b,{x:a,y:b});break;}
+        if(q){if(enemy(q,p))add(a,b,{x:a,y:b});else if(canMerge(p,q))r.push({x:a,y:b,merge:1});break;}
         add(a,b);
       }
     });
     const step=ds=>ds.forEach(([odx,ody])=>{
       const n=nextCell(x,y,odx,ody); if(!n)return;
       const q=B[n.b][n.a];
-      if(!q)add(n.a,n.b); else if(enemy(q,p))add(n.a,n.b,{x:n.a,y:n.b});
+      if(!q)add(n.a,n.b); else if(enemy(q,p))add(n.a,n.b,{x:n.a,y:n.b}); else if(canMerge(p,q))r.push({x:n.a,y:n.b,merge:1});
     });
-    if(p.k==='R')slide(O);else if(p.k==='B')slide(D);else if(p.k==='Q')slide(O.concat(D));
-    else if(p.k==='K')step(O.concat(D));else if(p.k==='N')step(KN);
-    else{
+    const pawnMoves=()=>{
       // пешка: вперёд (с возможным двойным) и взятие по диагонали
       const n1=nextCell(x,y,fx,fy);
       if(n1&&!B[n1.b][n1.a]){
@@ -4705,8 +4704,22 @@ function gen(x,y,capOnly){
         const n=nextCell(x,y,fx+px*sg,fy+py*sg);
         if(n&&enemy(B[n.b][n.a],p))add(n.a,n.b,{x:n.a,y:n.b});
       });
+    };
+    [p.k].concat(p.extra||[]).forEach(k=>{
+      if(k==='R')slide(O);else if(k==='B')slide(D);else if(k==='Q')slide(O.concat(D));
+      else if(k==='K')step(O.concat(D));else if(k==='N')step(KN);else pawnMoves();
+    });
+    // рокировка: король и ладья на стартовых местах, между ними пусто (≥2 клетки)
+    if(p.k==='K'&&p.home&&G.shape!=='m'&&!capOnly){
+      [[px,py],[-px,-py]].forEach(([dx,dy])=>{
+        let a=x+dx,b=y+dy,n=1;
+        while(valid(a,b)&&!B[b][a]&&n<10){a+=dx;b+=dy;n++;}
+        const rk=valid(a,b)&&B[b][a];
+        if(rk&&rk.t===p.t&&rk.k==='R'&&rk.home&&n>=3)r.push({x:x+2*dx,y:y+2*dy,castle:{rx:a,ry:b,tx:x+dx,ty:y+dy}});
+      });
     }
-    return r;
+    const seen=new Set();
+    return r.filter(m=>{const k=m.x+','+m.y+(m.cap?'c':'')+(m.merge?'m':'')+(m.castle?'k':'');if(seen.has(k))return false;seen.add(k);return true;});
   }
   const eur=rule==='eur',all=eur?D:O;
   const hitB=(a,b)=>{if(!capOnly&&valid(a,b)&&B[b][a]&&B[b][a].boss)add(a,b,{x:a,y:b});};
@@ -4754,16 +4767,26 @@ function promoteIf(p,x,y){
 }
 function apply(fx,fy,m){
   const p=B[fy][fx];
-  const cp=m.cap&&B[m.cap.y][m.cap.x];
+  if(m.merge){
+    const q=B[m.y][m.x];
+    if(q&&q.t===p.t){B[fy][fx]=null;B[m.y][m.x]=mergeP(p,q);log('Слияние! '+(NAME[p.t]||'')+' получили новые ходы');showTip('merge');return B[m.y][m.x];}
+  }
+  let cp=m.cap&&B[m.cap.y][m.cap.x];
   if(cp&&cp.boss){hitBoss();return p;}
   if(cp&&cp.shield){cp.shield=false;log('Щит отразил удар!');return p;}
+  if(cp&&cp.t!==p.t&&FW[cp.t]&&angelGlowAt(m.cap.x,m.cap.y,cp.t)&&Math.random()<0.78){log('Свет Ангела отразил атаку!');return p;}
+  if(cp&&cp.k==='K'&&R[cp.t]&&R[cp.t].type==='future'){
+    const kt=cp.t;R[kt]=null;fut.push({t:kt,piece:cp,x:m.cap.x,y:m.cap.y,left:8});B[m.cap.y][m.cap.x]=null;cp=null;
+    log('Король ('+NAME[kt]+') спасён резервом «Будущее» на 8 кругов — карта потрачена!');
+  }
   B[fy][fx]=null;
-  if(m.cap)B[m.cap.y][m.cap.x]=null;
-  B[m.y][m.x]=p;p.st=0;promoteIf(p,m.x,m.y);
-  if(cp&&cp.dbl){giveCard(p.t);giveCard(p.t);log('Контра! '+NAME[p.t]+' получили 2 карты');}
+  if(m.cap){B[m.cap.y][m.cap.x]=null;burry(cp,m.cap.x,m.cap.y);}
+  B[m.y][m.x]=p;p.st=0;p.home=0;promoteIf(p,m.x,m.y);
+  if(m.castle){const rk=B[m.castle.ry][m.castle.rx];if(rk){B[m.castle.ry][m.castle.rx]=null;B[m.castle.ty][m.castle.tx]=rk;rk.home=0;log('Рокировка!');}}
+  if(cp&&cp.dbl&&CS[p.t]){giveCard(p.t);giveCard(p.t);log('Контра! '+NAME[p.t]+' получили 2 карты');}
   if(cp&&SL[p.t]>0){
     const adj=[];for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++){const a=m.x+dx,b=m.y+dy;if((dx||dy)&&valid(a,b)){const q=B[b][a];if(q&&enemy(q,p)&&q.k!=='K'&&!q.boss)adj.push({a,b});}}
-    if(adj.length){const z=pick(adj);B[z.b][z.a]=null;SL[p.t]--;log('Шлем! '+NAME[p.t]+' берут ещё одну фигуру');}
+    if(adj.length){const z=pick(adj);burry(B[z.b][z.a],z.a,z.b);B[z.b][z.a]=null;SL[p.t]--;log('Шлем! '+NAME[p.t]+' берут ещё одну фигуру');}
   }
   return p;
 }
@@ -4817,8 +4840,247 @@ function mutate(){
   sel=null;moves=null;
   const t='Поле изменилось: '+ops.map(o=>o[0]).join(', ');log(t);showTip('plus_resize');return t;
 }
+function burry(q,x,y){if(!q||q.boss)return;grave.push({x,y,t:q.t,k:q.k,minion:!!q.minion});if(grave.length>600)grave.shift();}
+function graveIn(cx,cy){return grave.filter(g=>Math.abs(g.x-cx)<=2&&Math.abs(g.y-cy)<=2&&valid(g.x,g.y));}
+function reviveAround(cx,cy){
+  let n=0;const keep=[];
+  for(let i=grave.length-1;i>=0;i--){   // сначала самые «свежие» погибшие
+    const g=grave[i];
+    if(Math.abs(g.x-cx)<=2&&Math.abs(g.y-cy)<=2&&valid(g.x,g.y)&&!B[g.y][g.x]){
+      B[g.y][g.x]=g.minion?{t:'boss',k:'m',red:true,minion:true}:{t:g.t,k:g.k,st:0};n++;
+    }else keep.unshift(g);
+  }
+  grave=keep;return n;
+}
+function nukeCenter(){let best=null,bd=1e9;for(let y=0;y<WN;y++)for(let x=0;x<WN;x++)if(valid(x,y)){const d=Math.abs(x-20)+Math.abs(y-20);if(d<bd){bd=d;best={x,y};}}return best||{x:20,y:20};}
+function giveRez(t){for(let k=0;k<2;k++){if(CS[t].indexOf(null)<0)CS[t].push(null);giveCard(t,'rez');}}
+// ===== Слияние, ангел, демон, нейтралы, авиаудар, сброс, мигание, рокировка =====
+function canMerge(p,q){
+  if(!q||q.t!==p.t||q.boss||p.t==='neutral'||RULE[p.t]!=='chess')return false;
+  if(p.k==='K'||q.k==='K'||p.k==='P'||q.k==='P')return false;
+  const have=new Set([p.k].concat(p.extra||[]));
+  return [q.k].concat(q.extra||[]).some(k=>!have.has(k));
+}
+function mergeP(p,q){
+  const ex=new Set([p.k].concat(p.extra||[],[q.k],q.extra||[]));ex.delete(p.k);ex.delete('P');ex.delete('K');
+  return {t:p.t,k:p.k,st:0,home:0,extra:[...ex],shield:!!(p.shield||q.shield),angel:!!(p.angel||q.angel),demon:!!(p.demon||q.demon)};
+}
+function inDemonAura(x,y){let h=false;each((p,ax,ay)=>{if(p.demon&&Math.abs(ax-x)<=2&&Math.abs(ay-y)<=2)h=true;});return h;}
+function angelCells(){
+  const s=new Set();
+  each((p,ax,ay)=>{
+    if(!p.angel||p.demon||!FW[p.t]||!valid(ax,ay)||inDemonAura(ax,ay))return;
+    const [fx,fy]=FW[p.t],px=-fy,py=fx;
+    for(let d=1;d<=4;d++)for(let w=-1;w<=1;w++){const x=ax+fx*d+px*w,y=ay+fy*d+py*w;if(valid(x,y)&&!inDemonAura(x,y))s.add(p.t+'|'+x+','+y);}
+  });
+  return s;
+}
+function angelGlowAt(x,y,team){return angelCells().has(team+'|'+x+','+y);}
+function scatterArea(cx,cy){
+  const victims=[];
+  for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++){
+    const x=cx+dx,y=cy+dy;if(!valid(x,y)||!B[y][x]||B[y][x].boss)continue;
+    victims.push({x,y,p:B[y][x]});B[y][x]=null;
+  }
+  const used=[];
+  victims.forEach(v=>{
+    addHl(v.x,v.y,'scatter-hl');
+    const spots=[];
+    for(let r=1;r<=3;r++)for(let dy=-r;dy<=r;dy++)for(let dx=-r;dx<=r;dx++){
+      if(Math.abs(dx)!==r&&Math.abs(dy)!==r)continue;
+      const nx=v.x+dx,ny=v.y+dy;
+      if(valid(nx,ny)&&!B[ny][nx]&&!used.some(u=>u.x===nx&&u.y===ny))spots.push({x:nx,y:ny});
+    }
+    let d=spots.length?pick(spots):(!B[v.y][v.x]?{x:v.x,y:v.y}:null);
+    if(!d){const f=freeCells();d=f.length?{x:f[0][0],y:f[0][1]}:{x:v.x,y:v.y};}
+    B[d.y][d.x]=v.p;v.p.lying=1;used.push(d);
+  });
+  return victims.length;
+}
+function spawnNeutralAt(x,y){
+  const k=pick(['P','N','B','R','Q']);
+  B[y][x]={t:'neutral',k,st:k==='P'?1:0,shield:Math.random()<0.25};showTip('neutral_unit');
+}
+function armySlots(t){
+  const out=[],rule=RULE[t],files=(G.shape==='m')?(G.x1-G.x0):8;
+  if(rule==='chess'){
+    'RNBQKBNR'.slice(0,Math.min(8,files)).split('').forEach((k,i)=>{
+      let [x,y]=ARMY[t](0,i);if(valid(x,y))out.push({x,y,k,home:(k==='K'||k==='R')?1:0});
+      [x,y]=ARMY[t](1,i);if(valid(x,y))out.push({x,y,k:'P',st:1});
+    });
+  }else(rule==='arm'?[1,2]:[0,1,2]).forEach(d=>{
+    for(let i=0;i<files;i++){const [x,y]=ARMY[t](d,i);if(!valid(x,y))continue;if(rule==='arm'||(x+y)%2===1)out.push({x,y,k:'m'});}
+  });
+  return out;
+}
+function softReset(){
+  if(bossSt)return 'Сброс не работает во время босса';
+  const pools={};ORDER.forEach(t=>{pools[t]=[];});
+  each(p=>{if(pools[p.t])pools[p.t].push(p);});
+  fut.forEach(f=>{if(pools[f.t])pools[f.t].push(f.piece);});fut=[];
+  for(let y=0;y<WN;y++)for(let x=0;x<WN;x++)B[y][x]=null;   // нейтралы исчезают
+  let extra=0;
+  ORDER.forEach(t=>{
+    const pool=pools[t].slice(),placed=[];
+    armySlots(t).forEach(s=>{
+      let i=pool.findIndex(p=>p.k===s.k);
+      if(i<0&&s.k==='m')i=pool.findIndex(p=>p.k==='d');
+      if(i<0)return;
+      const p=pool.splice(i,1)[0];
+      p.k=s.k;p.st=s.st||0;p.home=s.home||0;B[s.y][s.x]=p;placed.push(p);
+    });
+    extra+=pool.length;
+    pool.forEach(()=>{if(placed.length)pick(placed).shield=true;});
+  });
+  sel=null;moves=null;
+  return 'Сброс! Фигуры вернулись на места, лишних → щиты: '+extra;
+}
+function chaosEffect(t,x,y){
+  const eff=pick(['bang','bang','demon','airstrike','spawn','shield','ice']);
+  addHl(x,y,'effect-hl');
+  const q=B[y][x];
+  if(eff==='ice'){if(q&&!q.boss){q.frozen=3;return 'лёд! фигура заморожена на 3 хода';}if(!q){spawnNeutralAt(x,y);return 'нейтральная фигура';}return 'ничего';}
+  if(eff==='airstrike'){const n=scatterArea(x,y);return 'авиаудар, разлетелось фигур: '+n;}
+  if(eff==='spawn'){if(!q){const sk=spawnKindFor(t,x,y);if(sk){B[y][x]={t,k:sk,st:0};return 'спавн фигуры';}return 'спавн отменён (рядом вражеский король)';}return 'спавн мимо (клетка занята)';}
+  if(eff==='shield'){if(q&&!q.boss){q.shield=true;return 'щит на фигуре';}spawnNeutralAt(x,y);return 'нейтральная фигура';}
+  if(eff==='demon'){
+    if(q&&!q.boss){q.demon=true;q.angel=false;showTip('demon');return 'демон! (гасит ангелов в радиусе 2)';}
+    if(!q){B[y][x]={t:'neutral',k:'N',st:0,demon:true};return 'нейтральный демон!';}
+    return 'ничего';
+  }
+  if(!q){spawnNeutralAt(x,y);return 'бах! появилась нейтральная фигура';}
+  if(q.boss)return 'ничего';
+  B[y][x]=null;
+  for(let r=1;r<=3;r++){
+    const c=[];for(let dy=-r;dy<=r;dy++)for(let dx=-r;dx<=r;dx++){if(Math.abs(dx)!==r&&Math.abs(dy)!==r)continue;const nx=x+dx,ny=y+dy;if(valid(nx,ny)&&!B[ny][nx])c.push([nx,ny]);}
+    if(c.length){const z=pick(c);B[z[1]][z[0]]=q;q.lying=1;return 'бах! фигура отлетела и лежит';}
+  }
+  B[y][x]=q;return 'бах! (фигуре некуда лететь)';
+}
+// нейтральные фигуры ходят раз в круг: бьют самое ценное, что достанут
+function neutralTurn(){
+  const list=[];each((p,x,y)=>{if(p.t==='neutral'&&valid(x,y))list.push({x,y});});
+  if(!list.length)return;
+  let best=null,bs=-1;
+  list.sort(()=>Math.random()-0.5).forEach(u=>{
+    gen(u.x,u.y).forEach(m=>{
+      const q=m.cap&&B[m.cap.y][m.cap.x];
+      const sc=Math.random()*2+(q?(q.boss?30:(VALS[q.k]||1)*10):0);
+      if(sc>bs){bs=sc;best={fx:u.x,fy:u.y,...m};}
+    });
+  });
+  if(!best)return;
+  const mover=B[best.fy][best.fx];
+  log('Ход нейтралов: '+(SYM2[mover.k]||'')+' → '+(best.cap?'бьёт':'идёт'));
+  apply(best.fx,best.fy,best);
+  hl.push({x:best.x,y:best.y,cls:'effect-hl',until:Date.now()+2500});
+}
+function decorate(){
+  const ANG=angelCells();
+  const KT=new Set();ORDER.forEach(t=>{const kp=kingPos(t);if(kp&&attacked(kp.x,kp.y,t))KT.add(kp.x+','+kp.y);});
+  document.querySelectorAll('#board [data-vx]').forEach(c=>{
+    const x=+c.dataset.vx,y=+c.dataset.vy;
+    c.querySelectorAll('.badge').forEach(e=>e.remove());
+    if(valid(x,y)&&[...ANG].some(k=>k.endsWith('|'+x+','+y)))c.style.boxShadow='inset 0 0 0 2px rgba(255,220,100,.55),inset 0 0 10px rgba(255,220,100,.3)';
+    if(KT.has(x+','+y))c.style.boxShadow='inset 0 0 0 3px rgba(255,60,60,.95),inset 0 0 14px rgba(255,60,60,.6)';
+    const p=B[y]&&B[y][x];if(!p||p.boss)return;
+    const add=(txt,css)=>{const s=document.createElement('span');s.className='badge';s.textContent=txt;s.style.cssText='position:absolute;pointer-events:none;line-height:1;z-index:3;'+css;c.appendChild(s);};
+    if(p.frozen>0)add('❄','right:1px;bottom:0;font-size:12px');
+    if(p.lying>0)add('💤','right:1px;bottom:0;font-size:12px');
+    if(p.angel&&!p.demon)add('😇','left:0;top:0;font-size:11px');
+    if(p.demon)add('😈','left:0;top:0;font-size:11px');
+    if(p.extra&&p.extra.length)add(p.extra.map(k=>SYM2[k]||k).join(''),'left:1px;bottom:0;font-size:9px;color:#ffd24a;text-shadow:0 0 2px #000');
+    if(p.t==='neutral')add('◌','right:1px;top:0;font-size:11px;color:#ddd;text-shadow:0 0 2px #000');
+    if(p.home&&p.k==='K')add('•','right:2px;bottom:0;font-size:9px;color:#8f8');
+  });
+}
+function tickStatus(t){each(p=>{if(p.t!==t)return;if(p.frozen>0)p.frozen--;if(p.lying>0)p.lying--;});}
+function kingPos(t){let k=null;each((p,x,y)=>{if(p.t===t&&p.k==='K'&&valid(x,y))k={x,y};});return k;}
+// кто из врагов может взять клетку (x,y) следующим ходом
+function attackers(x,y,team){
+  const res=[];
+  each((q,qx,qy)=>{
+    if(q.t===team||q.boss||!valid(qx,qy)||q.frozen>0||q.lying>0)return;
+    if(q.t==='boss'){if(Math.abs(qx-x)<=1&&Math.abs(qy-y)<=1)res.push({x:qx,y:qy,k:'m'});return;}
+    if(!RULE[q.t])return;
+    const ms=gen(qx,qy);
+    for(let i=0;i<ms.length;i++){const m=ms[i];if(m.cap&&m.cap.x===x&&m.cap.y===y){res.push({x:qx,y:qy,k:q.k});break;}}
+  });
+  return res;
+}
+function attacked(x,y,team){return attackers(x,y,team).length>0;}
+function isDefended(x,y,team){
+  const old=B[y][x];B[y][x]={t:'__d',k:'P'};let d=false;
+  each((q,qx,qy)=>{
+    if(d||q.t!==team||!valid(qx,qy)||q.frozen>0||q.lying>0)return;
+    const ms=gen(qx,qy);for(let i=0;i<ms.length;i++){const m=ms[i];if(m.cap&&m.cap.x===x&&m.cap.y===y){d=true;break;}}
+  });
+  B[y][x]=old;return d;
+}
+function announceCheck(t){const kp=kingPos(t);if(kp&&attacked(kp.x,kp.y,t))log('ШАХ! Королю ('+NAME[t]+') угрожают — спаси его');}
+// ИИ: выход из-под шаха, не подставляет фигуры, уводит атакованные, берёт ценное
+function aiPickMove(t,ms){
+  const kp0=kingPos(t),inCheck=!!(kp0&&attacked(kp0.x,kp0.y,t));
+  const hangMemo=new Map();
+  const hangNow=(x,y,p)=>{
+    const key=x+','+y;if(hangMemo.has(key))return hangMemo.get(key);
+    const at=attackers(x,y,t);let v=0;
+    if(at.length){if(!isDefended(x,y,t))v=VALS[p.k]||1;else v=Math.max(0,(VALS[p.k]||1)-Math.min(...at.map(a=>VALS[a.k]||1)));}
+    hangMemo.set(key,v);return v;
+  };
+  let best=null,bs=-1e9;
+  ms.forEach(m=>{
+    const p=B[m.fy][m.fx];if(!p)return;
+    const cp=m.cap&&B[m.cap.y][m.cap.x];
+    const wasHang=p.k==='K'?0:hangNow(m.fx,m.fy,p);
+    // пробный ход на доске
+    const snap=[];const save=(x,y)=>snap.push([x,y,B[y][x]]);
+    save(m.fx,m.fy);save(m.x,m.y);if(m.cap)save(m.cap.x,m.cap.y);
+    let rk=null;if(m.castle){rk=B[m.castle.ry][m.castle.rx];save(m.castle.rx,m.castle.ry);save(m.castle.tx,m.castle.ty);}
+    const target=B[m.y][m.x];
+    B[m.fy][m.fx]=null;if(m.cap)B[m.cap.y][m.cap.x]=null;
+    B[m.y][m.x]=m.merge&&target?mergeP(p,target):p;
+    if(m.castle){B[m.castle.ry][m.castle.rx]=null;B[m.castle.ty][m.castle.tx]=rk;}
+    const kp=p.k==='K'?{x:m.x,y:m.y}:kp0;
+    const safe=!kp||!attacked(kp.x,kp.y,t);
+    let landHang=0;
+    if(p.k!=='K'){
+      const at=attackers(m.x,m.y,t);
+      if(at.length){landHang=isDefended(m.x,m.y,t)?Math.max(0,(VALS[p.k]||1)-Math.min(...at.map(a=>VALS[a.k]||1))):(VALS[p.k]||1);}
+    }
+    for(let i=snap.length-1;i>=0;i--)B[snap[i][1]][snap[i][0]]=snap[i][2];
+    const fw=(m.x-m.fx)*FW[t][0]+(m.y-m.fy)*FW[t][1];
+    let sc=Math.random()*0.7;
+    if(!safe)sc-=4000;                 // оставить короля под ударом нельзя
+    if(inCheck&&safe)sc+=400;          // вышел из-под шаха
+    if(cp)sc+=cp.k==='K'?5000:(cp.boss?0:(VALS[cp.k]||1)*10);
+    sc-=landHang*9;                    // не подставлять фигуру
+    sc+=wasHang*8;                     // увести фигуру из-под боя
+    if(m.castle)sc+=3;
+    if(p.k==='P'||p.k==='m')sc+=fw*0.25;else sc+=fw*0.08;
+    if(sc>bs){bs=sc;best=m;}
+  });
+  return best;
+}
+let aiForce=null;
 function freeCells(){const a=[];for(let y=0;y<WN;y++)for(let x=0;x<WN;x++)if(valid(x,y)&&!B[y][x])a.push([x,y]);return a;}
 function pcsOf(f){const a=[];each((p,x,y)=>{if(valid(x,y)&&(!f||f(p)))a.push({p,x,y});});return a;}
+// Спавн рядом с вражеским королём: нельзя в соседней клетке; а фигура, которая могла бы сразу ударить по королю, не выбирается
+function spawnKindFor(t,x,y){
+  const ks=[];each((p,kx,ky)=>{if(p.k==='K'&&p.t!==t&&valid(kx,ky))ks.push({x:kx,y:ky});});
+  if(ks.some(k=>Math.abs(k.x-x)<=1&&Math.abs(k.y-y)<=1))return null;
+  const cands=(RULE[t]==='chess'?['P','N','B','R']:['m']).sort(()=>Math.random()-0.5);
+  const old=B[y][x];
+  for(const k of cands){
+    B[y][x]={t,k,st:0};
+    let hit=false;
+    const ms=gen(x,y);
+    for(let i=0;i<ms.length;i++){const q=ms[i].cap&&B[ms[i].cap.y][ms[i].cap.x];if(q&&q.k==='K'){hit=true;break;}}
+    B[y][x]=old;
+    if(!hit)return k;
+  }
+  B[y][x]=old;return null;
+}
 function newPiece(t,pawn){const ch=RULE[t]==='chess';return {t,k:ch?(pawn?'P':pick(['P','N','B','R'])):'m',st:0};}
 function giveCard(t,type){const i=CS[t].indexOf(null);if(i<0)return false;CS[t][i]=type||pick(CPOOL);fresh[t][i]=1;return true;}
 const FM=typeof FLY_MS==='number'?FLY_MS:2500,HM=typeof HL_MS==='number'?HL_MS:4500;
@@ -4827,8 +5089,11 @@ function cellEl(x,y){return document.getElementById('board').querySelector('[dat
 function addHl(x,y,cls){hl.push({x,y,cls,until:Date.now()+HM});}
 function cardMsg(t,type,x,y){
   const own=valid(x,y)&&B[y][x]&&B[y][x].t===t;
-  if(type==='nuclear'&&!valid(x,y))return 'Выбери клетку поля';
+  if(type==='airstrike'&&!valid(x,y))return 'Выбери клетку поля';
+  if(type==='angel'&&(!own||B[y][x].demon))return 'Выбери свою фигуру';
+  if(type==='rez'){if(!valid(x,y))return 'Выбери клетку поля';if(!graveIn(x,y).length)return 'Здесь некого воскрешать (радиус 5×5)';}
   const q=valid(x,y)&&B[y][x];
+  if(type==='spawn'){if(!valid(x,y)||B[y][x])return 'Нужна пустая клетка';if(!spawnKindFor(t,x,y))return 'Сюда нельзя: рядом вражеский король или фигура сразу ударила бы по нему';}
   if(type==='trump'&&!own)return 'Выбери свою фигуру';
   if(type==='dummy'&&!(q&&q.t!==t&&q.t!=='boss'&&q.k!=='K'&&!q.prot&&(RULE[q.t]==='chess')===(RULE[t]==='chess')))return 'Выбери чужую фигуру того же типа (не короля)';
   if(type==='double'&&!(q&&q.t!==t&&q.t!=='boss'&&q.k!=='K'))return 'Выбери чужую фигуру (не короля)';
@@ -4890,22 +5155,27 @@ function doMove(fx,fy,m,cb){animMove(fx,fy,m.x,m.y,()=>{apply(fx,fy,m);cb();});}
 function pushUndo(){undoSt.push(JSON.stringify({B,G,ti,round,extra,skipT,CS,R,fut,SL}));if(undoSt.length>12)undoSt.shift();undos=0;}
 function undo(){
   const my=(onlineMode&&onlineSeat)?onlineSeat:'white';
-  if(over||busy||ritual||ORDER[ti]!==my||!undoSt.length||undos>=2)return;
+  if(over||busy||ritual||netBlock||ORDER[ti]!==my||!undoSt.length||undos>=2)return;
   const st=JSON.parse(undoSt.pop());({B,G,ti,round,extra,skipT,CS,R,fut,SL}=st);
   sel=null;moves=null;selSlot=null;chain=false;undos++;fresh={white:[],black:[],pink:[],blue:[]};log('Ход отменён');draw();
 }
 function skip(){
   const my=(onlineMode&&onlineSeat)?onlineSeat:'white';
-  if(over||busy||ritual||ORDER[ti]!==my)return;
+  if(over||busy||ritual||ORDER[ti]!==my||netBlock)return;
   pushUndo();sel=null;moves=null;selSlot=null;chain=false;log('Ход пропущен');advance();
 }
 function playCard(t,type,x,y){
   const own=(a,b)=>valid(a,b)&&B[b][a]&&B[b][a].t===t;
   if(type==='shield'){if(!own(x,y)){log('Выбери свою фигуру');return false;}B[y][x].shield=true;log(NAME[t]+': щит');return true;}
   if(type==='future'){if(!own(x,y)||B[y][x].k==='K'){log('Выбери свою фигуру (не короля)');return false;}fut.push({t,piece:B[y][x],x,y,left:2});B[y][x]=null;log(NAME[t]+': фигура ушла в будущее');return true;}
-  if(type==='spawn'){if(!valid(x,y)||B[y][x]){log('Нужна пустая клетка');return false;}B[y][x]=newPiece(t);log(NAME[t]+': спавн');return true;}
+  if(type==='spawn'){if(!valid(x,y)||B[y][x]){log('Нужна пустая клетка');return false;}const sk=spawnKindFor(t,x,y);if(!sk){log('Сюда нельзя: рядом вражеский король или фигура сразу ударила бы по нему');return false;}B[y][x]={t,k:sk,st:0};log(NAME[t]+': спавн');return true;}
   if(type==='support'){const f=freeCells().sort(()=>Math.random()-0.5).slice(0,2);f.forEach(c=>{B[c[1]][c[0]]=newPiece(t,1);});log(NAME[t]+': поддержка +'+f.length);return true;}
-  if(type==='nuclear'){fireNuke(t,x,y);return true;}
+  if(type==='nuclear'){const c=nukeCenter();fireNuke(t,c.x,c.y);return true;}
+  if(type==='airstrike'){if(!valid(x,y)){log('Выбери клетку поля');return false;}const n=scatterArea(x,y);log(NAME[t]+': авиаудар — разлетелось фигур: '+n);showTip('airstrike');return true;}
+  if(type==='angel'){const q=valid(x,y)&&B[y][x];if(!q||q.t!==t||q.demon){log('Выбери свою фигуру');return false;}q.angel=true;log(NAME[t]+': ангел — фигура под защитой света');showTip('angel');return true;}
+  if(type==='reset'){log(softReset());showTip('reset');return true;}
+  if(type==='chaos'){const cells=[];for(let yy=0;yy<WN;yy++)for(let xx=0;xx<WN;xx++)if(valid(xx,yy))cells.push([xx,yy]);const c=pick(cells);log(NAME[t]+': Мигание → '+chaosEffect(t,c[0],c[1]));showTip('chaos');return true;}
+  if(type==='rez'){const n=reviveAround(x,y);if(!n){log('Некого воскрешать');return false;}log(NAME[t]+': Fh:DebugTest1Q — воскрешено фигур: '+n);return true;}
   if(type==='trump'){if(!own(x,y)){log('Выбери свою фигуру');return false;}const q=B[y][x];if(!q.prot){q.prot=true;q.tmp=round+3;}log(NAME[t]+': козырь — фигура неуязвима 3 круга');return true;}
   if(type==='dummy'){const q=valid(x,y)&&B[y][x];if(!q||q.t===t||q.t==='boss'||q.k==='K'||q.prot||(RULE[q.t]==='chess')!==(RULE[t]==='chess')){log('Выбери чужую фигуру того же типа (не короля)');return false;}q.loan={t:q.t,until:round+2};q.t=t;log(NAME[t]+': болван — чужая фигура играет за них 2 круга');return true;}
   if(type==='bid'){for(let k=0;k<2;k++){if(CS[t].indexOf(null)<0)CS[t].push(null);giveCard(t);}log(NAME[t]+': торги — получены 2 карты');return true;}
@@ -4916,10 +5186,12 @@ function playCard(t,type,x,y){
   return false;
 }
 function aiCard(t,cont){
-  if(!ritual&&!bossSt&&!nukeDone){
+  {const kp=kingPos(t);if(kp&&attacked(kp.x,kp.y,t)){const i=CS[t].indexOf('shield');if(i>=0&&!B[kp.y][kp.x].shield){aiForce=kp;return aiUse(t,i,'shield',cont);}}}
+  if(CFG.craft!==false&&!bossSt&&!nukeDone){
     const h=CS[t].filter(Boolean);
     if(h.length===3&&h.some((x,i)=>h.indexOf(x)!==i)&&Math.random()<0.4){
-      CS[t]=[null,null,null];giveCard(t,'nuclear');log(NAME[t]+' собрали ЯДЕРКУ!');showTip('nuclear');startRitual(t);return;
+      CS[t]=[null,null,null];giveCard(t,'nuclear');nukeDone=true;log(NAME[t]+' собрали ЯДЕРКУ!');showTip('nuclear');
+      return aiUse(t,CS[t].indexOf('nuclear'),'nuclear',cont);
     }
   }
   const idx=CS[t].map((c,i)=>c?i:-1).filter(i=>i>=0);
@@ -4931,14 +5203,18 @@ function aiCard(t,cont){
 }
 function aiUse(t,where,type,cont){
   let x,y;
-  if(PC[type].target){
-    if(type==='spawn'){const c=pick(freeCells());if(!c)return cont();x=c[0];y=c[1];}
+  if(type==='rez'){let best=null,bn=0;grave.forEach(g=>{const n=graveIn(g.x,g.y).length;if(n>bn){bn=n;best=g;}});if(!best)return cont();x=best.x;y=best.y;}
+  else if(PC[type].target){
+    if(type==='spawn'){const c=pick(freeCells().filter(f=>spawnKindFor(t,f[0],f[1])));if(!c)return cont();x=c[0];y=c[1];}
+    else if(type==='airstrike'){const o=pcsOf(q=>q.t!==t&&q.t!=='boss');if(!o.length)return cont();const z=pick(o);x=z.x;y=z.y;}
     else if(type==='dummy'||type==='double'){const o=pcsOf(q=>q.t!==t&&q.t!=='boss'&&q.k!=='K'&&!q.prot&&(type==='double'||(RULE[q.t]==='chess')===(RULE[t]==='chess')));if(!o.length)return cont();const z=pick(o);x=z.x;y=z.y;}
+    else if(aiForce){x=aiForce.x;y=aiForce.y;}
     else{const o=pcsOf(q=>q.t===t&&q.k!=='K');if(!o.length)return cont();const z=pick(o);x=z.x;y=z.y;}
   }
+  aiForce=null;
   cardAnim(t,where,type,x,y,()=>{
     if(where==='reserve')R[t]=null;else CS[t][where]=null;
-    playCard(t,type,x,y);cont();
+    playCard(t,type,x,y);if(type==='nuclear')return;cont();
   });
 }
 
@@ -4948,7 +5224,7 @@ function errEffect(who){
   const pcs=f=>pcsOf(p=>p.t!=='boss'&&(!f||f(p)));
   const effects=[
     ()=>{const c=pick(free()),t=pick(ORDER.filter(alive));if(!c)return;const chess=t==='white'||t==='black';B[c[1]][c[0]]={t,k:chess?pick(['P','N','B','R']):'m',st:0};return 'Из ниоткуда появилась фигура: '+NAME[t];},
-    ()=>{const a=pcs(p=>p.k!=='K');if(!a.length)return;const z=pick(a);B[z.y][z.x]=null;return 'Исчезла фигура ('+NAME[z.p.t]+')';},
+    ()=>{const a=pcs(p=>p.k!=='K');if(!a.length)return;const z=pick(a);burry(z.p,z.x,z.y);B[z.y][z.x]=null;return 'Исчезла фигура ('+NAME[z.p.t]+')';},
     ()=>{const a=pcs(),c=pick(free());if(!a.length||!c)return;const z=pick(a);B[z.y][z.x]=null;B[c[1]][c[0]]=z.p;return 'Фигура ('+NAME[z.p.t]+') телепортировалась';},
     ()=>{const a=pcs(p=>p.k==='P'||p.k==='m'||p.k==='N'||p.k==='B'||p.k==='R');if(!a.length)return;const z=pick(a);z.p.k=z.p.k==='m'?'d':'Q';return 'Фигура ('+NAME[z.p.t]+') возвысилась';},
     ()=>{const a=pcs(p=>p.k==='Q'||p.k==='d');if(!a.length)return;const z=pick(a);z.p.k=z.p.k==='d'?'m':'P';z.p.st=0;return 'Фигура ('+NAME[z.p.t]+') разжалована';},
@@ -4967,7 +5243,8 @@ function errEffect(who){
 // ===== Крафт, ядерный ритуал, ядерка и босс =====
 function whiteCount(){let n=0;each((p,x,y)=>{if(p.t==='white'&&valid(x,y))n++;});fut.forEach(f=>{if(f.t==='white')n++;});return n;}
 function craftClick(){
-  if(over||busy||ritual||ORDER[ti]!=='white')return;
+  if(CFG.craft===false){log('Крафт отключён в настройках игры');return;}
+  if(over||busy||ritual||netBlock||ORDER[ti]!=='white')return;
   if(bossSt||nukeDone){log('Крафт больше недоступен');return;}
   if(typeof selSlot!=='number'){log('Выбери карту из руки, затем слот «?»');return;}
   const type=CS.white[selSlot];if(!type)return;
@@ -4978,41 +5255,10 @@ function craftClick(){
   log('В крафт: '+PC[type].n+' ('+pile.length+'/3)');
   if(pile.length===3){
     const cnt={};pile.forEach(x=>cnt[x]=(cnt[x]||0)+1);
-    if(Object.values(cnt).some(n=>n>=2)){pile=[];giveCard('white','nuclear');log('Собрана ЯДЕРКА!');showTip('nuclear',true);draw();startRitual('white');return;}
+    if(Object.values(cnt).some(n=>n>=2)){pile=[];giveCard('white','nuclear');log('Собрана ЯДЕРКА!');showTip('nuclear',true);nukeDone=true;draw();return;}
     log('Нужны 2 одинаковые + 1 любая. Крафт сброшен.');pile=[];
   }
   draw();
-}
-function startRitual(owner){
-  ritual={owner,phase:'equalize',n:0,avail:0,wait:false};busy=true;nukeDone=true;sel=null;moves=null;selSlot=null;undoSt=[];draw();
-  forceTetoSay('Давайте уравняем шансы…',()=>{
-    ORDER.filter(t=>t!==owner&&alive(t)).forEach(t=>{CS[t]=['future','future','future'];R[t]=null;fresh[t]=[1,1,1];});
-    draw();
-    setTimeout(()=>forceTetoSay('Все, кроме владельца ядерки, выбирают 3 фигуры для вечной защиты.',()=>{
-      ritual.phase='protect';
-      // ИИ-стороны защищают самых ценных (кроме королей)
-      ORDER.filter(t=>t!==owner&&t!=='white'&&alive(t)).forEach(t=>{
-        pcsOf(q=>q.t===t).sort((u,v)=>VALS[v.p.k]-VALS[u.p.k]).slice(0,3).forEach(z=>{z.p.prot=true;});
-      });
-      ritual.avail=pcsOf(q=>q.t==='white').length;
-      if(owner!=='white'&&ritual.avail>0){busy=false;ritual.wait=true;log('Выбери 3 своих фигуры для вечной защиты (тап по клетке)');draw();}
-      else finishProtect();
-    }),700);
-  });
-}
-function finishProtect(){
-  busy=true;ritual.wait=false;draw();
-  forceTetoSay('На этом всё. Держитесь.',()=>{
-    ritual.phase='fire';
-    if(ritual.owner==='white'){busy=false;log('Только ядерка: выбери карту «Ядерка», затем клетку удара');draw();}
-    else setTimeout(aiFire,600);
-  });
-}
-function aiFire(){
-  const t=ritual.owner,i=CS[t].indexOf('nuclear');if(i>=0)CS[t][i]=null;
-  const tg=pcsOf(q=>q.t!==t&&q.k==='K'),any=pcsOf(q=>q.t!==t&&q.t!=='boss');
-  const z=tg.length?pick(tg):(any.length?pick(any):{x:20,y:20});
-  fireNuke(t,z.x,z.y);
 }
 function rocketAnim(tx,ty,done){
   const fly=document.getElementById('fly'),vp=document.getElementById('viewport'),c=cellEl(tx,ty);
@@ -5031,38 +5277,20 @@ function rocketAnim(tx,ty,done){
   setTimeout(()=>{fly.style.display='none';fly.style.transition='none';fly.innerHTML='';done();},900);
 }
 function fireNuke0(t,cx,cy){
-  busy=true;undoSt=[];selSlot=null;ritual=null;
+  busy=true;undoSt=[];selSlot=null;ritual=null;nukeDone=true;
   const zone=[];for(let dy=-2;dy<=1;dy++)for(let dx=-1;dx<=1;dx++)if(valid(cx+dx,cy+dy))zone.push({x:cx+dx,y:cy+dy});
   zone.forEach(z=>hl.push({x:z.x,y:z.y,cls:'nuke-blast',until:Date.now()+9500}));
-  log('Ядерка запущена… 8 секунд до удара');draw();
+  log('Ядерка запущена в центр поля… 8 секунд до удара');draw();
   let left=8;const tick=setInterval(()=>{left--;if(left>0)log('До удара: '+left+'…');},1000);
   setTimeout(()=>{
     clearInterval(tick);
     rocketAnim(cx,cy,()=>{
-      const victims=[];
-      zone.forEach(({x,y})=>{const p=B[y][x];if(p&&!p.prot&&!p.boss){victims.push({x,y});B[y][x]=null;}});
-      log('УДАР! Зона очищена (защищённые фигуры уцелели)');draw();if(onlineMode)onlinePushState({full:true});
+      zone.forEach(({x,y})=>{const p=B[y][x];if(p&&!p.prot&&!p.boss){burry(p,x,y);B[y][x]=null;}});
+      ORDER.filter(u=>u!==t&&alive(u)).forEach(giveRez);   // вместо вечной защиты — по 2 карты Fh:DebugTest1Q остальным
+      log('УДАР! Зона очищена. Остальные получили по 2 карты Fh:DebugTest1Q');draw();if(onlineMode)onlinePushState({full:true});
       setTimeout(()=>{
-        const reds=victims.map(v=>{B[v.y][v.x]={t:'boss',k:'m',red:true,minion:true};return {x:v.x,y:v.y};});
-        log('Перерождение… красные сходятся к эпицентру');draw();if(onlineMode)onlinePushState({full:true});
-        const stepR=()=>{
-          let moved=false;
-          reds.forEach(r=>{
-            const q=B[r.y][r.x];if(!q||!q.red)return;
-            const dx=Math.sign(cx-r.x),dy=Math.sign(cy-r.y);
-            for(const [sx,sy] of (dx?[[dx,0],[0,dy]]:[[0,dy]])){
-              if(!sx&&!sy)continue;const nx=r.x+sx,ny=r.y+sy;
-              if(valid(nx,ny)&&!B[ny][nx]){B[ny][nx]=q;B[r.y][r.x]=null;r.x=nx;r.y=ny;moved=true;break;}
-            }
-          });
-          draw();if(onlineMode)onlinePushState({full:true});
-          if(!moved||reds.every(r=>Math.abs(r.x-cx)+Math.abs(r.y-cy)<=1)){
-            reds.forEach(r=>{if(B[r.y][r.x]&&B[r.y][r.x].red)B[r.y][r.x]=null;});
-            spawnBoss(cx,cy);return;
-          }
-          setTimeout(stepR,700);
-        };
-        setTimeout(stepR,700);
+        if(CFG.boss===false){busy=false;if(!check())advance();return;}
+        spawnBoss(cx,cy);
       },1000);
     });
   },8000);
@@ -5077,7 +5305,7 @@ function placeBoss(x,y){
   if(bossSt)for(let j=0;j<3;j++)for(let i=0;i<3;i++){const q=B[bossSt.y+j][bossSt.x+i];if(q&&q.boss)B[bossSt.y+j][bossSt.x+i]=null;}
   for(let j=0;j<3;j++)for(let i=0;i<3;i++){
     const q=B[y+j][x+i];
-    if(q&&!q.boss){B[y+j][x+i]=null;log('Босс раздавил фигуру ('+(NAME[q.t]||'миньон')+')');}
+    if(q&&!q.boss){burry(q,x+i,y+j);B[y+j][x+i]=null;log('Босс раздавил фигуру ('+(NAME[q.t]||'миньон')+')');}
     B[y+j][x+i]={t:'boss',k:'X',boss:true,center:i===1&&j===1};
   }
   if(bossSt){bossSt.x=x;bossSt.y=y;}
@@ -5085,24 +5313,24 @@ function placeBoss(x,y){
 function spawnBoss(cx,cy){
   let bx=cx-1,by=cy-1,best=null,bd=1e9;
   for(let y=0;y<WN;y++)for(let x=0;x<WN;x++)if(bossFits(x,y)){const d=Math.abs(x-bx)+Math.abs(y-by);if(d<bd){bd=d;best=[x,y];}}
-  bossSt={x:best[0],y:best[1],hp:20,max:20,p2:false};
+  bossSt={x:best[0],y:best[1],hp:20,max:20,p2:false,hand:2,elite:0};
   placeBoss(best[0],best[1]);
   log('БОСС-ФАЙТ! Босс 3×3, 20 ударов. Бейте его любыми фигурами!');
   draw();
-  forceTetoSay('После ядерного удара трупы поднялись и начали двигаться. Победить друг друга уже не так важно — выживите и сразите босса!',()=>{
+  forceTetoSay('В центре поля поднялся босс. Побеждать друг друга уже не так важно — выживите и сразите его! Босс не двигается, но каждый ход призывает приспешников картами.',()=>{
     busy=false;check();if(!over)advance();
   });
 }
 function hitBoss(){
   if(!bossSt)return;
   bossSt.hp--;log('Удар по боссу! HP '+bossSt.hp+'/'+bossSt.max);
-  if(!bossSt.p2&&bossSt.hp>0&&bossSt.hp<=5){bossSt.p2=true;log('2-я фаза! Босс стал ОФИЦЕРОМ: ходит по диагонали 4 раза за круг');forceTetoSay('Босс ослаб и стал офицером! Он ходит по диагонали, но уже 4 раза за круг.',()=>{});}
+  if(!bossSt.p2&&bossSt.hp>0&&bossSt.hp<=5){bossSt.p2=true;bossSt.elite=1;log('2-я фаза! Каждая карта призывает по 2 приспешника, плюс каждый ход 3-я карта — «Призыв элиты»');forceTetoSay('Босс в ярости! Теперь его карты призывают вдвое больше приспешников, а каждый ход он получает ещё одну карту — призыв элитной фигуры.',()=>{});}
   if(bossSt.hp<=0){
     each((q,x,y)=>{if(q.t==='boss')B[y][x]=null;});bossSt=null;
     over=true;
     document.getElementById('go-text').textContent='Примирение';
     const g=document.getElementById('go-reason');if(g)g.textContent='Босс уничтожен. Война окончена миром.';
-    document.getElementById('game-over').classList.add('show');
+    document.getElementById('game-over').classList.add('show');try{netClearSession();}catch(e){}
   }
 }
 function nearestEnemy(x,y){
@@ -5112,35 +5340,32 @@ function nearestEnemy(x,y){
 }
 function bossTurn(){
   if(!bossSt||over)return;
-  const steps=bossSt.p2?4:2,dirs=bossSt.p2?D:O;
-  for(let s=0;s<steps;s++){
-    const tg=nearestEnemy(bossSt.x+1,bossSt.y+1);if(!tg)break;
-    let bestD=null,bd=1e9;
-    dirs.forEach(([dx,dy])=>{
-      const nx=bossSt.x+dx,ny=bossSt.y+dy;if(!bossFits(nx,ny))return;
-      let blocked=false;for(let j=0;j<3;j++)for(let i=0;i<3;i++){const q=B[ny+j][nx+i];if(q&&q.t==='boss'&&!q.boss)blocked=true;}
-      if(blocked)return;
-      const d=Math.abs(nx+1-tg.x)+Math.abs(ny+1-tg.y);if(d<bd){bd=d;bestD=[nx,ny];}
-    });
-    if(!bestD)break;placeBoss(bestD[0],bestD[1]);
-  }
-  // миньоны: один шаг к ближайшему врагу, бьют, наступая на фигуру
+  // босс не двигается; ходят только его приспешники
   const mins=[];each((q,x,y)=>{if(q.minion&&valid(x,y))mins.push({q,x,y});});
-  mins.forEach(({q,x,y})=>{
-    const tg=nearestEnemy(x,y);if(!tg)return;
+  const stepMin=(q,x,y)=>{
+    const tg=nearestEnemy(x,y);if(!tg)return null;
     const dx=Math.sign(tg.x-x),dy=Math.sign(tg.y-y);
     for(const [sx,sy] of (Math.abs(tg.x-x)>=Math.abs(tg.y-y)?[[dx,0],[0,dy]]:[[0,dy],[dx,0]])){
       if(!sx&&!sy)continue;const nx=x+sx,ny=y+sy;if(!valid(nx,ny))continue;const o=B[ny][nx];
       if(o&&(o.t==='boss'||o.prot))continue;
-      if(o)log('Красный миньон съел фигуру ('+NAME[o.t]+')');
-      B[y][x]=null;B[ny][nx]=q;break;
+      if(o){burry(o,nx,ny);log('Красный '+(q.elite?'элитный ':'')+'приспешник съел фигуру ('+(NAME[o.t]||'приспешник')+')');}
+      B[y][x]=null;B[ny][nx]=q;return [nx,ny];
     }
-  });
-  if(round%2===0){
-    const near=freeCells().filter(c=>Math.abs(c[0]-bossSt.x-1)+Math.abs(c[1]-bossSt.y-1)<=5).sort(()=>Math.random()-0.5).slice(0,2);
-    near.forEach(c=>{B[c[1]][c[0]]={t:'boss',k:'m',red:true,minion:true};});
-    if(near.length)log('Босс призвал '+near.length+' красных миньонов');
+    return null;
+  };
+  mins.forEach(({q,x,y})=>{let c=[x,y];for(let s=0;s<(q.elite?2:1)&&c;s++)c=stepMin(q,c[0],c[1]);});
+  // карты босса разыгрываются в его ход, потом выдаются новые
+  const near=()=>freeCells().filter(c=>Math.abs(c[0]-bossSt.x-1)+Math.abs(c[1]-bossSt.y-1)<=5);
+  const per=bossSt.p2?2:1;let spawned=0,elite=0;
+  for(let i=0;i<(bossSt.hand||0);i++){
+    for(let j=0;j<per;j++){const n=near();if(!n.length)break;const c=pick(n);B[c[1]][c[0]]={t:'boss',k:'m',red:true,minion:true};spawned++;}
   }
+  if(bossSt.elite){
+    const n=near();
+    if(n.length){const c=pick(n);B[c[1]][c[0]]={t:'boss',k:'Q',red:true,minion:true,elite:true};elite++;}
+  }
+  bossSt.hand=2;bossSt.elite=bossSt.p2?1:0;
+  if(spawned||elite)log('Босс разыграл карты: приспешников '+spawned+(elite?', элитная фигура ×1':''));
 }
 
 
@@ -5172,10 +5397,10 @@ function makeTeto(h){
   return w;
 }
 function saveCfg(){try{localStorage.setItem('chaos_plus_cfg',JSON.stringify(CFG));}catch(e){}}
-function loadCfg(){try{const c=JSON.parse(localStorage.getItem('chaos_plus_cfg'));if(c&&(c.shape==='p'||c.shape==='x'||c.shape==='s'||c.shape==='m')&&['chess','eur','arm','mixed'].includes(c.army)){c.teams=[2,3,4].includes(c.teams)?c.teams:4;CFG=c;return true;}}catch(e){}return false;}
-/* ========== Онлайн через PeerJS (WebRTC) — без аккаунтов, ключей и регистрации ========== */
-/* Хост создаёт комнату, гости подключаются по 6-значному коду напрямую (peer-to-peer).
-   Публичный брокер PeerJS нужен только на момент соединения; сами ходы идут напрямую между игроками. */
+function loadCfg(){try{const c=JSON.parse(localStorage.getItem('chaos_plus_cfg'));if(c&&(c.shape==='p'||c.shape==='x'||c.shape==='s'||c.shape==='m')&&['chess','eur','arm','mixed'].includes(c.army)){c.teams=[2,3,4].includes(c.teams)?c.teams:4;c.craft=c.craft!==false;c.boss=c.boss!==false;CFG=c;return true;}}catch(e){}return false;}
+/* ========== Онлайн через PeerJS (WebRTC) + переподключение ========== */
+/* Хост создаёт комнату, гости заходят по коду напрямую (peer-to-peer). Публичный брокер PeerJS нужен только для соединения.
+   Если связь оборвалась — игрок возвращается по тому же коду (сам, либо после перезагрузки страницы). */
 const PEER_PREFIX = 'chaoschess-';
 const PEER_OPTS = {
   debug: 0,
@@ -5186,6 +5411,8 @@ const PEER_OPTS = {
     { urls: 'stun:global.stun.twilio.com:3478' }
   ] }
 };
+const NET_SESS_KEY = 'chaos_net_session', NET_HOST_KEY = 'chaos_net_host';
+const NET_PING_MS = 5000, NET_DEAD_MS = 16000, NET_GRACE2_MS = 90000;
 let onlineMode = false;
 function showInspectModal(text){
   let el=document.getElementById('inspect-modal');
@@ -5202,15 +5429,20 @@ function showInspectModal(text){
 }
 
 
+
 let onlineRole = null; // 'host' | 'guest'
 let onlineRoomCode = null;
-let onlinePlayerId = null;
-let onlineSeat = null; // white/black/pink/blue
-let onlineApplying = false; // true while applying remote snapshot
+let onlinePlayerId = null; // id пира (меняется при каждом подключении)
+let onlineToken = null;    // постоянный id игрока в комнате (переживает переподключение)
+let onlineSeat = null;
+let onlineApplying = false;
 let onlineStateSeq = 0;
-let onlineHumanSeats = {white:true}; // seats controlled by humans
-let netPeer = null, netConns = {}, netHostConn = null, netRoom = null, netLobbyCb = null;
+let onlineHumanSeats = {white:true};
+let netPeer = null, netConns = {}, connTok = {}, netHostConn = null, netRoom = null, netLobbyCb = null;
 let netPending = null, netGameOn = false, netAiTimer = null, netSess = 0;
+let netBlock = null, netLastRx = 0, netPingT = null, netReconT = null, netReconTry = 0, netSaveT = null;
+const netSleep = ms => new Promise(r => setTimeout(r, ms));
+const genToken = () => Math.random().toString(36).slice(2) + Date.now().toString(36);
 
 function loadPeerSDK(){
   return new Promise((resolve, reject)=>{
@@ -5262,16 +5494,81 @@ function netSend(conn, msg){ try{ if(conn && conn.open) conn.send(msg); }catch(e
 function netBroadcast(msg, exceptId){
   Object.keys(netConns).forEach(id=>{ if(id !== exceptId) netSend(netConns[id], msg); });
 }
-function netCleanup(){
+
+/* ---------- сохранение сессии (для возврата после перезагрузки) ---------- */
+function netSaveSession(o){ try{ localStorage.setItem(NET_SESS_KEY, JSON.stringify(Object.assign({ts:Date.now()}, o))); }catch(e){} }
+function netLoadSession(){
+  try{ const s = JSON.parse(localStorage.getItem(NET_SESS_KEY)); if(s && s.code && s.token && Date.now()-s.ts < 6*3600e3) return s; }catch(e){}
+  return null;
+}
+function netClearSession(){ try{ localStorage.removeItem(NET_SESS_KEY); localStorage.removeItem(NET_HOST_KEY); }catch(e){} }
+function hostSaveState(){
+  if(onlineRole !== 'host' || !netRoom || netRoom.status !== 'playing' || over) return;
+  clearTimeout(netSaveT);
+  netSaveT = setTimeout(()=>{
+    try{
+      const room = JSON.parse(JSON.stringify(netRoom));
+      localStorage.setItem(NET_HOST_KEY, JSON.stringify({ code:netRoom.code, room, humanSeats:onlineHumanSeats, snap:onlineSnapshot(), ts:Date.now() }));
+      netSaveSession({ role:'host', code:netRoom.code, token:'host' });
+    }catch(e){ console.warn('save', e); }
+  }, 700);
+}
+
+/* ---------- баннер «нет связи / игрок вернётся» ---------- */
+function netSetBlock(msg){
+  netBlock = msg || null;
+  let el = document.getElementById('net-banner');
+  if(!netBlock){ if(el) el.style.display = 'none'; try{ updateOnlineBadge(); }catch(e){} return; }
+  if(!el){
+    el = document.createElement('div'); el.id = 'net-banner';
+    el.style.cssText = 'position:fixed;left:50%;top:72px;transform:translateX(-50%);z-index:150;max-width:92vw;background:rgba(20,20,24,.95);color:#fff;border:1px solid rgba(255,255,255,.2);border-radius:12px;padding:10px 14px;font-size:13px;line-height:1.35;text-align:center;box-shadow:0 6px 24px rgba(0,0,0,.5);pointer-events:none';
+    document.body.appendChild(el);
+  }
+  el.textContent = '⚠ ' + netBlock; el.style.display = 'block';
+  try{ updateOnlineBadge(); }catch(e){}
+}
+
+/* ---------- проверка связи (ping/pong) ---------- */
+function stopNetHeartbeat(){ clearInterval(netPingT); netPingT = null; }
+function startNetHeartbeat(){ stopNetHeartbeat(); netPingT = setInterval(netBeat, NET_PING_MS); }
+function netBeat(){
+  const now = Date.now();
+  if(onlineRole === 'host' && netRoom){
+    netBroadcast({ t:'ping' });
+    Object.values(netRoom.players).forEach(p=>{
+      if(p.id !== 'host' && p.connected !== false && p.peer && now-(p.lastSeen||0) > NET_DEAD_MS){
+        const c = netConns[p.peer]; if(c){ try{ c.close(); }catch(e){} hostDropConn(c); }
+      }
+    });
+  } else if(onlineRole === 'guest' && netHostConn && !netReconT){
+    if(now - netLastRx > NET_DEAD_MS) guestLost();
+  }
+}
+document.addEventListener('visibilitychange', ()=>{
+  if(document.visibilityState !== 'visible' || !onlineMode) return;
+  if(onlineRole === 'guest' && !netReconT){
+    if(!netHostConn || !netHostConn.open) guestLost(); else netSend(netHostConn, { t:'pong' });
+  }
+});
+window.addEventListener('online', ()=>{ if(onlineMode && onlineRole === 'guest' && !netReconT && (!netHostConn || !netHostConn.open)) guestLost(); });
+
+function netTeardownConn(){
   netSess++;
-  clearTimeout(netAiTimer);
-  try{ Object.values(netConns).forEach(c=>{ try{ c.close(); }catch(e){} }); }catch(e){}
-  netConns = {};
   try{ if(netHostConn) netHostConn.close(); }catch(e){}
   netHostConn = null;
   try{ if(netPeer) netPeer.destroy(); }catch(e){}
-  netPeer = null; netRoom = null; netLobbyCb = null; netPending = null; netGameOn = false;
+  netPeer = null;
+}
+function netCleanup(){
+  clearTimeout(netAiTimer); clearTimeout(netReconT); netReconT = null; clearTimeout(netSaveT);
+  stopNetHeartbeat();
+  try{ Object.values(netConns).forEach(c=>{ try{ c.close(); }catch(e){} }); }catch(e){}
+  netConns = {}; connTok = {};
+  if(netRoom && netRoom.players) Object.values(netRoom.players).forEach(p=>clearTimeout(p.graceT));
+  netTeardownConn();
+  netRoom = null; netLobbyCb = null; netPending = null; netGameOn = false;
   remoteQ = []; remoteRunning = false;
+  netSetBlock(null);
 }
 
 /* ---------- хост ---------- */
@@ -5280,42 +5577,107 @@ function hostPublishLobby(){
   netBroadcast({ t:'lobby', room:netRoom });
   if(netLobbyCb) netLobbyCb(netRoom);
 }
+function hostBindPeer(peer, sess){
+  peer.on('connection', conn=>{
+    conn.on('data', msg=>{ if(sess === netSess) hostOnData(conn, msg); });
+    conn.on('close', ()=>{ if(sess === netSess) hostDropConn(conn); });
+    conn.on('error', ()=>{ if(sess === netSess) hostDropConn(conn); });
+  });
+  const rec = ()=>{
+    if(sess !== netSess) return;
+    try{ if(peer.disconnected) peer.reconnect(); }catch(e){}
+    setTimeout(()=>{ if(sess === netSess && peer.disconnected) rec(); }, 3000);
+  };
+  peer.on('disconnected', rec);
+  peer.on('error', e=>console.warn('peer', e));
+}
 function hostOnData(conn, msg){
   if(!msg || typeof msg !== 'object' || !netRoom) return;
-  if(msg.t === 'hello'){
-    const n = Object.keys(netRoom.players).length;
-    if(netRoom.status !== 'lobby'){ netSend(conn, {t:'reject', reason:'Игра уже идёт'}); setTimeout(()=>{ try{ conn.close(); }catch(e){} }, 400); return; }
-    if(n >= netRoom.maxPlayers){ netSend(conn, {t:'reject', reason:'Комната полная'}); setTimeout(()=>{ try{ conn.close(); }catch(e){} }, 400); return; }
-    const id = conn.peer;
-    netConns[id] = conn;
-    netRoom.players[id] = { id, name:'Игрок '+(n+1), seat:null, joinedAt:Date.now() };
-    netSend(conn, { t:'welcome', id, code:netRoom.code });
-    hostPublishLobby();
-    return;
-  }
-  if(!netConns[conn.peer]) return;
+  const tok = connTok[conn.peer];
+  if(tok && netRoom.players[tok]) netRoom.players[tok].lastSeen = Date.now();
+  if(msg.t === 'hello'){ hostHello(conn, msg); return; }
+  if(!tok) return;
   if(msg.t === 'state' && msg.snap){
-    netBroadcast(msg, conn.peer); // переслать остальным гостям
+    netBroadcast(msg, conn.peer);
     netGotState(msg);
+    hostSaveState();
   } else if(msg.t === 'anim'){
     netBroadcast(msg, conn.peer);
     netGotAnim(msg);
   }
 }
-function hostDropConn(conn){
-  const id = conn.peer;
-  if(!netConns[id] || !netRoom) return;
-  delete netConns[id];
-  const p = netRoom.players[id];
-  delete netRoom.players[id];
+function hostHello(conn, msg){
+  const tok = String(msg.token || conn.peer).slice(0, 64);
+  let p = netRoom.players[tok];
+  const reject = r=>{ netSend(conn, {t:'reject', reason:r}); setTimeout(()=>{ try{ conn.close(); }catch(e){} }, 400); };
   if(netRoom.status === 'playing'){
-    if(p && p.seat){
+    if(!p || !p.seat) return reject('Игра уже идёт');
+  } else if(!p){
+    const n = Object.keys(netRoom.players).length;
+    if(n >= netRoom.maxPlayers) return reject('Комната полная');
+    p = netRoom.players[tok] = { id:tok, name:'Игрок '+(n+1), seat:null, joinedAt:Date.now() };
+  }
+  if(p.peer && p.peer !== conn.peer && netConns[p.peer]){   // заменяем старое подключение этого игрока
+    const old = netConns[p.peer]; delete netConns[p.peer]; delete connTok[p.peer]; try{ old.close(); }catch(e){}
+  }
+  netConns[conn.peer] = conn; connTok[conn.peer] = tok;
+  p.peer = conn.peer; p.lastSeen = Date.now();
+  const wasLost = p.connected === false; p.connected = true;
+  netSend(conn, { t:'welcome', id:conn.peer, token:tok, code:netRoom.code });
+  if(netRoom.status === 'playing') hostPlayerBack(p, conn, wasLost);
+  else hostPublishLobby();
+}
+function hostDropConn(conn){
+  const peerId = conn.peer, tok = connTok[peerId];
+  delete netConns[peerId]; delete connTok[peerId];
+  if(!netRoom || !tok) return;
+  const p = netRoom.players[tok];
+  if(!p || p.peer !== peerId) return;        // игрок уже подключился заново
+  if(netRoom.status === 'lobby'){ delete netRoom.players[tok]; hostPublishLobby(); return; }
+  if(p.connected === false || over) return;
+  hostMarkLost(p);
+}
+function hostMarkLost(p){
+  p.connected = false; p.lostAt = Date.now();
+  if(!p.seat) return;
+  const humans = Object.values(netRoom.players).filter(q=>q.seat).length;
+  if(humans > 2){
+    delete onlineHumanSeats[p.seat];
+    netBroadcast({ t:'seats', seats:onlineHumanSeats });
+    try{ log('«'+(NAME[p.seat]||p.seat)+'»: нет связи — пока играет бот'); }catch(e){}
+    onlineMaybeAI();
+  } else {
+    netRoom.paused = p.id;
+    const txt = 'У игрока ('+(NAME[p.seat]||p.seat)+') проблемы с подключением. Он сейчас присоединится…';
+    netBroadcast({ t:'pause', on:true, text:txt });
+    netSetBlock(txt);
+    clearTimeout(p.graceT);
+    p.graceT = setTimeout(()=>{
+      if(!netRoom || p.connected !== false || netRoom.paused !== p.id) return;
+      netRoom.paused = null;
       delete onlineHumanSeats[p.seat];
-      try{ log('Игрок ('+(NAME[p.seat]||p.seat)+') вышел — теперь ходит ИИ'); }catch(e){}
       netBroadcast({ t:'seats', seats:onlineHumanSeats });
+      netBroadcast({ t:'pause', on:false });
+      netSetBlock(null);
+      try{ log('«'+(NAME[p.seat]||p.seat)+'» не вернулся — играет бот (можно вернуться по коду)'); }catch(e){}
       onlineMaybeAI();
-    }
-  } else hostPublishLobby();
+    }, NET_GRACE2_MS);
+  }
+  hostSaveState();
+}
+function hostPlayerBack(p, conn, wasLost){
+  clearTimeout(p.graceT);
+  onlineHumanSeats[p.seat] = true;
+  netBroadcast({ t:'seats', seats:onlineHumanSeats }, conn.peer);
+  let fromPause = false;
+  if(netRoom.paused === p.id){
+    netRoom.paused = null; fromPause = true;
+    netBroadcast({ t:'pause', on:false }, conn.peer);
+    netSetBlock(null);
+  }
+  if(wasLost){ try{ log('«'+(NAME[p.seat]||p.seat)+'» снова в игре'); }catch(e){} }
+  netSend(conn, { t:'resume', seat:p.seat, seats:onlineHumanSeats, cfg:netRoom.cfg, snap:JSON.parse(JSON.stringify(onlineSnapshot())) });
+  if(fromPause) onlineMaybeAI();
 }
 async function onlineCreateRoom(maxPlayers){
   await loadPeerSDK();
@@ -5332,44 +5694,66 @@ async function onlineCreateRoom(maxPlayers){
   }
   if(sess !== netSess){ try{ peer.destroy(); }catch(e){} throw new Error('Отменено'); }
   netPeer = peer;
-  onlinePlayerId = peer.id;
-  onlineRole = 'host';
-  onlineRoomCode = code;
-  onlineSeat = 'white';
-  onlineHumanSeats = {white:true};
+  onlinePlayerId = peer.id; onlineToken = 'host';
+  onlineRole = 'host'; onlineRoomCode = code; onlineSeat = 'white'; onlineHumanSeats = {white:true};
   netRoom = {
     code, hostId:onlinePlayerId,
     maxPlayers: Math.min(4, Math.max(2, maxPlayers||2)),
-    status:'lobby', cfg:null, createdAt:Date.now(),
-    players:{ [onlinePlayerId]:{ id:onlinePlayerId, name:'Хост', seat:'white', joinedAt:Date.now() } }
+    status:'lobby', cfg:null, createdAt:Date.now(), paused:null,
+    players:{ host:{ id:'host', name:'Хост', seat:'white', peer:peer.id, connected:true, joinedAt:Date.now() } }
   };
-  peer.on('connection', conn=>{
-    conn.on('data', msg=>{ if(sess === netSess) hostOnData(conn, msg); });
-    conn.on('close', ()=>{ if(sess === netSess) hostDropConn(conn); });
-    conn.on('error', ()=>{ if(sess === netSess) hostDropConn(conn); });
-  });
-  peer.on('disconnected', ()=>{ try{ if(sess === netSess) peer.reconnect(); }catch(e){} });
-  peer.on('error', e=>console.warn('peer', e));
+  hostBindPeer(peer, sess);
+  startNetHeartbeat();
   return code;
 }
 async function onlineStartGame(cfg){
   if(onlineRole !== 'host' || !netRoom) return;
   const nt = [2,3,4].includes(cfg.teams) ? cfg.teams : 4;
   const order = seatOrderFor(nt);
-  const guests = Object.keys(netRoom.players).filter(id=>id !== onlinePlayerId);
+  const guests = Object.keys(netRoom.players).filter(id=>id !== 'host');
   if(guests.length + 1 > order.length){
     throw new Error('Игроков ('+(guests.length+1)+') больше, чем команд ('+order.length+'). Выбери больше команд при настройке.');
   }
-  const seats = {};
-  seats[onlinePlayerId] = order[0];
+  const seats = { host:order[0] };
   guests.forEach((id,i)=>{ seats[id] = order[i+1]; });
   Object.keys(seats).forEach(id=>{ netRoom.players[id].seat = seats[id]; });
   onlineSeat = order[0];
   onlineHumanSeats = {};
   Object.values(seats).forEach(s=>{ onlineHumanSeats[s] = true; });
-  netRoom.status = 'playing';
-  netRoom.cfg = cfg;
+  netRoom.status = 'playing'; netRoom.cfg = cfg;
   netBroadcast({ t:'start', cfg, seats });
+  netSaveSession({ role:'host', code:netRoom.code, token:'host' });
+}
+// возвращение хоста после перезагрузки страницы: комната и партия восстанавливаются из сохранённого состояния
+async function onlineResumeHost(s){
+  await loadPeerSDK();
+  let hs = null;
+  try{ hs = JSON.parse(localStorage.getItem(NET_HOST_KEY)); }catch(e){}
+  if(!hs || hs.code !== s.code || !hs.snap || !hs.room) throw new Error('Сохранённая партия не найдена');
+  netCleanup();
+  const sess = netSess, t0 = Date.now();
+  let peer = null;
+  while(!peer){   // старая регистрация на брокере может держаться до минуты
+    try{ peer = await openPeer(PEER_PREFIX+hs.code); }
+    catch(e){
+      if(e && e.type === 'unavailable-id' && Date.now()-t0 < 60000){ await netSleep(2500); continue; }
+      throw netErr(e);
+    }
+  }
+  if(sess !== netSess){ try{ peer.destroy(); }catch(e){} throw new Error('Отменено'); }
+  netPeer = peer; onlineMode = true; onlineRole = 'host'; onlineRoomCode = hs.code; onlineToken = 'host'; onlinePlayerId = peer.id;
+  netRoom = hs.room; netRoom.paused = null; netRoom.status = 'playing';
+  Object.values(netRoom.players).forEach(p=>{ p.lastSeen = Date.now(); p.connected = p.id === 'host'; p.peer = p.id === 'host' ? peer.id : null; });
+  onlineSeat = netRoom.players.host.seat || 'white';
+  onlineHumanSeats = hs.humanSeats || {white:true};
+  hostBindPeer(peer, sess);
+  startNetHeartbeat();
+  if(netRoom.cfg) CFG = Object.assign(CFG, netRoom.cfg);
+  start();
+  onlineApplySnapshotNow(hs.snap);
+  Object.values(netRoom.players).filter(p=>p.id !== 'host' && p.seat).forEach(p=>{ hostMarkLost(p); });
+  netSaveSession({ role:'host', code:hs.code, token:'host' });
+  try{ log('Партия восстановлена. Ждём возвращения игроков…'); }catch(e){}
 }
 
 /* ---------- гость ---------- */
@@ -5379,60 +5763,147 @@ function guestOnData(msg){
     netRoom = msg.room;
     if(netLobbyCb) netLobbyCb(netRoom);
   } else if(msg.t === 'start'){
-    onlineSeat = msg.seats[onlinePlayerId] || null;
+    onlineSeat = msg.seats[onlineToken] || null;
     onlineHumanSeats = {};
     Object.values(msg.seats).forEach(s=>{ onlineHumanSeats[s] = true; });
     if(!netRoom) netRoom = { players:{} };
-    netRoom.status = 'playing';
-    netRoom.cfg = msg.cfg;
+    netRoom.status = 'playing'; netRoom.cfg = msg.cfg;
+    netSaveSession({ role:'guest', code:onlineRoomCode, token:onlineToken });
     if(netLobbyCb) netLobbyCb(netRoom);
+  } else if(msg.t === 'resume'){
+    onlineSeat = msg.seat; onlineHumanSeats = msg.seats || {};
+    if(msg.cfg) CFG = Object.assign(CFG, msg.cfg);
+    if(!netRoom) netRoom = { players:{} };
+    netRoom.status = 'playing';
+    netSetBlock(null);
+    const ov = document.getElementById('plus-setup'); if(ov) ov.remove();
+    if(!netGameOn) start();           // страница была перезагружена — поднимаем партию заново
+    if(msg.snap) onlineApplySnapshot(msg.snap);
+    netSaveSession({ role:'guest', code:onlineRoomCode, token:onlineToken });
+    try{ log('Вы снова в игре'); }catch(e){}
   } else if(msg.t === 'seats'){
     onlineHumanSeats = msg.seats || {};
+  } else if(msg.t === 'pause'){
+    netSetBlock(msg.on ? (msg.text || 'У игрока проблемы с подключением. Он сейчас присоединится…') : null);
+  } else if(msg.t === 'ping'){
+    netSend(netHostConn, { t:'pong' });
   } else if(msg.t === 'state'){
     netGotState(msg);
   } else if(msg.t === 'anim'){
     netGotAnim(msg);
   }
 }
-function guestLost(){
-  try{ log('Связь с хостом потеряна'); }catch(e){}
-  try{ showInspectModal('Связь с хостом потеряна. Игра остановлена — вернись в меню (Тето в углу) и создай новую комнату.'); }catch(e){}
-  const el = document.getElementById('online-badge');
-  if(el) el.textContent = 'ONLINE · нет связи';
-}
-async function onlineJoinRoom(code){
-  code = String(code||'').trim().toUpperCase();
-  if(code.length < 4) throw new Error('Короткий код');
-  await loadPeerSDK();
-  netCleanup();
+async function guestConnect(code, token, wantResume){
+  netTeardownConn();
   const sess = netSess;
   let peer;
   try{ peer = await openPeer(null); } catch(e){ throw netErr(e); }
-  netPeer = peer;
-  onlinePlayerId = peer.id;
-  onlineRole = 'guest';
-  onlineRoomCode = code;
-  onlineSeat = null;
-  onlineHumanSeats = {};
-  netRoom = { players:{}, status:'lobby' };
+  if(sess !== netSess){ try{ peer.destroy(); }catch(e){} throw new Error('Отменено'); }
+  netPeer = peer; onlinePlayerId = peer.id;
   const conn = peer.connect(PEER_PREFIX+code, { reliable:true });
   netHostConn = conn;
   await new Promise((resolve, reject)=>{
-    let done = false;
-    const to = setTimeout(()=>fail(new Error('Комната не отвечает (проверь код)')), 15000);
+    let done = false, to = null;
     const fail = e=>{ if(done) return; done = true; clearTimeout(to); reject(e instanceof Error ? e : netErr(e)); };
+    to = setTimeout(()=>fail(new Error('Комната не отвечает (проверь код)')), 15000);
     peer.on('error', e=>{ if(!done) fail(netErr(e)); else console.warn('peer', e); });
+    peer.on('disconnected', ()=>{ try{ if(sess === netSess) peer.reconnect(); }catch(e){} });
     conn.on('error', fail);
-    conn.on('open', ()=>{ conn.send({ t:'hello' }); });
+    conn.on('open', ()=>{ conn.send({ t:'hello', token, resume:!!wantResume }); });
     conn.on('data', msg=>{
       if(sess !== netSess || !msg) return;
+      netLastRx = Date.now();
       if(msg.t === 'welcome' && !done){ done = true; clearTimeout(to); resolve(); return; }
       if(msg.t === 'reject'){ if(!done) fail(new Error(msg.reason || 'Отказано')); return; }
       guestOnData(msg);
     });
     conn.on('close', ()=>{ if(!done) fail(new Error('Соединение закрыто')); else if(sess === netSess) guestLost(); });
   });
+  netLastRx = Date.now();
+  startNetHeartbeat();
+}
+async function onlineJoinRoom(code){
+  code = String(code||'').trim().toUpperCase();
+  if(code.length < 4) throw new Error('Короткий код');
+  await loadPeerSDK();
+  netCleanup();
+  onlineToken = genToken(); onlineRole = 'guest'; onlineRoomCode = code; onlineSeat = null; onlineHumanSeats = {};
+  netRoom = { players:{}, status:'lobby' };
+  await guestConnect(code, onlineToken, false);
+  netSaveSession({ role:'guest', code, token:onlineToken });
   return { code };
+}
+async function onlineResumeGuest(s){
+  await loadPeerSDK();
+  netCleanup();
+  onlineMode = true; onlineRole = 'guest'; onlineRoomCode = s.code; onlineToken = s.token; onlineSeat = null; onlineHumanSeats = {};
+  netRoom = { players:{}, status:'lobby' };
+  await guestConnect(s.code, s.token, true);
+}
+// потеря связи у гостя: сами пытаемся вернуться по тому же коду
+function guestLost(){
+  if(onlineRole !== 'guest' || !onlineMode || netReconT) return;
+  netSetBlock('Нет связи с хостом. Переподключаюсь…');
+  netReconTry = 0;
+  guestReconnectLoop();
+}
+function guestReconnectLoop(){
+  const code = onlineRoomCode, tok = onlineToken;
+  netReconT = setTimeout(async ()=>{
+    netReconT = null;
+    if(!onlineMode || onlineRole !== 'guest' || onlineRoomCode !== code) return;
+    netReconTry++;
+    try{
+      await guestConnect(code, tok, true);
+      if(!onlineMode || onlineRoomCode !== code) return;
+      netReconTry = 0;
+      if(!netGameOn) netSetBlock(null);   // если партия идёт — баннер уберёт сообщение «resume»
+    }catch(e){
+      if(!onlineMode || onlineRoomCode !== code) return;
+      if(netReconTry >= 40){ netSetBlock('Не удалось вернуться: '+e.message+'. Нажми на Тето → «Оффлайн», чтобы выйти.'); return; }
+      netSetBlock('Нет связи. Переподключаюсь… (попытка '+netReconTry+')');
+      guestReconnectLoop();
+    }
+  }, netReconTry === 0 ? 300 : Math.min(1000*(netReconTry+1), 4000));
+}
+
+/* ---------- окно «Вернуться в партию?» после перезагрузки ---------- */
+function showResumeDialog(s, had){
+  const ov = document.createElement('div');
+  ov.id = 'resume-dialog';
+  ov.style.cssText = 'position:fixed;inset:0;z-index:180;background:rgba(0,0,0,.72);display:flex;align-items:center;justify-content:center;padding:16px';
+  const box = document.createElement('div');
+  box.style.cssText = 'background:#fff7e0;color:#222;border-radius:16px;padding:16px 18px;max-width:340px;width:100%;font-size:14px;line-height:1.4;box-shadow:0 10px 40px rgba(0,0,0,.5)';
+  const txt = document.createElement('div'), btns = document.createElement('div');
+  btns.style.cssText = 'display:flex;gap:8px;flex-wrap:wrap;margin-top:12px';
+  box.appendChild(txt); box.appendChild(btns); ov.appendChild(box); document.body.appendChild(ov);
+  const mk = (label, fn, primary)=>{
+    const b = document.createElement('button'); b.textContent = label;
+    b.style.cssText = 'padding:9px 14px;border-radius:10px;border:1px solid #b9b2a0;font-weight:700;cursor:pointer;background:'+(primary?'#2aabee;color:#fff':'#ffd98a');
+    b.onclick = fn; btns.appendChild(b);
+  };
+  const leave = ()=>{ netClearSession(); onlineDisconnect(); ov.remove(); if(!had) openSetup(true); };
+  const ask = ()=>{
+    txt.textContent = 'Найдена онлайн-партия: комната '+s.code+' ('+(s.role==='host'?'вы хост':'вы гость')+'). Вернуться?';
+    btns.innerHTML = ''; mk('Вернуться', go, true); mk('Нет, начать заново', leave);
+  };
+  const go = async ()=>{
+    txt.textContent = 'Подключаюсь к комнате '+s.code+'…'; btns.innerHTML = '';
+    try{
+      if(s.role === 'host'){ await onlineResumeHost(s); ov.remove(); return; }
+      await onlineResumeGuest(s);
+      for(let i=0;i<20 && !netGameOn;i++) await netSleep(150);
+      if(netGameOn){ ov.remove(); return; }
+      txt.textContent = 'Подключено к комнате '+s.code+'. Игра ещё не началась — ждём хоста…';
+      onlineListenLobby(room=>{
+        if(room.status === 'playing'){ if(room.cfg) CFG = Object.assign(CFG, room.cfg); ov.remove(); start(); }
+      });
+    }catch(e){
+      txt.textContent = 'Не удалось вернуться: '+e.message;
+      btns.innerHTML = ''; mk('Ещё раз', go, true); mk('Выйти', leave);
+    }
+  };
+  ask();
 }
 
 /* ---------- общее: лобби, состояние игры, ИИ ---------- */
@@ -5460,6 +5931,7 @@ function onlineSnapshot(){
     pile: pile,
     craftRound: craftRound,
     nukeDone: !!nukeDone,
+    grave: grave,
     ORDER: ORDER,
     CFG: CFG,
     __plusMines: window.__plusMines||[]
@@ -5485,6 +5957,7 @@ function onlineApplySnapshotNow(st){
     pile = st.pile||[];
     craftRound = st.craftRound||0;
     nukeDone = !!st.nukeDone;
+    grave = st.grave||[];
     if(st.ORDER) ORDER = st.ORDER;
     if(st.CFG) CFG = Object.assign(CFG, st.CFG);
     window.__plusMines = st.__plusMines||[];
@@ -5499,6 +5972,7 @@ function onlineApplySnapshotNow(st){
     onlineApplying = false;
   }
 }
+
 
 function netGotState(msg){
   if(!netGameOn){ netPending = msg; return; }
@@ -5550,6 +6024,7 @@ function remoteNuke(a,fin){
   setTimeout(()=>{clearInterval(tick);rocketAnim(cx,cy,()=>{busy=false;fin();});},8000);
 }
 
+
 async function onlinePushState(partial){
   if(!onlineMode || !onlineRoomCode || !netPeer || onlineApplying || !netGameOn) return;
   try{
@@ -5557,7 +6032,7 @@ async function onlinePushState(partial){
       t:'state', updatedAt:Date.now(), by:onlinePlayerId, seat:onlineSeat,
       snap: JSON.parse(JSON.stringify(onlineSnapshot()))
     };
-    if(onlineRole === 'host') netBroadcast(payload);
+    if(onlineRole === 'host'){ netBroadcast(payload); hostSaveState(); }
     else netSend(netHostConn, payload);
   }catch(e){ console.warn('online push', e); }
 }
@@ -5573,17 +6048,18 @@ function updateOnlineBadge(){
   if(!el) return;
   if(onlineMode && onlineRoomCode){
     el.classList.add('show');
-    el.textContent = 'ONLINE '+onlineRoomCode+' · '+(NAME[onlineSeat]||onlineSeat)+(onlineIsMyTurn()?' · ваш ход':'');
+    el.textContent = 'ONLINE '+onlineRoomCode+' · '+(NAME[onlineSeat]||onlineSeat)+(onlineIsMyTurn()?' · ваш ход':'')+(netBlock?' · ⚠ нет связи':'');
   } else el.classList.remove('show');
 }
 
+
 // ИИ за пустые места считает только хост, чтобы у всех было одно и то же
 function onlineMaybeAI(tries){
-  if(!onlineMode || onlineRole !== 'host' || over) return;
+  if(!onlineMode || onlineRole !== 'host' || over || netBlock) return;
   if(onlineSeatHasHuman(ORDER[ti])) return;
   clearTimeout(netAiTimer);
   netAiTimer = setTimeout(()=>{
-    if(over || !onlineMode || onlineSeatHasHuman(ORDER[ti])) return;
+    if(over || !onlineMode || netBlock || onlineSeatHasHuman(ORDER[ti])) return;
     if(busy){ if((tries||0) < 20) onlineMaybeAI((tries||0)+1); return; }
     ai();
   }, 600);
@@ -5599,11 +6075,12 @@ function onlineListenGame(){
 }
 function onlineDisconnect(){
   netCleanup();
+  netClearSession();
   try{
     const badge = document.getElementById('online-badge');
     if(badge) badge.classList.remove('show');
   }catch(e){}
-  onlineMode = false; onlineRole = null; onlineRoomCode = null; onlineSeat = null;
+  onlineMode = false; onlineRole = null; onlineRoomCode = null; onlineSeat = null; onlineToken = null;
   onlineHumanSeats = {white:true};
 }
 
@@ -5653,10 +6130,16 @@ function openSetup(first){
       ask(teamHint,[['2','2'],['3','3'],['4','4']],String(cfg.teams|| (v==='m'?2:4)),vt=>{
         cfg.teams=+vt;
         ask('Чем будем играть?',[['♟ Шахматы','chess'],['⛀ Шашки','checkers'],['Смесь','mixed']],cfg.army==='eur'||cfg.army==='arm'?'checkers':cfg.army,v2=>{
-          if(v2==='checkers')ask('Какие шашки?',[['Европейские','eur'],['Армянские','arm']],cfg.army,v3=>{cfg.army=v3;finishLocalOrHost();});
-          else{cfg.army=v2;finishLocalOrHost();}
+          if(v2==='checkers')ask('Какие шашки?',[['Европейские','eur'],['Армянские','arm']],cfg.army,v3=>{cfg.army=v3;askExtras();});
+          else{cfg.army=v2;askExtras();}
         });
       });
+    });
+  };
+  const askExtras=()=>{
+    ask('Крафт ядерки (3 карты → ядерка)?',[['Включён','on'],['Выключен','off']],cfg.craft===false?'off':'on',vc=>{
+      cfg.craft=vc!=='off';
+      ask('Босс после ядерки?',[['Включён','on'],['Выключен','off']],cfg.boss===false?'off':'on',vb=>{cfg.boss=vb!=='off';finishLocalOrHost();});
     });
   };
   const finishLocalOrHost=()=>{
@@ -5802,7 +6285,7 @@ function end(win,why){
   over=true;
   document.getElementById('go-text').textContent=win?'Победа!':'Поражение...';
   const g=document.getElementById('go-reason');if(g)g.textContent=why;
-  document.getElementById('game-over').classList.add('show');draw();return true;
+  document.getElementById('game-over').classList.add('show');draw();try{netClearSession();}catch(e){}return true;
 }
 function newRound(){
   round++;
@@ -5811,8 +6294,18 @@ function newRound(){
     if(q.loan&&q.loan.until<=round){if(alive(q.loan.t))q.t=q.loan.t;else B[y][x]=null;delete q.loan;}
   });
   if(bossSt)bossTurn();
+  neutralTurn();
   fut.forEach(f=>{f.left--;});
-  fut=fut.filter(f=>{if(f.left<=0&&valid(f.x,f.y)&&!B[f.y][f.x]){B[f.y][f.x]=f.piece;return false;}return true;});
+  fut=fut.filter(f=>{
+    if(f.left>0)return true;
+    if(!inW(f.x,f.y))return false;
+    const ex=B[f.y][f.x];
+    if(!ex){B[f.y][f.x]=f.piece;promoteIf(f.piece,f.x,f.y);log('Фигура ('+NAME[f.t]+') вернулась из будущего');return false;}
+    if(ex.boss){log('Босс уничтожил фигуру, вернувшуюся из будущего');return false;}
+    if(ex.t!==f.t){burry(ex,f.x,f.y);B[f.y][f.x]=f.piece;promoteIf(f.piece,f.x,f.y);log('Фигура ('+NAME[f.t]+') вернулась из будущего и съела');return false;}
+    if(canMerge(f.piece,ex)){B[f.y][f.x]=mergeP(f.piece,ex);log('Слияние при возврате из будущего');return false;}
+    f.left=1;return true;   // клетка занята своей — ждём ещё круг
+  });
   ORDER.forEach(t=>{if(alive(t)&&Math.random()<0.45)giveCard(t);});
   if(round>1&&!bossSt&&Math.random()<0.2)mutate();
 }
@@ -5830,6 +6323,7 @@ function advance(){
     updateOnlineBadge();
     return;
   }
+  tickStatus(ORDER[ti]);
   for(let i=0;i<ORDER.length;i++){
     ti=(ti+1)%ORDER.length;const t=ORDER[ti];
     if(!alive(t))continue;
@@ -5837,6 +6331,7 @@ function advance(){
     if(skipT===t){skipT=null;log('Пропуск хода: '+NAME[t]);continue;}
     walk(t);if(check()){ if(onlineMode) onlinePushState({full:true}); return; }
     if(!teamMoves(t).length)continue;
+    announceCheck(t);
     draw();
     if(onlineMode){
       onlinePushState({full:true});
@@ -5851,14 +6346,11 @@ function advance(){
   if(onlineMode) onlinePushState({full:true});
 }
 function ai(){
-  if(over)return;const t=ORDER[ti];
+  if(over||netBlock)return;const t=ORDER[ti];
   aiCard(t,()=>{
     if(over||check())return;
     const ms=teamMoves(t);if(!ms.length)return advance();
-    let best=null,bs=-1;
-    ms.forEach(m=>{const q=m.cap&&B[m.cap.y][m.cap.x];
-      const fw=(m.x-m.fx)*FW[t][0]+(m.y-m.fy)*FW[t][1];
-      const sc=Math.random()*1.5+(q?VALS[q.k]*10:0)+fw*0.3;if(sc>bs){bs=sc;best=m;}});
+    const best=aiPickMove(t,ms);if(!best)return advance();
     doMove(best.fx,best.fy,best,()=>aiStep(best));
   });
 }
@@ -5877,8 +6369,13 @@ function click(x,y){
         (NAME[p.t]||p.t)+' · '+(KN2[p.k]||p.k||'?')+' '+(SYM2[p.k]||''),
         p.shield?'Щит: да':'Щит: нет',
         p.prot?'Защита: да':'',
-        p.lying?'Лежит: '+p.lying:'',
-        p.frozen?'Лёд: '+p.frozen:'',
+        p.angel&&!p.demon?'Ангел: нимб, защищает клетки впереди (отражение 78%)':'',
+        p.demon?'Демон: гасит ангелов в радиусе 2':'',
+        (p.extra&&p.extra.length)?'Слияние: ещё ходит как '+p.extra.map(k=>KN2[k]||k).join(', '):'',
+        p.frozen>0?'Лёд: заморожена, не ходит ещё '+p.frozen+' ход(а)':'',
+        p.lying>0?'Лежит: сбита с ног, не ходит ещё '+p.lying+' ход':'',
+        p.t==='neutral'?'Нейтральная фигура: ходит сама и бьёт всех':'',
+        (p.home&&(p.k==='K'||p.k==='R'))?'Не ходила: возможна рокировка':'',
         p.boss?'БОСС':'',
         p.minion?'Миньон':''
       ].filter(Boolean);
@@ -5887,6 +6384,7 @@ function click(x,y){
     }catch(e){ log('Осмотр: '+x+','+y); }
     return;
   }
+  if(netBlock){log(netBlock);return;}
   if(onlineMode && !onlineIsMyTurn() && !(ritual&&ritual.wait)){
     log('Сейчас ход: '+(NAME[ORDER[ti]]||ORDER[ti])+' (вы: '+(NAME[onlineSeat]||onlineSeat)+')');
     return;
@@ -5947,6 +6445,7 @@ function slotClick(i){
     return;
   }
   if(over||busy||ORDER[ti]!==my||!type)return;
+  if(netBlock){log(netBlock);return;}
   const mySeat=(onlineMode&&onlineSeat)?onlineSeat:'white';
   if(ritual&&!(ritual.phase==='fire'&&ritual.owner===mySeat&&type==='nuclear'))return;
   showTip(type);sel=null;moves=null;
@@ -5959,6 +6458,7 @@ function reserveClick(){
   const my=(onlineMode&&onlineSeat)?onlineSeat:'white';
   if(window.inspectMode){ if(R[my])inspectCardType(R[my].type); return; }
   if(over||busy||ritual||ORDER[ti]!==my)return;
+  if(netBlock){log(netBlock);return;}
   if(typeof selSlot==='number'){
     if(CS[my][selSlot]==='nuclear'){log('Ядерку в резерв не кладут');return;}
     if(R[my]){log('Резерв занят');return;}
@@ -5982,7 +6482,7 @@ function cardEl(type,cls,fn){
   const d=document.createElement('div');
   if(!type){d.className='card empty '+cls;d.textContent='—';return d;}
   const c=PC[type];d.className='card '+cls;
-  d.innerHTML='<div class="corner">'+c.c+'</div><div class="icon">'+c.i+'</div><div class="cname"'+(type==='err'?' style="font-size:6px;word-break:break-all"':'')+'>'+c.n+'</div>';
+  d.innerHTML='<div class="corner">'+c.c+'</div><div class="icon">'+c.i+'</div><div class="cname"'+(type==='err'||type==='rez'?' style="font-size:6px;word-break:break-all"':'')+'>'+c.n+'</div>';
   if(fn)d.onclick=fn;return d;
 }
 
@@ -6001,7 +6501,7 @@ const FIG_NAMES={
   d:['checker_king','checkerking','king_checker','dame','damka','Dame','crowned','checker-king','дамка','Дамка'],
   X:['boss','Boss','босс','Босс']
 };
-const FIG_FILL={white:'#ffffff',black:'#5b5b5b',pink:'#ff6fb5',blue:'#4a90ff',boss:'#ff3333'};
+const FIG_FILL={white:'#ffffff',black:'#5b5b5b',pink:'#ff6fb5',blue:'#4a90ff',boss:'#ff3333',neutral:'#b8b8b8'};
 const figState={},figTint={},figTeamImg={};
 let figReady=false;
 let figTimer=null,figTries=0;
@@ -6080,7 +6580,20 @@ function inspectCardType(tp){
   const def=PC[tp]||{n:tp,desc:''};
   showInspectModal('«'+def.n+'»\n'+(def.desc||''));
 }
-function drawCards(){
+function drawBossHand(){
+  const z=document.getElementById('ai-zone');if(!z)return;
+  let el=document.getElementById('boss-hand');
+  if(!el){el=document.createElement('div');el.id='boss-hand';el.style.cssText='display:none;gap:6px;justify-content:center;align-items:center;margin-top:2px';
+    el.onclick=()=>{if(window.inspectMode)showInspectModal('Карты босса (босс не двигается)\n«Призыв приспешника»: красная шашка рядом с боссом (в 2-й фазе — по 2 за карту).\n«Призыв элиты» (только во 2-й фазе, каждый ход): сильная красная фигура, ходит на 2 клетки за круг.');};z.appendChild(el);}
+  if(!bossSt){el.style.display='none';return;}
+  el.style.display='flex';
+  const n=bossSt.hand||0,el3=bossSt.elite?1:0;
+  let h='<span style="font-size:10px;color:#f55">☠ Босс'+(bossSt.p2?' II':'')+'</span>';
+  for(let i=0;i<2;i++)h+=i<n?'<div class="card ai-card" style="background:linear-gradient(#8a1020,#4a0a14);border-color:#f55;color:#fff"><div class="corner">'+(bossSt.p2?'×2':'☠')+'</div><div class="icon">👹</div><div class="cname" style="font-size:5px!important">Призыв приспешника</div></div>':'<div class="card empty ai-card">—</div>';
+  if(bossSt.p2)h+=el3?'<div class="card ai-card" style="background:linear-gradient(#6a1a8a,#2a0a4a);border-color:#d6f;color:#fff"><div class="corner">♛</div><div class="icon">👑</div><div class="cname" style="font-size:5px!important">Призыв элиты</div></div>':'<div class="card empty ai-card">—</div>';
+  el.innerHTML=h;
+}
+function drawCards(){drawBossHand();
   const mySeat=(typeof onlineMode!=='undefined'&&onlineMode&&onlineSeat)?onlineSeat:'white';
   ALL4.forEach(t=>{
     const mine=(t===mySeat);
@@ -6113,7 +6626,7 @@ function drawCards(){
     if(mine)re.onclick=reserveClick;else re.onclick=r?()=>inspectCardType(r.type):null;
   });
   const cs=document.getElementById('craft-slot');
-  if(cs){const n=craftRound===round?pile.length:0;cs.innerHTML=n?'<div class="craft-q">'+n+'/3</div>':'<div class="craft-q">?</div>';cs.onclick=craftClick;}
+  if(cs){const n=craftRound===round?pile.length:0;cs.innerHTML=n?'<div class="craft-q">'+n+'/3</div>':'<div class="craft-q">?</div>';cs.onclick=craftClick;cs.style.display=CFG.craft===false?'none':'';}
   const hint=document.getElementById('nuke-protect-hint');
   if(hint){if(ritual&&ritual.phase==='protect'&&ritual.wait){hint.textContent='Выбери 3 фигуры для вечной защиты ('+ritual.n+'/'+Math.min(3,ritual.avail)+')';hint.classList.add('show');}else hint.classList.remove('show');}
   const sb=document.getElementById('skip-btn'),ub=document.getElementById('undo-btn');
@@ -6283,10 +6796,10 @@ function draw(){
   } // end non-möbius
   document.getElementById('status').innerHTML=over?'Игра окончена':'Ход: <b style="color:'+(ORDER[ti]==='black'?'#888':COL[ORDER[ti]])+'">'+NAME[ORDER[ti]]+'</b>';
   document.getElementById('info').textContent=bossSt?'☠ Босс '+bossSt.hp+'/'+bossSt.max+(bossSt.p2?' (офицер)':''):(G.shape==='m'?'∞ Мёбиус '+(G.x1-G.x0)+'×'+(G.y1-G.y0):G.shape==='s'?'■ поле '+(G.ax1-G.ax0)+'×'+(G.ay1-G.ay0):G.shape==='x'?'× ширина '+(2*G.w+1):'✚ поле '+(G.x1-G.x0)+'×'+(G.y1-G.y0));
-  drawCards();
+  decorate();drawCards();
 }
 function start(){
-  over=false;ti=0;sel=null;moves=null;round=1;extra=false;skipT=null;selSlot=null;fut=[];busy=false;chain=false;hl=[];undoSt=[];undos=0;ritual=null;bossSt=null;pile=[];craftRound=0;nukeDone=false;R={white:null,black:null,pink:null,blue:null};fresh={white:[],black:[],pink:[],blue:[]};CS={white:[null,null,null],black:[null,null,null],pink:[null,null,null],blue:[null,null,null]};ORDER.forEach(t=>{const n=1+Math.floor(Math.random()*3);for(let k=0;k<n;k++)giveCard(t);});
+  over=false;ti=0;sel=null;moves=null;round=1;extra=false;skipT=null;selSlot=null;fut=[];busy=false;chain=false;hl=[];undoSt=[];undos=0;ritual=null;bossSt=null;pile=[];grave=[];craftRound=0;nukeDone=false;R={white:null,black:null,pink:null,blue:null};fresh={white:[],black:[],pink:[],blue:[]};CS={white:[null,null,null],black:[null,null,null],pink:[null,null,null],blue:[null,null,null]};ORDER.forEach(t=>{const n=1+Math.floor(Math.random()*3);for(let k=0;k<n;k++)giveCard(t);});
   gameOver=true;bossMode=false;
   document.getElementById('game-over').classList.remove('show');
   render=draw;configure();setup();figPreload();SL={white:0,black:0,pink:0,blue:0};
@@ -6390,7 +6903,8 @@ window.setupStartPosition=()=>start();
 })();
 const had=loadCfg();
 start();
-if(!had)openSetup(true);
+const rs=netLoadSession();
+if(rs)showResumeDialog(rs,had);else if(!had)openSetup(true);
 })();
 </script>
 </body>
