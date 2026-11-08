@@ -4562,12 +4562,12 @@ function applyCam(){
 const WN=40,ALL4=['white','blue','black','pink'];let ORDER=ALL4.slice();
 const COL={white:'#fff',black:'#111',pink:'#ff6fb5',blue:'#4a90ff',boss:'#f33',neutral:'#b8b8b8'};
 const NAME={white:'белые',black:'чёрные',pink:'розовые',blue:'синие',neutral:'нейтралы'};
-const SYM2={X:'',K:'♚',Q:'♛',R:'♜',B:'♝',N:'♞',P:'♟',m:'●',d:'◉'};
-const VALS={P:1,N:3,B:3,R:5,Q:9,K:100,m:1,d:5,X:8};
+const SYM2={E:'🐘',C:'🏇',H:'👻',T:'🗼',Y:'🐴',G:'🐎',W:'▒',X:'',K:'♚',Q:'♛',R:'♜',B:'♝',N:'♞',P:'♟',m:'●',d:'◉'};
+const VALS={E:8,C:4,H:5,T:5,Y:2,G:4,P:1,N:3,B:3,R:5,Q:9,K:100,m:1,d:5,X:8};
 const O=[[1,0],[-1,0],[0,1],[0,-1]],D=[[1,1],[1,-1],[-1,1],[-1,-1]];
 const KN=[[1,2],[2,1],[-1,2],[-2,1],[1,-2],[2,-1],[-1,-2],[-2,-1]];
 let CFG={shape:'p',army:'mixed',teams:4,craft:true,boss:true},grave=[],RULE,FW,ARMY,SL,B,G,ti,over,sel,moves,round,extra,skipT,selSlot,CS,fut,R,fresh,busy=false,chain=false,hl=[],undoSt=[],undos=0,ritual=null,bossSt=null,pile=[],craftRound=0,nukeDone=false;
-let JEST=null,GUNS=[],shootMode=false;
+let JEST=null,GUNS=[],FALLEN=[],TQ=[],htChain=null,lastFrom=null,shootMode=false;
 const PC={
   shield:{n:'Щит',i:'🔵',c:'H',desc:'Ставит щит на твою фигуру.',target:1},future:{n:'Будущее',i:'⏳',c:'F',desc:'Твоя фигура (кроме короля) уходит в будущее и возвращается на то же место через 2 круга, если клетка свободна.',target:1},spawn:{n:'Спавн',i:'✨',c:'S',desc:'Создаёт твою новую фигуру на выбранной пустой клетке.',target:1},
   support:{n:'Поддержка',i:'🛡',c:'P',desc:'Подкрепление: твои новые фигуры появляются на двух случайных свободных клетках.'},nuclear:{n:'Ядерка',i:'☢',c:'N',desc:'Бьёт точно в центр поля через 8 секунд. Всё без защиты в зоне удара погибает, затем в центре появляется босс. Остальные стороны получают по 2 карты Fh:DebugTest1Q.'},
@@ -4708,7 +4708,17 @@ function gen0(x,y,capOnly){
     };
     [p.k].concat(p.extra||[]).forEach(k=>{
       if(k==='R')slide(O);else if(k==='B')slide(D);else if(k==='Q')slide(O.concat(D));
-      else if(k==='K')step(O.concat(D));else if(k==='N')step(KN);else pawnMoves();
+      else if(k==='K')step(O.concat(D));else if(k==='N')step(KN);
+      else if(k==='E'||k==='T'){slide(O);if(k==='E')step(KN);}
+      else if(k==='C')step(KN3);
+      else if(k==='Y')step(D);
+      else if(k==='H'){slide(O.concat(D));step(KN);}
+      else if(k==='G')KN.forEach(([odx,ody])=>{
+        const n=nextCell(x,y,odx,ody);if(!n)return;const q=B[n.b][n.a];
+        if(!q)add(n.a,n.b);
+        else if(q.t!==p.t&&!q.prot&&q.k!=='K'&&!q.boss&&q.t!=='boss'&&!q.wall&&(RULE[q.t]==='chess')===(RULE[p.t]==='chess'))r.push({x:n.a,y:n.b,steal:1});
+      });
+      else pawnMoves();
     });
     // рокировка: король и ладья на стартовых местах, между ними пусто (≥2 клетки)
     if(p.k==='K'&&p.home&&G.shape!=='m'&&!capOnly){
@@ -4719,6 +4729,7 @@ function gen0(x,y,capOnly){
         if(rk&&rk.t===p.t&&rk.k==='R'&&rk.home&&n>=3)r.push({x:x+2*dx,y:y+2*dy,castle:{rx:a,ry:b,tx:x+dx,ty:y+dy}});
       });
     }
+    if(p.k==='H'){for(let i=r.length-1;i>=0;i--)if(r[i].cap||r[i].merge)r.splice(i,1);}
     const seen=new Set();
     return r.filter(m=>{const k=m.x+','+m.y+(m.cap?'c':'')+(m.merge?'m':'')+(m.castle?'k':'');if(seen.has(k))return false;seen.add(k);return true;});
   }
@@ -4842,7 +4853,7 @@ function mutate(){
   sel=null;moves=null;
   const t='Поле изменилось: '+ops.map(o=>o[0]).join(', ');log(t);showTip('plus_resize');return t;
 }
-function burry(q,x,y){if(q&&q.gun&&!q.boss){q.gun=false;dropGun(x,y);}if(!q||q.boss)return;grave.push({x,y,t:q.t,k:q.k,minion:!!q.minion});if(grave.length>600)grave.shift();}
+function burry(q,x,y){if(q&&q.gun&&!q.boss){q.gun=false;dropGun(x,y,q.ammo);}if(q&&q.k==='T'&&!q.boss)towerDie(q,x,y);if(!q||q.boss)return;grave.push({x,y,t:q.t,k:q.k,minion:!!q.minion});if(grave.length>600)grave.shift();}
 function graveIn(cx,cy){return grave.filter(g=>Math.abs(g.x-cx)<=2&&Math.abs(g.y-cy)<=2&&valid(g.x,g.y));}
 function reviveAround(cx,cy){
   let n=0;const keep=[];
@@ -4860,6 +4871,7 @@ function giveRez(t){for(let k=0;k<2;k++){if(CS[t].indexOf(null)<0)CS[t].push(nul
 function canMerge(p,q){
   if(!q||q.t!==p.t||q.boss||p.t==='neutral'||RULE[p.t]!=='chess')return false;
   if(p.k==='K'||q.k==='K'||p.k==='P'||q.k==='P')return false;
+  if(!'RNBQ'.includes(p.k)||!'RNBQ'.includes(q.k))return false;
   const have=new Set([p.k].concat(p.extra||[]));
   return [q.k].concat(q.extra||[]).some(k=>!have.has(k));
 }
@@ -4881,7 +4893,7 @@ function angelGlowAt(x,y,team){return angelCells().has(team+'|'+x+','+y);}
 function scatterArea(cx,cy){
   const victims=[];
   for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++){
-    const x=cx+dx,y=cy+dy;if(!valid(x,y)||!B[y][x]||B[y][x].boss||B[y][x].k==='J')continue;
+    const x=cx+dx,y=cy+dy;if(!valid(x,y)||!B[y][x]||B[y][x].boss||B[y][x].k==='J'||B[y][x].wall)continue;
     victims.push({x,y,p:B[y][x]});B[y][x]=null;
   }
   const used=[];
@@ -4925,11 +4937,11 @@ function softReset(){
   ORDER.forEach(t=>{
     const pool=pools[t].slice(),placed=[];
     armySlots(t).forEach(s=>{
-      let i=pool.findIndex(p=>p.k===s.k);
+      let i=pool.findIndex(p=>(BASEK[p.k]||p.k)===s.k);
       if(i<0&&s.k==='m')i=pool.findIndex(p=>p.k==='d');
       if(i<0)return;
       const p=pool.splice(i,1)[0];
-      p.k=s.k;p.st=s.st||0;p.home=s.home||0;B[s.y][s.x]=p;placed.push(p);
+      if(!BASEK[p.k])p.k=s.k;p.st=s.st||0;p.home=s.home||0;B[s.y][s.x]=p;placed.push(p);
     });
     extra+=pool.length;
     pool.forEach(()=>{if(placed.length)pick(placed).shield=true;});
@@ -4940,7 +4952,7 @@ function softReset(){
 function chaosEffect(t,x,y){
   const eff=pick(['bang','bang','demon','airstrike','spawn','shield','ice']);
   addHl(x,y,'effect-hl');
-  const q=B[y][x];if(q&&q.k==='J')return 'шут увернулся';
+  const q=B[y][x];if(q&&(q.k==='J'||q.wall))return 'шут увернулся';
   if(eff==='ice'){if(q&&!q.boss){q.frozen=3;return 'лёд! фигура заморожена на 3 хода';}if(!q){spawnNeutralAt(x,y);return 'нейтральная фигура';}return 'ничего';}
   if(eff==='airstrike'){const n=scatterArea(x,y);return 'авиаудар, разлетелось фигур: '+n;}
   if(eff==='spawn'){if(!q){const sk=spawnKindFor(t,x,y);if(sk){B[y][x]={t,k:sk,st:0};return 'спавн фигуры';}return 'спавн отменён (рядом вражеский король)';}return 'спавн мимо (клетка занята)';}
@@ -4987,7 +4999,7 @@ function decorate(){
     if(KT.has(x+','+y))c.style.boxShadow='inset 0 0 0 3px rgba(255,60,60,.95),inset 0 0 14px rgba(255,60,60,.6)';
     const p=B[y]&&B[y][x];if(!p||p.boss)return;
     const add=(txt,css)=>{const s=document.createElement('span');s.className='badge';s.textContent=txt;s.style.cssText='position:absolute;pointer-events:none;line-height:1;z-index:3;'+css;c.appendChild(s);};
-    if(p.frozen>0)add('❄','right:1px;bottom:0;font-size:12px');
+    if(p.frozen>0)add(p.scared?'😱':'❄','right:1px;bottom:0;font-size:12px');
     if(p.lying>0)add('💤','right:1px;bottom:0;font-size:12px');
     if(p.angel&&!p.demon)add('😇','left:0;top:0;font-size:11px');
     if(p.demon)add('😈','left:0;top:0;font-size:11px');
@@ -5033,6 +5045,7 @@ function aiPickMove(t,ms){
   let best=null,bs=-1e9;
   ms.forEach(m=>{
     const p=B[m.fy][m.fx];if(!p)return;
+    if(m.steal){const tq=B[m.y][m.x];if(tq){const s0=Math.random()*0.7+(VALS[tq.k]||1)*18;if(s0>bs){bs=s0;best=m;}}return;}
     if(m.shoot){const tq=B[m.cap.y][m.cap.x];if(tq){const s0=Math.random()*0.7+(tq.k==='K'?5000:(VALS[tq.k]||1)*10+6);if(s0>bs){bs=s0;best=m;}}return;}
     const cp=m.cap&&B[m.cap.y][m.cap.x];
     const wasHang=p.k==='K'?0:hangNow(m.fx,m.fy,p);
@@ -5100,7 +5113,7 @@ function cardMsg(t,type,x,y){
   if(type==='spawn'){if(!valid(x,y)||B[y][x])return 'Нужна пустая клетка';if(!spawnKindFor(t,x,y))return 'Сюда нельзя: рядом вражеский король или фигура сразу ударила бы по нему';}
   if(type==='trump'&&!own)return 'Выбери свою фигуру';
   if(type==='dummy'&&!(q&&q.t!==t&&q.t!=='boss'&&q.k!=='K'&&!q.prot&&(RULE[q.t]==='chess')===(RULE[t]==='chess')))return 'Выбери чужую фигуру того же типа (не короля)';
-  if(type==='double'&&!(q&&q.t!==t&&q.t!=='boss'&&q.k!=='K'&&q.k!=='J'))return 'Выбери чужую фигуру (не короля)';
+  if(type==='double'&&!(q&&q.t!==t&&q.t!=='boss'&&q.k!=='K'&&q.k!=='J'&&!q.wall))return 'Выбери чужую фигуру (не короля)';
   if(type==='shield'&&!own)return 'Выбери свою фигуру';
   if(type==='future'&&(!own||B[y][x].k==='K'))return 'Выбери свою фигуру (не короля)';
   if(type==='spawn'&&(!valid(x,y)||B[y][x]))return 'Нужна пустая клетка';
@@ -5155,15 +5168,15 @@ function animMove0(fx,fy,tx,ty,done){
   setTimeout(()=>{fly.style.display='none';fly.style.transition='none';busy=false;done();},dur*1000+40);
 }
 function doMove(fx,fy,m,cb){
-  if(m.shoot){shootAnim(fx,fy,m,()=>{apply(fx,fy,m);cb();});return;}
+  if(m.shoot||m.steal){shootAnim(fx,fy,m,()=>{apply(fx,fy,m);cb();},m.steal?'#c06bff':null);return;}
   animMove(fx,fy,m.x,m.y,()=>{apply(fx,fy,m);cb();});
 }
 // отмена / пропуск
-function pushUndo(){undoSt.push(JSON.stringify({B,G,ti,round,extra,skipT,CS,R,fut,SL,JEST,GUNS}));if(undoSt.length>12)undoSt.shift();undos=0;}
+function pushUndo(){undoSt.push(JSON.stringify({B,G,ti,round,extra,skipT,CS,R,fut,SL,JEST,GUNS,FALLEN}));if(undoSt.length>12)undoSt.shift();undos=0;}
 function undo(){
   const my=(onlineMode&&onlineSeat)?onlineSeat:'white';
   if(over||busy||ritual||netBlock||ORDER[ti]!==my||!undoSt.length||undos>=2)return;
-  const st=JSON.parse(undoSt.pop());({B,G,ti,round,extra,skipT,CS,R,fut,SL,JEST,GUNS}=st);GUNS=GUNS||[];JEST=JEST||null;
+  const st=JSON.parse(undoSt.pop());({B,G,ti,round,extra,skipT,CS,R,fut,SL,JEST,GUNS,FALLEN}=st);GUNS=GUNS||[];FALLEN=FALLEN||[];JEST=JEST||null;
   sel=null;moves=null;selSlot=null;chain=false;undos++;fresh={white:[],black:[],pink:[],blue:[]};log('Ход отменён');draw();
 }
 function skip(){
@@ -5187,7 +5200,7 @@ function playCard(t,type,x,y){
   if(type==='dummy'){const q=valid(x,y)&&B[y][x];if(!q||q.t===t||q.t==='boss'||q.k==='K'||q.prot||(RULE[q.t]==='chess')!==(RULE[t]==='chess')){log('Выбери чужую фигуру того же типа (не короля)');return false;}q.loan={t:q.t,until:round+2};q.t=t;log(NAME[t]+': болван — чужая фигура играет за них 2 круга');return true;}
   if(type==='bid'){for(let k=0;k<2;k++){if(CS[t].indexOf(null)<0)CS[t].push(null);giveCard(t);}log(NAME[t]+': торги — получены 2 карты');return true;}
   if(type==='slam'){SL[t]++;log(NAME[t]+': шлем — следующее взятие заберёт ещё фигуру');return true;}
-  if(type==='double'){const q=valid(x,y)&&B[y][x];if(!q||q.t===t||q.t==='boss'||q.k==='K'||q.k==='J'){log('Выбери чужую фигуру (не короля)');return false;}q.dbl=true;log(NAME[t]+': контра — за взятие этой фигуры дадут 2 карты');return true;}
+  if(type==='double'){const q=valid(x,y)&&B[y][x];if(!q||q.t===t||q.t==='boss'||q.k==='K'||q.k==='J'||q.wall){log('Выбери чужую фигуру (не короля)');return false;}q.dbl=true;log(NAME[t]+': контра — за взятие этой фигуры дадут 2 карты');return true;}
   if(type==='extra'){extra=true;log(NAME[t]+': второй ход');return true;}
   if(type==='err'){log('Err.MDXphrzVPLAJ ('+NAME[t]+'): '+errEffect(t));return true;}
   return false;
@@ -5228,7 +5241,7 @@ function aiUse(t,where,type,cont){
 // Err.MDXphrzVPLAJ — совершенно случайное действие
 function errEffect(who){
   const free=freeCells;
-  const pcs=f=>pcsOf(p=>p.t!=='boss'&&p.k!=='J'&&(!f||f(p)));
+  const pcs=f=>pcsOf(p=>p.t!=='boss'&&p.k!=='J'&&!p.wall&&(!f||f(p)));
   const effects=[
     ()=>{const c=pick(free()),t=pick(ORDER.filter(alive));if(!c)return;const chess=t==='white'||t==='black';B[c[1]][c[0]]={t,k:chess?pick(['P','N','B','R']):'m',st:0};return 'Из ниоткуда появилась фигура: '+NAME[t];},
     ()=>{const a=pcs(p=>p.k!=='K');if(!a.length)return;const z=pick(a);burry(z.p,z.x,z.y);B[z.y][z.x]=null;return 'Исчезла фигура ('+NAME[z.p.t]+')';},
@@ -5342,7 +5355,7 @@ function hitBoss(){
 }
 function nearestEnemy(x,y){
   let best=null,bd=1e9;
-  each((q,a,b)=>{if(q.t!=='boss'&&q.k!=='J'&&valid(a,b)){const d=Math.abs(a-x)+Math.abs(b-y);if(d<bd){bd=d;best={x:a,y:b,d};}}});
+  each((q,a,b)=>{if(q.t!=='boss'&&q.k!=='J'&&!q.wall&&valid(a,b)){const d=Math.abs(a-x)+Math.abs(b-y);if(d<bd){bd=d;best={x:a,y:b,d};}}});
   return best;
 }
 function bossTurn(){
@@ -5943,7 +5956,8 @@ function onlineSnapshot(){
     CFG: CFG,
     __plusMines: window.__plusMines||[],
     JEST: JEST,
-    GUNS: GUNS
+    GUNS: GUNS,
+    FALLEN: FALLEN
   };
 }
 function onlineApplySnapshotNow(st){
@@ -5970,7 +5984,7 @@ function onlineApplySnapshotNow(st){
     if(st.ORDER) ORDER = st.ORDER;
     if(st.CFG) CFG = Object.assign(CFG, st.CFG);
     window.__plusMines = st.__plusMines||[];
-    JEST = st.JEST||null; GUNS = st.GUNS||[];
+    JEST = st.JEST||null; GUNS = st.GUNS||[]; FALLEN = st.FALLEN||[];
     if(typeof st.seq==='number') onlineStateSeq = Math.max(onlineStateSeq, st.seq);
     sel=null; moves=null; selSlot=null; chain=false; busy=false;
     if(over){
@@ -6367,6 +6381,7 @@ function ai(){
 function aiStep(m){
   if(over)return;
   if(m.jump){if(check())return;const c=B[m.y][m.x]?gen(m.x,m.y,true).filter(z=>z.jump):[];if(c.length)return doMove(m.x,m.y,c[0],()=>aiStep(c[0]));}
+  {const hn=htNext(m);if(hn&&!check()){const ms2=hn.map(z=>({fx:m.x,fy:m.y,...z})),b2=aiPickMove(B[m.y][m.x].t,ms2);if(b2)return doMove(b2.fx,b2.fy,b2,()=>aiStep(b2));}}
   advance();
 }
 function click(x,y){
@@ -6374,7 +6389,7 @@ function click(x,y){
     try{
       const p=valid(x,y)&&B[y][x];
       if(!p){ if(typeof showInspectModal==='function') showInspectModal('Пустая клетка'); return; }
-      const KN2={J:'Шут',P:'Пешка',N:'Конь',B:'Слон',R:'Ладья',Q:'Ферзь',K:'Король',m:'Шашка',d:'Дамка',X:'Фигура'};
+      const KN2={E:'Слонь',C:'Конница',H:'Хтонь',T:'Высокая Тура',Y:'Пони',G:'Цыганский конь',J:'Шут',P:'Пешка',N:'Конь',B:'Слон',R:'Ладья',Q:'Ферзь',K:'Король',m:'Шашка',d:'Дамка',X:'Фигура'};
       const lines=[
         (NAME[p.t]||p.t)+' · '+(KN2[p.k]||p.k||'?')+' '+(SYM2[p.k]||''),
         p.shield?'Щит: да':'Щит: нет',
@@ -6389,9 +6404,12 @@ function click(x,y){
         p.boss?'БОСС':'',
         p.minion?'Миньон':'',
         p.k==='J'?'Шут: нейтрален, не атакует, его нельзя убить. Уводит королей за границу':'',
-        p.gun?'Пистолет: стреляет без хода на 2 клетки':'',
+        p.gun?'Пистолет: '+(p.ammo||0)+' патр., стреляет без хода на 2 клетки':'',
         p.shot?'Ранена: лежит, раз в 2 круга может встать или исчезнуть':'',
-        p.jail?'Увезена Шутом за границу':''
+        p.jail?'Увезена Шутом за границу':'',
+        p.wall?'Стена: упавшая Высокая Тура, навсегда':'',
+        (p.scared&&p.frozen>0)?'Испуг: не ходит ещё '+p.frozen+' ход(а)':'',
+        KDESC[p.k]||''
       ].filter(Boolean);
       if(typeof showInspectModal==='function') showInspectModal(lines.join('\n'));
       else log(lines.join(' | '));
@@ -6437,6 +6455,7 @@ function click(x,y){
     const from=sel;sel=null;moves=null;
     doMove(from.x,from.y,m,()=>{
       if(m.jump&&B[m.y][m.x]){const c=gen(m.x,m.y,true).filter(z=>z.jump);if(c.length&&!check()){sel={x:m.x,y:m.y};moves=c;chain=true;return draw();}}
+      {const hn=htNext(m);if(hn&&!check()){sel={x:m.x,y:m.y};moves=hn;chain=true;return draw();}}
       chain=false;advance();
     });
     return;
@@ -6521,7 +6540,8 @@ const FIG_NAMES={
   P:['pawn','Pawn','P','пешка','Пешка','пехота','Пехота'],
   m:['checker','Checker','checkers','man','Man','draught','piece','шашка','Шашка'],
   d:['checker_king','checkerking','king_checker','dame','damka','Dame','crowned','checker-king','дамка','Дамка'],
-  X:['boss','Boss','босс','Босс']
+  X:['boss','Boss','босс','Босс'],
+  E:['falsetour','Falsetour'],C:['cavalry','Cavalry'],H:['htony','Htony'],T:['longrook','Longrook'],G:['Gypsyhorse','gypsyhorse','GypsyHorse']
 };
 const FIG_FILL={white:'#ffffff',black:'#5b5b5b',pink:'#ff6fb5',blue:'#4a90ff',boss:'#ff3333',neutral:'#b8b8b8'};
 const figState={},figTint={},figTeamImg={};
@@ -6539,7 +6559,7 @@ function figLoad(k){
   if(figState[k])return figState[k];
   const st=figState[k]={status:'loading',img:null};
   const c=[];if(FIGURE_FILES[k])c.push(FIGURE_FILES[k]);
-  (FIG_NAMES[k]||[k]).forEach(n=>['png','webp','svg'].forEach(e=>c.push(FIG_DIR+n+'.'+e)));
+  (FIG_NAMES[k]||[k]).forEach(n=>['png','webp','svg'].forEach(e=>{c.push(FIG_DIR+n+'.'+e);c.push(n+'.'+e);}));
   let i=0;
   const next=()=>{
     if(i>=c.length){st.status='none';return;}
@@ -6589,6 +6609,7 @@ function figTinted(k,team){
 }
 function fillPiece(s,p){
   if(p.k==='J')return fillJester(s);
+  if(p.wall||p.k==='Y'||p.k==='T')return fillSpecial(s,p);
   const u=figTinted(p.k,p.t);
   if(u){
     s.textContent='';
@@ -6819,13 +6840,14 @@ function draw(){
     {const g=GUNS.find(g=>g.x===x&&g.y===y);if(g&&v)c.appendChild(floorGunEl(g,'cell'));}
     el.appendChild(c);
   }
+  drawFallen(el,x0,y0);
   } // end non-möbius
   document.getElementById('status').innerHTML=over?'Игра окончена':'Ход: <b style="color:'+(ORDER[ti]==='black'?'#888':COL[ORDER[ti]])+'">'+NAME[ORDER[ti]]+'</b>';
   document.getElementById('info').textContent=bossSt?'☠ Босс '+bossSt.hp+'/'+bossSt.max+(bossSt.p2?' (офицер)':''):(G.shape==='m'?'∞ Мёбиус '+(G.x1-G.x0)+'×'+(G.y1-G.y0):G.shape==='s'?'■ поле '+(G.ax1-G.ax0)+'×'+(G.ay1-G.ay0):G.shape==='x'?'× ширина '+(2*G.w+1):'✚ поле '+(G.x1-G.x0)+'×'+(G.y1-G.y0));
   decorate();drawCards();
 }
 function start(){
-  over=false;ti=0;sel=null;moves=null;round=1;extra=false;skipT=null;selSlot=null;fut=[];busy=false;chain=false;hl=[];undoSt=[];undos=0;ritual=null;bossSt=null;pile=[];grave=[];JEST=null;GUNS=[];shootMode=false;craftRound=0;nukeDone=false;R={white:null,black:null,pink:null,blue:null};fresh={white:[],black:[],pink:[],blue:[]};CS={white:[null,null,null],black:[null,null,null],pink:[null,null,null],blue:[null,null,null]};ORDER.forEach(t=>{const n=1+Math.floor(Math.random()*3);for(let k=0;k<n;k++)giveCard(t);});
+  over=false;ti=0;sel=null;moves=null;round=1;extra=false;skipT=null;selSlot=null;fut=[];busy=false;chain=false;hl=[];undoSt=[];undos=0;ritual=null;bossSt=null;pile=[];grave=[];JEST=null;GUNS=[];FALLEN=[];TQ=[];htChain=null;lastFrom=null;shootMode=false;craftRound=0;nukeDone=false;R={white:null,black:null,pink:null,blue:null};fresh={white:[],black:[],pink:[],blue:[]};CS={white:[null,null,null],black:[null,null,null],pink:[null,null,null],blue:[null,null,null]};ORDER.forEach(t=>{const n=1+Math.floor(Math.random()*3);for(let k=0;k<n;k++)giveCard(t);});
   gameOver=true;bossMode=false;
   document.getElementById('game-over').classList.remove('show');
   render=draw;configure();setup();figPreload();SL={white:0,black:0,pink:0,blue:0};
@@ -6935,7 +6957,11 @@ const JESTER_STEPS=2;         // клеток за круг
 const JAIL_ROUNDS=2;          // сколько кругов короли стоят за границей
 const GUN_CHANCE=0.12;        // шанс падения пистолета за круг
 const GUN_MAX_TOTAL=3;        // максимум пистолетов в игре (на полу + в руках)
+const GUN_AMMO=3;           // патронов в пистолете
 const GUN_RANGE=2;            // дальность выстрела (клеток, по кругу вокруг фигуры)
+const VARIANT_CHANCE=0.2;   // шанс, что ладья/конь/слон в начале игры окажется особой фигурой
+const PONY_CHANCE=0.1;      // шанс, что конь при первом ходе окажется пони
+const LONGROOK_LEN=3;       // на сколько клеток падает Высокая Тура
 const SHOT_VANISH=0.30, SHOT_RISE=0.35;   // раз в 2 круга: исчезнуть / встать (иначе продолжает лежать)
 
 // ---- текстуры: ищем в figures/, в корне и ещё в нескольких папках ----
@@ -6975,7 +7001,9 @@ function gunImgEl(kind,css){
 function pieceExtras(s,p){
   if(p.gun&&!p.jail&&p.k!=='J'){
     if(!s.style.position)s.style.position='relative';
-    s.appendChild(gunImgEl('arm','position:absolute;left:36%;top:30%;width:52%;height:52%;font-size:.55em;z-index:3'));
+    s.appendChild(gunImgEl('arm','position:absolute;left:6%;top:30%;width:52%;height:52%;font-size:.55em;z-index:3'));
+    const am=document.createElement('span');am.textContent=p.ammo||0;
+    am.style.cssText='position:absolute;left:1px;top:14px;font-size:9px;line-height:1;color:#ffd24a;text-shadow:0 0 2px #000,0 0 2px #000;pointer-events:none;z-index:4';s.appendChild(am);
   }
   if(p.shot){s.style.transform='rotate(90deg)';s.style.opacity='.85';}
 }
@@ -7007,9 +7035,9 @@ function nearestFree(x,y){
   }
   return best;
 }
-function dropGun(x,y){
+function dropGun(x,y,ammo){
   if(!valid(x,y)){const c=nearestFree(x,y);if(!c)return;x=c.x;y=c.y;}
-  if(!gunAt(x,y))GUNS.push({x,y,fresh:0});
+  if(!gunAt(x,y))GUNS.push({x,y,fresh:0,ammo:ammo||GUN_AMMO});
 }
 function pname(p){return (NAME[p.t]||'нейтрал')+' '+(SYM2[p.k]||'');}
 
@@ -7031,15 +7059,26 @@ function gen(x,y,capOnly){
 }
 function apply(fx,fy,m){
   let r;
-  if(m&&m.shoot)r=shootApply(fx,fy,m);else r=apply0(fx,fy,m);
-  try{settleGuns();}catch(e){console.warn(e);}
+  lastFrom={x:fx,y:fy};
+  if(m&&m.shoot)r=shootApply(fx,fy,m);
+  else if(m&&m.steal)r=stealApply(fx,fy,m);
+  else{
+    const pp=B[fy][fx];
+    if(pp&&pp.k==='N'&&!pp.ponyChk){pp.ponyChk=1;if(Math.random()<PONY_CHANCE){pp.k='Y';log('🐴 Конь оказался пони!');}}
+    r=apply0(fx,fy,m);
+    if(r&&r.k==='H'&&!m.merge)htScare(r,m.x,m.y);
+  }
+  try{settleGuns();resolveFalls();}catch(e){console.warn(e);}
+  lastFrom=null;
   return r;
 }
 // выстрел: фигура не двигается, цель падает (лежит)
 function shootApply(fx,fy,m){
   const p=B[fy][fx],tx=m.cap.x,ty=m.cap.y,q=B[ty][tx];
   if(!p||!q)return p;
-  log('🔫 '+pname(p)+' стреляет');
+  p.ammo=(p.ammo||GUN_AMMO)-1;
+  log('🔫 '+pname(p)+' стреляет (патронов: '+Math.max(0,p.ammo)+')');
+  if(p.ammo<=0){p.gun=false;p.ammo=0;log('Патроны кончились — пистолет выброшен');}
   addHl(tx,ty,'target-hl');
   if(q.boss||q.k==='J'||q.prot){log('Пуля никого не задела');return p;}
   if(q.shield){q.shield=false;log('Щит отразил пулю!');return p;}
@@ -7049,7 +7088,7 @@ function shootApply(fx,fy,m){
   log('Попадание! '+pname(q)+' лежит');
   return p;
 }
-function shootAnim(fx,fy,m,done){
+function shootAnim(fx,fy,m,done,color){
   const a=cellEl(fx,fy),b=cellEl(m.x,m.y),vp=document.getElementById('viewport');
   if(!a||!b||!vp){done();return;}
   busy=true;
@@ -7058,7 +7097,7 @@ function shootAnim(fx,fy,m,done){
   const len=Math.hypot(x1-x0,y1-y0),ang=Math.atan2(y1-y0,x1-x0);
   const ln=document.createElement('div');
   ln.style.cssText='position:absolute;left:'+x0+'px;top:'+(y0-1.5)+'px;width:'+len+'px;height:3px;transform-origin:0 50%;transform:rotate('+ang+'rad);'
-    +'background:linear-gradient(90deg,rgba(255,240,150,0),#fff3a0 40%,#ffb020);box-shadow:0 0 6px #ffcc40;z-index:35;pointer-events:none;opacity:1;transition:opacity .35s';
+    +'background:linear-gradient(90deg,rgba(255,255,255,0),'+(color||'#ffb020')+');box-shadow:0 0 6px '+(color||'#ffcc40')+';z-index:35;pointer-events:none;opacity:1;transition:opacity .35s';
   vp.appendChild(ln);
   requestAnimationFrame(()=>{ln.style.opacity='0';});
   setTimeout(()=>{ln.remove();busy=false;done();},380);
@@ -7070,7 +7109,7 @@ function settleGuns(){
     if(!valid(g.x,g.y)){const c=nearestFree(g.x,g.y);if(c){g.x=c.x;g.y=c.y;return true;}return false;}
     const q=B[g.y][g.x];
     if(!q||q.boss||q.t==='boss'||q.k==='J'||q.gun||q.shot||q.jail)return true;
-    q.gun=true;log('🔫 '+pname(q)+' подобрал пистолет');addHl(g.x,g.y,'effect-hl');
+    q.gun=true;q.ammo=g.ammo||GUN_AMMO;log('🔫 '+pname(q)+' подобрал пистолет ('+q.ammo+' патр.)');addHl(g.x,g.y,'effect-hl');
     return false;
   });
 }
@@ -7099,7 +7138,7 @@ function gunRound(){
   }
   if(!cells.length)return;
   const c=pick(cells);
-  GUNS.push({x:c[0],y:c[1],fresh:Date.now()});
+  GUNS.push({x:c[0],y:c[1],fresh:Date.now(),ammo:GUN_AMMO});
   addHl(c[0],c[1],'effect-hl');
   log('🔫 С неба упал пистолет! Подбери его, встав на клетку');
 }
@@ -7213,18 +7252,149 @@ function jesterJail(){
   log('🤡 Шут вернул королей и скрылся');
 }
 
+
+// ===== Новые фигуры =====
+const KN3=[[1,3],[3,1],[-1,3],[-3,1],[1,-3],[3,-1],[-1,-3],[-3,-1]];   // «длинная Г» Конницы
+const BASEK={E:'R',T:'R',C:'N',G:'N',Y:'N',H:'B'};                     // какой стандартной фигурой считаются при «Сбросе»
+const VARIANTS={R:['T','E'],N:['C','G'],B:['H','E']};
+const KDESC={
+  E:'Слонь: ходит как Ладья и как Конь',
+  C:'Конница: прыгает «длинной Г» (1×3)',
+  H:'Хтонь: ходит как угодно, но не бьёт. Пугает фигуры, которые «атакует» (3 хода не ходят). Ходит 3 раза подряд за один ход',
+  T:'Высокая Тура: ходит как Ладья. Погибая, падает на 3 клетки, убивает всех там и навсегда делает их стеной',
+  Y:'Пони: ходит и бьёт на 1 клетку по диагонали',
+  G:'Цыганский конь: ходит как Конь, не бьёт — крадёт фигуры'
+};
+NAME.wall='стена';
+function variantsInit(){
+  each((p,x,y)=>{
+    if(!p.t||!ORDER.includes(p.t)||RULE[p.t]!=='chess')return;
+    const v=VARIANTS[p.k];
+    if(v&&Math.random()<VARIANT_CHANCE)p.k=pick(v);
+  });
+}
+function fillSpecial(s,p){
+  s.textContent='';
+  if(p.wall){
+    const d=document.createElement('div');
+    d.style.cssText='width:100%;height:100%;box-sizing:border-box;background:repeating-linear-gradient(45deg,#55555e,#55555e 4px,#3c3c44 4px,#3c3c44 8px);border-radius:3px;box-shadow:inset 0 0 0 1px #222';
+    s.appendChild(d);return true;
+  }
+  if(p.k==='Y'){   // пони: обычный конь, уменьшенный в 2.5 раза
+    const u=figTinted('N',p.t);
+    if(u){
+      const im=document.createElement('img');im.src=u;im.alt='';im.draggable=false;
+      im.style.cssText='width:37%;height:37%;object-fit:contain;pointer-events:none;display:block';
+      s.appendChild(im);return true;
+    }
+    const sp=document.createElement('span');sp.textContent=SYM2.N;sp.style.fontSize='.45em';s.appendChild(sp);return false;
+  }
+  // Высокая Тура: нижний пиксель текстуры — к нижнему краю клетки, остальное торчит вверх
+  const u=figTinted('T',p.t);
+  if(u){
+    if(!s.style.position)s.style.position='relative';
+    const im=document.createElement('img');im.src=u;im.alt='';im.draggable=false;
+    im.style.cssText='position:absolute;bottom:0;left:50%;transform:translateX(-50%);width:100%;height:auto;max-width:none;pointer-events:none;z-index:4';
+    s.appendChild(im);return true;
+  }
+  s.textContent=SYM2.T;return false;
+}
+
+// Хтонь: пугает всех, кого «атакует» (линии ферзя и ходы коня, первая фигура на линии)
+function htScare(p,x,y){
+  const hit=[];
+  const mark=(a,b)=>{const q=B[b]&&B[b][a];if(q&&q.t!==p.t&&!q.prot&&!q.boss&&q.t!=='boss'&&q.k!=='J'&&!q.wall&&!q.jail)hit.push(q);};
+  O.concat(D).forEach(([dx,dy])=>{let a=x+dx,b=y+dy;while(valid(a,b)){if(B[b][a]){mark(a,b);break;}a+=dx;b+=dy;}});
+  KN.forEach(([dx,dy])=>{if(valid(x+dx,y+dy))mark(x+dx,y+dy);});
+  hit.forEach(q=>{q.frozen=Math.max(q.frozen||0,3);q.scared=true;});
+  if(hit.length)log('😱 Хтонь пугает фигур: '+hit.length+' (3 хода не ходят)');
+}
+// три хода подряд за один ход
+function htNext(m){
+  if(m.shoot||m.steal||m.merge){htChain=null;return null;}
+  const p=B[m.y][m.x];
+  if(!p||p.k!=='H'){htChain=null;return null;}
+  if(!htChain||htChain.p!==p)htChain={p,left:2};else htChain.left--;
+  if(htChain.left<=0){htChain=null;return null;}
+  const mv=gen(m.x,m.y);
+  if(!mv.length){htChain=null;return null;}
+  if(p.t===ORDER[ti])log('👻 Хтонь: ещё ход ('+htChain.left+') — или «Пропуск хода»');
+  return mv;
+}
+// Цыганский конь: переманивает фигуру на свою сторону
+function stealApply(fx,fy,m){
+  const p=B[fy][fx],q=B[m.y][m.x];
+  if(!p||!q)return p;
+  addHl(m.x,m.y,'target-hl');
+  if(q.shield){q.shield=false;log('Щит помешал краже!');return p;}
+  if(q.prot||q.boss||q.k==='K'||q.k==='J'||q.wall||q.t===p.t)return p;
+  const old=q.t;q.t=p.t;delete q.loan;delete q.dbl;
+  log('🐎 Цыганский конь украл фигуру ('+(NAME[old]||'нейтралы')+' → '+NAME[p.t]+')');
+  return p;
+}
+// Высокая Тура: падает и превращается в стену
+function towerDie(q,x,y){
+  let d=null;
+  if(lastFrom){const dx=x-lastFrom.x,dy=y-lastFrom.y;if(dx||dy)d=Math.abs(dx)>=Math.abs(dy)?[Math.sign(dx),0]:[0,Math.sign(dy)];}
+  if(!d)d=pick([[1,0],[-1,0],[0,1],[0,-1]]);
+  TQ.push({x,y,d,t:q.t});
+}
+function wallPiece(){return {t:'wall',k:'W',prot:true,wall:true};}
+function resolveFalls(){
+  let guard=0;
+  while(TQ.length&&guard++<30){
+    const f=TQ.shift(),cells=[];let dead=0;
+    for(let i=1;i<=LONGROOK_LEN;i++){
+      const nx=f.x+f.d[0]*i,ny=f.y+f.d[1]*i;
+      if(!valid(nx,ny))break;
+      const q=B[ny][nx];
+      if(q&&(q.boss||q.k==='J'))break;
+      if(q&&!q.wall){burry(q,nx,ny);dead++;}
+      B[ny][nx]=wallPiece();cells.push([nx,ny]);
+    }
+    if(cells.length){FALLEN.push({x:f.x,y:f.y,d:f.d,cells,t:f.t,t0:Date.now()});}
+    log('🗼 Высокая Тура упала: раздавлено фигур '+dead+', клеток перекрыто навсегда: '+cells.length);
+  }
+}
+function placeWalls(){
+  FALLEN.forEach(f=>f.cells.forEach(([x,y])=>{
+    if(!valid(x,y))return;
+    const q=B[y][x];if(q&&q.wall)return;
+    if(q){if(q.boss||q.k==='J')return;burry(q,x,y);}
+    B[y][x]=wallPiece();
+  }));
+  resolveFalls();
+}
+function drawFallen(el,x0,y0){
+  FALLEN.forEach(f=>{
+    const cs=f.cells;if(!cs||!cs.length)return;
+    const u=figTinted('T',f.t);if(!u)return;
+    const n=cs.length,a=cs[0],b=cs[n-1];
+    const cx=((a[0]+b[0])/2-x0)*40+20,cy=((a[1]+b[1])/2-y0)*40+20;
+    const rot=f.d[0]>0?90:(f.d[0]<0?-90:(f.d[1]>0?180:0));
+    const box=document.createElement('div');
+    box.style.cssText='position:absolute;left:'+(cx-20)+'px;top:'+(cy-n*20)+'px;width:40px;height:'+(n*40)+'px;transform:rotate('+rot+'deg);pointer-events:none;z-index:5';
+    const im=document.createElement('img');im.src=u;im.alt='';im.draggable=false;
+    im.style.cssText='width:100%;height:100%;object-fit:contain;display:block;pointer-events:none';
+    box.appendChild(im);el.appendChild(box);
+  });
+}
+
 // ---- обёртки ----
 {
   const _newRound=newRound;
   newRound=function(){_newRound();try{shotRound();jesterRound();gunRound();}catch(e){console.warn('plus-extras',e);}};
   const _advance=advance;
-  advance=function(){try{settleGuns();}catch(e){}return _advance.apply(this,arguments);};
+  advance=function(){htChain=null;try{settleGuns();resolveFalls();}catch(e){}return _advance.apply(this,arguments);};
+  const _setup=setup;
+  setup=function(){_setup();try{variantsInit();}catch(e){console.warn(e);}};
   const _soft=softReset;
   softReset=function(){
     if(bossSt)return _soft();
     each(p=>{delete p.jail;});
     const r=_soft();
     JEST={phase:'idle',cd:round+JESTER_COOLDOWN};GUNS=[];
+    try{placeWalls();}catch(e){}
     return r;
   };
   const _draw=draw;
@@ -7238,7 +7408,7 @@ function jesterJail(){
       }
       if(G.shape==='m'&&JEST&&JEST.phase==='jail'){
         const el=document.getElementById('board'),d=document.createElement('div');
-        d.textContent='🤡⛓ за границей в грузии: '+JEST.items.map(i=>NAME[i.t]).join(', ');
+        d.textContent='🤡⛓ за границей: '+JEST.items.map(i=>NAME[i.t]).join(', ');
         d.style.cssText='position:absolute;left:50%;bottom:2px;transform:translateX(-50%);font-size:11px;color:#fff;background:rgba(0,0,0,.5);padding:1px 6px;border-radius:6px;z-index:6;pointer-events:none;white-space:nowrap';
         el.appendChild(d);
       }
@@ -7257,4 +7427,3 @@ if(rs)showResumeDialog(rs,had);else if(!had)openSetup(true);
 </script>
 </body>
 </html>
-
