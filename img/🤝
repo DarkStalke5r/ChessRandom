@@ -1,0 +1,94 @@
+!buildapp
+Name: micro Display
+Package: com.example.micro.display
+Version: Rebuild arm64-only…
+To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/8.7/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+Daemon will be stopped at the end of the build 
+> Task :app:clean
+> Task :app:preBuild UP-TO-DATE
+> Task :app:preDebugBuild UP-TO-DATE
+> Task :app:mergeDebugNativeDebugMetadata NO-SOURCE
+> Task :app:checkKotlinGradlePluginConfigurationErrors
+> Task :app:generateDebugResValues
+> Task :app:checkDebugAarMetadata
+> Task :app:mapDebugSourceSetPaths
+> Task :app:generateDebugResources
+> Task :app:packageDebugResources
+> Task :app:parseDebugLocalResources
+> Task :app:createDebugCompatibleScreenManifests
+> Task :app:extractDeepLinksDebug
+> Task :app:mergeDebugResources
+> Task :app:processDebugMainManifest
+> Task :app:processDebugManifest
+> Task :app:processDebugManifestForPackage
+> Task :app:javaPreCompileDebug
+> Task :app:mergeDebugShaders
+> Task :app:compileDebugShaders NO-SOURCE
+> Task :app:generateDebugAssets UP-TO-DATE
+> Task :app:mergeDebugAssets
+> Task :app:compressDebugAssets
+> Task :app:desugarDebugFileDependencies
+> Task :app:checkDebugDuplicateClasses
+> Task :app:mergeDebugStartupProfile UP-TO-DATE
+> Task :app:processDebugResources
+> Task :app:mergeExtDexDebug
+> Task :app:mergeLibDexDebug
+> Task :app:mergeDebugJniLibFolders
+> Task :app:mergeDebugNativeLibs
+> Task :app:compileDebugKotlin
+
+> Task :app:stripDebugDebugSymbols
+Unable to strip the following libraries, packaging them as they are: libfreebl3.so, libgkcodecs.so, libipcclientcerts.so, liblgpllibs.so, libmozavcodec.so, libmozavutil.so, libmozglue.so, libnss3.so, libnssckbi.so, libplugin-container.so, libsoftokn3.so, libxul.so.
+
+> Task :app:validateSigningDebug
+> Task :app:writeDebugAppMetadata
+> Task :app:writeDebugSigningConfigVersions
+> Task :app:compileDebugJavaWithJavac NO-SOURCE
+> Task :app:dexBuilderDebug
+> Task :app:mergeDebugGlobalSynthetics
+> Task :app:processDebugJavaRes
+> Task :app:mergeProjectDexDebug
+> Task :app:mergeDebugJavaResource
+> Task :app:packageDebug
+> Task :app:createDebugApkListingFileRedirect
+> Task :app:assembleDebug
+
+BUILD SUCCESSFUL in 2m 5s
+38 actionable tasks: 37 executed, 1 up-to-date
+
+ZIP OK, entries: 961 bad: None
+has AndroidManifest.xml: True
+native libs: 12
+src bytes: 82845753
+dst bytes: 82845753
+Локально в Colab: /content/scena-arm64-debug.apk
+На Диске: /content/drive/MyDrive/Scena/scena-arm64-debug.apk
+Скачайте ЛУЧШЕ через Colab слева (Files) → scena-arm64-debug.apk
+Не через «поделиться ссылкой Диска», если файл режется.
+По идее, поворот должен работать как поворот модели, когда я убираю поворот, то WebView начинает багать, и карта может сбрасывается, левый и правый глаз не работают нормально, 1на настройка меняет оба глаза одновременно, а 2я ничего не делает, (происходит не на всех моделях).
+Сделай фон настроек лица графики и т.д. прозрачным, и стилизируй под Виндоус 98(обводка), спасибо.~/repo $ node run
+
+Запускаю 2 скрипт(ов) из: /sdcard/download/BotSystem
+
+──────────────────────────────────────────────────
+[Node.js] запущен (PID: 11088)
+[TetoPromiceSelfie.js] запущен (PID: 11089)
+──────────────────────────────────────────────────
+Логи идут ниже. Нажми Ctrl+C чтобы остановить всё.
+
+[Node.js] [Shell] NodeBot оболочка
+[TetoPromiceSelfie.js] [Shell] System_Teto оболочка запущена
+[TetoPromiceSelfie.js] [Shell] Запуск основного бота (попытка #1)
+[Node.js] [Main] Ноде запущена (ИИ + хранитель)
+[TetoPromiceSelfie.js] [Main] Бот запущен
+[Node.js] [Guardian] Ноде онлайн: @NodeJsCobot (id 8745858322)
+[Node.js] [Guardian] Будет чинить Тето (id 8869741747) в известных чатах
+[TetoPromiceSelfie.js] [Guardian] Онлайн: @NodeJsCobot (id 8745858322), взаимная защита с ботом 8869741747
+[Node.js] [Fix] repromote -1003956966341 Тето 400: Bad Request: CHAT_ADMIN_REQUIRED
+[TetoPromiceSelfie.js] [Fix] repromote -1003956966341 бот-хранитель 400: Bad Request: CHAT_ADMIN_REQUIRED
+[TetoPromiceSelfie.js] [Main] Discord ready as Θ θTeto maid#2870
+[TetoPromiceSelfie.js] [GitHub] Синхронизация: загружено 0, выгружено 0
+[TetoPromiceSelfie.js] [Triggers] Загружен triggers.txt из GitHub (4 триггеров)
+[Node.js] [Discord] login error: Used disallowed intents
+[Node.js] [Fix] repromote -1003956966341 Тето 400: Bad Request: CHAT_ADMIN_REQUIRED
+[TetoPromiceSelfie.js] [Fix] repromote -1003956966341 бот-хранитель 400: Bad Request: CHAT_ADMIN_REQUIRED
