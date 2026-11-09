@@ -7442,6 +7442,189 @@ assetProbe('buffoon',['buffoon.png','buffoon.webp','buffoon.gif']);
 assetProbe('pistol',['pistol.gif','pistol.png','pistol.webp']);
 assetProbe('pistolinarm',['pistolinarm.png','pistolinarm.gif','pistolinarm.webp']);
 
+/* ===== Аккаунты и таблицы лидеров (Supabase) ===== */
+// Публичный (publishable) ключ проекта; секретный service_role сюда вставлять нельзя
+const SB_URL='https://supabase.com/dashboard/project/wlirbdneulstqsjburjh';
+const SB_KEY='sb_publishable_l5GduuCh5WB5DI5ecqAc-g_HjGZK802';
+let myMoves=0,pendingResult=null,resultSent=false,sbSession=null;
+const sbOk=()=>!!SB_KEY&&!/PASTE/.test(SB_KEY);
+try{sbSession=JSON.parse(localStorage.getItem('sb_session')||'null');}catch(e){}
+function sbSave(s){sbSession=s;try{if(s)localStorage.setItem('sb_session',JSON.stringify(s));else localStorage.removeItem('sb_session');}catch(e){}}
+async function sbFetch(path,opts,token){
+  opts=opts||{};
+  const h=Object.assign({apikey:SB_KEY,'Content-Type':'application/json'},opts.headers||{});
+  if(token)h.Authorization='Bearer '+token;   // publishable-ключ — не JWT, в Authorization отправляем только токен пользователя
+  const r=await fetch(SB_URL+path,Object.assign({},opts,{headers:h}));
+  let j=null;try{j=await r.json();}catch(e){}
+  if(!r.ok){throw new Error((j&&(j.msg||j.message||j.error_description||j.error))||('Ошибка '+r.status));}
+  return j;
+}
+function sbMakeSession(j){
+  if(!j||!j.access_token)return null;
+  return {access_token:j.access_token,refresh_token:j.refresh_token,expires_at:j.expires_at||(Math.floor(Date.now()/1000)+(j.expires_in||3600)),user:j.user};
+}
+async function sbToken(){
+  if(!sbSession)return null;
+  if(sbSession.expires_at-60<Date.now()/1000){
+    try{
+      const j=await sbFetch('/auth/v1/token?grant_type=refresh_token',{method:'POST',body:JSON.stringify({refresh_token:sbSession.refresh_token})});
+      const s=sbMakeSession(j);if(s)sbSave(s);else{sbSave(null);return null;}
+    }catch(e){sbSave(null);return null;}
+  }
+  return sbSession.access_token;
+}
+function sbNick(){const u=sbSession&&sbSession.user;if(!u)return '';return (u.user_metadata&&u.user_metadata.nickname)||(u.email||'').split('@')[0];}
+async function sbSignUp(email,password,nick){
+  const j=await sbFetch('/auth/v1/signup',{method:'POST',body:JSON.stringify({email,password,data:{nickname:nick}})});
+  const s=sbMakeSession(j);if(s){sbSave(s);return 'ok';}
+  return 'confirm';
+}
+async function sbSignIn(email,password){
+  const j=await sbFetch('/auth/v1/token?grant_type=password',{method:'POST',body:JSON.stringify({email,password})});
+  const s=sbMakeSession(j);if(!s)throw new Error('Не удалось войти');sbSave(s);
+}
+async function sbSignOut(){try{const t=await sbToken();if(t)await sbFetch('/auth/v1/logout',{method:'POST'},t);}catch(e){}sbSave(null);}
+async function sbSubmit(res){
+  const t=await sbToken();if(!t)throw new Error('Нужно войти в аккаунт');
+  await sbFetch('/rest/v1/games',{method:'POST',headers:{Prefer:'return=minimal'},body:JSON.stringify({nickname:sbNick().slice(0,24)||'игрок',moves:res.moves,teams:res.teams,shape:res.shape})},t);
+}
+async function sbBoard(order){
+  const rows=await sbFetch('/rest/v1/games?select=user_id,nickname,moves,created_at&order=moves.'+order+',created_at.asc&limit=80');
+  const seen=new Set(),out=[];
+  (rows||[]).forEach(r=>{if(seen.has(r.user_id))return;seen.add(r.user_id);if(out.length<15)out.push(r);});   // один лучший результат на игрока
+  return out;
+}
+async function sendResult(res){
+  try{
+    await sbSubmit(res);resultSent=true;pendingResult=null;
+    return '✅ Результат ('+res.moves+' ход.) записан в таблицу лидеров';
+  }catch(e){return '⚠ Не удалось записать результат: '+e.message;}
+}
+async function finishResult(){
+  if(resultSent)return;
+  const res={moves:myMoves,teams:(CFG&&CFG.teams)||2,shape:(CFG&&CFG.shape)||'p'};
+  let note;
+  if(!sbOk())return;
+  if(sbSession){resultSent=true;note=await sendResult(res);}
+  else{pendingResult=res;note='Победа за '+res.moves+' ход.! Войди в аккаунт (👤 слева вверху), чтобы записать результат';}
+  const g=document.getElementById('go-reason');if(g)g.textContent+=' · '+note;
+}
+
+// ---- интерфейс ----
+function el(tag,css,txt,props){const e=document.createElement(tag);if(css)e.style.cssText=css;if(txt!=null)e.textContent=txt;if(props)Object.assign(e,props);return e;}
+let acctOverlay=null,acctTab='acct',acctMode='in';
+function acctBuild(){
+  const st=document.createElement('style');
+  st.textContent='#acct-bar{position:fixed;top:6px;left:6px;z-index:10000;display:flex;gap:6px}'
+   +'#acct-bar button{width:34px;height:34px;border-radius:10px;border:1px solid rgba(255,255,255,.18);background:rgba(30,30,38,.9);color:#fff;font-size:17px;cursor:pointer;padding:0}'
+   +'#acct-ov{position:fixed;inset:0;z-index:10001;background:rgba(0,0,0,.6);display:none;align-items:center;justify-content:center}'
+   +'#acct-ov.show{display:flex}'
+   +'#acct-box{width:min(92vw,400px);max-height:88vh;overflow:auto;background:#1d1d25;color:#eee;border-radius:14px;padding:14px;box-shadow:0 10px 40px rgba(0,0,0,.6);font:14px/1.35 system-ui,sans-serif}'
+   +'#acct-box input{width:100%;box-sizing:border-box;margin:4px 0;padding:9px 10px;border-radius:8px;border:1px solid #444;background:#12121a;color:#fff;font-size:15px}'
+   +'#acct-box .ab{padding:9px 12px;border-radius:9px;border:0;background:#2ea6ff;color:#fff;font-size:14px;cursor:pointer}'
+   +'#acct-box .ab.sec{background:#33333f}'
+   +'#acct-box table{width:100%;border-collapse:collapse;font-size:13px}#acct-box td{padding:3px 4px;border-bottom:1px solid #2c2c38}';
+  document.head.appendChild(st);
+  const bar=el('div');bar.id='acct-bar';
+  const b1=el('button',null,'👤',{title:'Аккаунт'}),b2=el('button',null,'🏆',{title:'Таблицы лидеров'});
+  b1.onclick=()=>acctOpen('acct');b2.onclick=()=>acctOpen('top');
+  bar.appendChild(b1);bar.appendChild(b2);document.body.appendChild(bar);
+  acctOverlay=el('div');acctOverlay.id='acct-ov';
+  acctOverlay.addEventListener('pointerdown',e=>{if(e.target===acctOverlay)acctClose();});
+  document.body.appendChild(acctOverlay);
+}
+function acctClose(){acctOverlay.classList.remove('show');}
+function acctOpen(tab){acctTab=tab;acctOverlay.classList.add('show');acctRender();}
+function acctRender(){
+  acctOverlay.textContent='';
+  const box=el('div');box.id='acct-box';acctOverlay.appendChild(box);
+  const tabs=el('div','display:flex;gap:6px;margin-bottom:10px');
+  [['acct','👤 Аккаунт'],['top','🏆 Лидеры']].forEach(([k,t])=>{
+    const b=el('button',null,t,{className:'ab'+(acctTab===k?'':' sec'),style:'flex:1'});
+    b.onclick=()=>{acctTab=k;acctRender();};tabs.appendChild(b);
+  });
+  const x=el('button','background:none;border:0;color:#aaa;font-size:20px;cursor:pointer','✕');x.onclick=acctClose;tabs.appendChild(x);
+  box.appendChild(tabs);
+  if(!sbOk()){box.appendChild(el('div','color:#ffb020','Не задан ключ Supabase: впиши SB_KEY в index.html (см. инструкцию).'));}
+  if(acctTab==='top')acctBoards(box);else acctForm(box);
+}
+function acctForm(box){
+  const msg=el('div','margin-top:8px;min-height:18px;color:#ffb020');
+  if(sbSession){
+    box.appendChild(el('div','font-size:17px;margin-bottom:4px','Привет, '+sbNick()+'!'));
+    box.appendChild(el('div','color:#aaa;margin-bottom:8px',(sbSession.user&&sbSession.user.email)||''));
+    box.appendChild(el('div','margin-bottom:10px','Ходов в текущей партии: '+myMoves));
+    if(pendingResult){
+      const pb=el('button',null,'Записать результат ('+pendingResult.moves+' ход.)',{className:'ab'});
+      pb.onclick=async()=>{msg.textContent='Отправляю…';msg.textContent=await sendResult(pendingResult);acctRender();};
+      box.appendChild(pb);
+    }
+    const lo=el('button','margin-left:6px','Выйти',{className:'ab sec'});
+    lo.onclick=async()=>{await sbSignOut();acctRender();};box.appendChild(lo);box.appendChild(msg);return;
+  }
+  const up=acctMode==='up';
+  box.appendChild(el('div','font-size:16px;margin-bottom:6px',up?'Регистрация':'Вход'));
+  const em=el('input',null,null,{type:'email',placeholder:'Email',autocomplete:'email'});
+  const pw=el('input',null,null,{type:'password',placeholder:'Пароль (от 6 символов)',autocomplete:up?'new-password':'current-password'});
+  const nk=el('input',null,null,{type:'text',placeholder:'Ник (для таблицы лидеров)',maxLength:24});
+  box.appendChild(em);if(up)box.appendChild(nk);box.appendChild(pw);
+  const go=el('button','margin-top:6px',up?'Зарегистрироваться':'Войти',{className:'ab'});
+  const sw=el('button','margin-top:6px;margin-left:6px',up?'У меня есть аккаунт':'Создать аккаунт',{className:'ab sec'});
+  sw.onclick=()=>{acctMode=up?'in':'up';acctRender();};
+  const run=async()=>{
+    const email=em.value.trim(),pass=pw.value,nick=nk.value.trim();
+    if(!email||!pass){msg.textContent='Введи email и пароль';return;}
+    if(up&&!nick){msg.textContent='Введи ник';return;}
+    if(!sbOk()){msg.textContent='Не задан ключ Supabase';return;}
+    go.disabled=true;msg.style.color='#ffb020';msg.textContent='Подождите…';
+    try{
+      if(up){
+        const r=await sbSignUp(email,pass,nick);
+        if(r==='confirm'){msg.style.color='#7be07b';msg.textContent='Готово! Подтверди email по письму, затем войди.';acctMode='in';go.disabled=false;return;}
+      }else await sbSignIn(email,pass);
+      if(pendingResult&&!resultSent){await sendResult(pendingResult);}
+      acctRender();
+    }catch(e){msg.style.color='#ff7070';msg.textContent=e.message;go.disabled=false;}
+  };
+  go.onclick=run;[em,pw,nk].forEach(i=>i.addEventListener('keydown',e=>{if(e.key==='Enter')run();}));
+  box.appendChild(go);box.appendChild(sw);box.appendChild(msg);
+}
+function acctBoards(box){
+  const mk=(title,order,hint)=>{
+    box.appendChild(el('div','font-size:15px;margin:10px 0 2px',title));
+    box.appendChild(el('div','color:#999;font-size:12px;margin-bottom:4px',hint));
+    const holder=el('div',null,'Загрузка…');box.appendChild(holder);
+    if(!sbOk()){holder.textContent='—';return;}
+    sbBoard(order).then(rows=>{
+      holder.textContent='';
+      if(!rows.length){holder.textContent='Пока пусто';return;}
+      const tb=el('table');
+      rows.forEach((r,i)=>{
+        const tr=el('tr');
+        [i+1,r.nickname,r.moves+' ход.',(r.created_at||'').slice(0,10)].forEach((v,j)=>tr.appendChild(el('td',j===2?'text-align:right;font-weight:600':(j===3?'color:#888;text-align:right':''),String(v))));
+        if(sbSession&&sbSession.user&&r.user_id===sbSession.user.id)tr.style.background='rgba(46,166,255,.15)';
+        tb.appendChild(tr);
+      });
+      holder.appendChild(tb);
+    }).catch(e=>{holder.style.color='#ff7070';holder.textContent=e.message;});
+  };
+  mk('🐢 Самая долгая победа','desc','Больше всего ходов в выигранной партии');
+  mk('⚡ Самая быстрая победа','asc','Меньше всего ходов в выигранной партии');
+}
+acctBuild();
+{
+  const _doMove2=doMove;
+  doMove=function(fx,fy,m,cb){const p=B[fy]&&B[fy][fx];if(p&&p.t==='white'&&!over)myMoves++;return _doMove2(fx,fy,m,cb);};
+  const _end2=end;
+  end=function(win,why){
+    const r=_end2(win,why);
+    try{if(win&&!(typeof onlineMode!=='undefined'&&onlineMode)&&myMoves>0)finishResult();}catch(e){console.warn(e);}
+    return r;
+  };
+  const _start2=start;
+  start=function(){myMoves=0;pendingResult=null;resultSent=false;return _start2.apply(this,arguments);};
+}
+
 const had=loadCfg();
 start();
 const rs=netLoadSession();
