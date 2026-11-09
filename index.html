@@ -5086,7 +5086,7 @@ function pcsOf(f){const a=[];each((p,x,y)=>{if(valid(x,y)&&(!f||f(p)))a.push({p,
 function spawnKindFor(t,x,y){
   const ks=[];each((p,kx,ky)=>{if(p.k==='K'&&p.t!==t&&valid(kx,ky))ks.push({x:kx,y:ky});});
   if(ks.some(k=>Math.abs(k.x-x)<=1&&Math.abs(k.y-y)<=1))return null;
-  const cands=(RULE[t]==='chess'?['P','N','B','R']:['m']).sort(()=>Math.random()-0.5);
+  const cands=(RULE[t]==='chess'?['P','N','B','R','E','C','H','T','G']:['m']).sort(()=>Math.random()-0.5);
   const old=B[y][x];
   for(const k of cands){
     B[y][x]={t,k,st:0};
@@ -6951,15 +6951,16 @@ window.setupStartPosition=()=>start();
 })();
 /* ===== Шут, пистолет и раненые фигуры ===== */
 // Настройки (можно менять)
-const JESTER_CHANCE=0.07;     // шанс появления Шута за круг (когда он не на поле)
-const JESTER_COOLDOWN=12;     // пауза после ухода Шута, кругов
-const JESTER_STEPS=2;         // клеток за круг
+const JESTER_CHANCE=0.25;     // шанс появления Шута за круг (когда он не на поле)
+const JESTER_COOLDOWN=8;      // пауза после ухода Шута, кругов
+const JESTER_STEPS=3;         // клеток за круг
 const JAIL_ROUNDS=2;          // сколько кругов короли стоят за границей
-const GUN_CHANCE=0.12;        // шанс падения пистолета за круг
+const GUN_CHANCE=0.3;         // шанс падения пистолета за круг
 const GUN_MAX_TOTAL=3;        // максимум пистолетов в игре (на полу + в руках)
 const GUN_AMMO=3;           // патронов в пистолете
 const GUN_RANGE=2;            // дальность выстрела (клеток, по кругу вокруг фигуры)
-const VARIANT_CHANCE=0.2;   // шанс, что ладья/конь/слон в начале игры окажется особой фигурой
+const VARIANT_MIN=2;           // минимум особых фигур у каждой шахматной стороны
+const VARIANT_CHANCE=0.25;   // шанс, что ладья/конь/слон в начале игры окажется особой фигурой
 const PONY_CHANCE=0.1;      // шанс, что конь при первом ходе окажется пони
 const LONGROOK_LEN=3;       // на сколько клеток падает Высокая Тура
 const SHOT_VANISH=0.30, SHOT_RISE=0.35;   // раз в 2 круга: исчезнуть / встать (иначе продолжает лежать)
@@ -7127,7 +7128,7 @@ function shotRound(){
 
 // ---- пистолет падает с неба: на пустую клетку, максимально далеко от всех фигур ----
 function gunRound(){
-  if(bossSt||over||GUNS.length||round<3||Math.random()>GUN_CHANCE||totalGuns()>=GUN_MAX_TOTAL)return;
+  if(bossSt||over||GUNS.length||round<2||Math.random()>GUN_CHANCE||totalGuns()>=GUN_MAX_TOTAL)return;
   const pts=[];each((p,x,y)=>{pts.push([x,y]);});
   let best=-1,cells=[];
   for(let y=0;y<WN;y++)for(let x=0;x<WN;x++){
@@ -7146,7 +7147,7 @@ function gunRound(){
 // ---- Шут ----
 function kingList(){return ORDER.filter(t=>alive(t)).map(t=>({t,p:kingPos(t)})).filter(k=>k.p);}
 function jesterRound(){
-  if(!JEST)JEST={phase:'idle',cd:5};
+  if(!JEST)JEST={phase:'idle',cd:3+Math.floor(Math.random()*4)};
   if(JEST.phase==='idle'){
     if(round<JEST.cd||bossSt||over||Math.random()>JESTER_CHANCE)return;
     return jesterSpawn();
@@ -7266,12 +7267,25 @@ const KDESC={
   G:'Цыганский конь: ходит как Конь, не бьёт — крадёт фигуры'
 };
 NAME.wall='стена';
+let variantNote='';
+function hasVariants(){let n=0;each(p=>{if(p.t&&p.t!=='neutral'&&p.t!=='wall'&&p.k.length===1&&'ECHTGY'.includes(p.k))n++;});return n;}
 function variantsInit(){
+  const cnt={},made=[];
   each((p,x,y)=>{
     if(!p.t||!ORDER.includes(p.t)||RULE[p.t]!=='chess')return;
     const v=VARIANTS[p.k];
-    if(v&&Math.random()<VARIANT_CHANCE)p.k=pick(v);
+    if(v&&Math.random()<VARIANT_CHANCE){p.k=pick(v);cnt[p.t]=(cnt[p.t]||0)+1;made.push(p.k);}
   });
+  // гарантия: у каждой шахматной стороны минимум VARIANT_MIN особых фигур
+  ORDER.filter(t=>RULE[t]==='chess').forEach(t=>{
+    const cand=[];each((p,x,y)=>{if(p.t===t&&VARIANTS[p.k])cand.push(p);});
+    while((cnt[t]||0)<VARIANT_MIN&&cand.length){
+      const p=cand.splice(Math.floor(Math.random()*cand.length),1)[0];
+      p.k=pick(VARIANTS[p.k]);cnt[t]=(cnt[t]||0)+1;made.push(p.k);
+    }
+  });
+  if(made.length){const N={E:'Слонь',C:'Конница',H:'Хтонь',T:'Высокая Тура',G:'Цыганский конь'};
+    variantNote='✨ Особые фигуры в партии: '+made.map(k=>N[k]).join(', ');}
 }
 function fillSpecial(s,p){
   s.textContent='';
@@ -7386,6 +7400,15 @@ function drawFallen(el,x0,y0){
   newRound=function(){_newRound();try{shotRound();jesterRound();gunRound();}catch(e){console.warn('plus-extras',e);}};
   const _advance=advance;
   advance=function(){htChain=null;try{settleGuns();resolveFalls();}catch(e){}return _advance.apply(this,arguments);};
+  const _start=start;
+  start=function(){
+    variantNote='';
+    _start.apply(this,arguments);
+    try{
+      if(!hasVariants()){variantsInit();draw();}   // страховка, если расстановка шла другим путём
+      if(variantNote)log(variantNote);
+    }catch(e){console.warn('plus-extras',e);}
+  };
   const _setup=setup;
   setup=function(){_setup();try{variantsInit();}catch(e){console.warn(e);}};
   const _soft=softReset;
