@@ -7444,9 +7444,31 @@ assetProbe('pistolinarm',['pistolinarm.png','pistolinarm.gif','pistolinarm.webp'
 
 /* ===== Аккаунты и таблицы лидеров (Supabase) ===== */
 // Публичный (publishable) ключ проекта; секретный service_role сюда вставлять нельзя
-const SB_URL='https://supabase.com/dashboard/project/wlirbdneulstqsjburjh';
-const SB_KEY='sb_publishable_l5GduuCh5WB5DI5ecqAc-g_HjGZK802';
+const SB_URL_DEFAULT='https://wlirbdneulstqsjburjh.supabase.co';
+const SB_URL_RE=/^https:\/\/[a-z0-9-]+\.supabase\.co$/i;
+function sbNormUrl(u){
+  u=(u||'').trim().replace(/\/+$/,'');
+  if(!u)return '';
+  const dm=u.match(/supabase\.com\/dashboard\/project\/([a-z0-9]{20})/i);   // ссылка на дашборд → берём id проекта
+  if(dm)u=dm[1];
+  if(/^[a-z0-9]{20}$/i.test(u))u='https://'+u+'.supabase.co';
+  else if(!/^https?:\/\//i.test(u))u='https://'+u;
+  u=u.replace(/^http:\/\//i,'https://');
+  return SB_URL_RE.test(u)?u:null;      // null — не похоже на адрес проекта
+}
+function sbUrl(){
+  let u='';try{u=localStorage.getItem('sb_url')||'';}catch(e){}
+  return sbNormUrl(u)||SB_URL_DEFAULT;     // испорченное сохранённое значение игнорируем
+}
+function sbSetUrl(v){
+  const n=sbNormUrl(v);
+  if(n===null)return false;
+  try{if(n)localStorage.setItem('sb_url',n);else localStorage.removeItem('sb_url');}catch(e){}
+  sbSave(null);return true;
+}
 let myMoves=0,pendingResult=null,resultSent=false,sbSession=null;
+// Публичный (publishable) ключ проекта; секретный service_role сюда вставлять нельзя
+const SB_KEY='sb_publishable_l5GduuCh5WB5DI5ecqAc-g_HjGZK802';
 const sbOk=()=>!!SB_KEY&&!/PASTE/.test(SB_KEY);
 try{sbSession=JSON.parse(localStorage.getItem('sb_session')||'null');}catch(e){}
 function sbSave(s){sbSession=s;try{if(s)localStorage.setItem('sb_session',JSON.stringify(s));else localStorage.removeItem('sb_session');}catch(e){}}
@@ -7454,7 +7476,9 @@ async function sbFetch(path,opts,token){
   opts=opts||{};
   const h=Object.assign({apikey:SB_KEY,'Content-Type':'application/json'},opts.headers||{});
   if(token)h.Authorization='Bearer '+token;   // publishable-ключ — не JWT, в Authorization отправляем только токен пользователя
-  const r=await fetch(SB_URL+path,Object.assign({},opts,{headers:h}));
+  let r;
+  try{r=await fetch(sbUrl()+path,Object.assign({},opts,{headers:h}));}
+  catch(e){throw new Error('Нет связи с Supabase ('+sbUrl().replace(/^https?:\/\//,'')+'). Проверь адрес проекта (кнопка «Адрес проекта» ниже) и интернет.');}
   let j=null;try{j=await r.json();}catch(e){}
   if(!r.ok){throw new Error((j&&(j.msg||j.message||j.error_description||j.error))||('Ошибка '+r.status));}
   return j;
@@ -7560,7 +7584,7 @@ function acctForm(box){
       box.appendChild(pb);
     }
     const lo=el('button','margin-left:6px','Выйти',{className:'ab sec'});
-    lo.onclick=async()=>{await sbSignOut();acctRender();};box.appendChild(lo);box.appendChild(msg);return;
+    lo.onclick=async()=>{await sbSignOut();acctRender();};box.appendChild(lo);box.appendChild(msg);acctUrlBtn(box);return;
   }
   const up=acctMode==='up';
   box.appendChild(el('div','font-size:16px;margin-bottom:6px',up?'Регистрация':'Вход'));
@@ -7588,6 +7612,12 @@ function acctForm(box){
   };
   go.onclick=run;[em,pw,nk].forEach(i=>i.addEventListener('keydown',e=>{if(e.key==='Enter')run();}));
   box.appendChild(go);box.appendChild(sw);box.appendChild(msg);
+  acctUrlBtn(box);
+}
+function acctUrlBtn(box){
+  const b=el('button','margin-top:10px;background:none;border:0;color:#7aa7ff;font-size:12px;cursor:pointer;padding:0;text-decoration:underline','Адрес проекта: '+sbUrl().replace(/^https?:\/\//,''));
+  b.onclick=()=>{const v=prompt('Project URL из Supabase → Project Settings → API\n(вида https://xxxxxxxxxxxxxxxxxxxx.supabase.co или только 20-символьный id)',sbUrl());if(v!==null){if(/^sb_(publishable|secret)/i.test(v.trim()))alert('Это ключ, а не адрес. Ключ уже вписан в игру. Нужен Project URL вида https://xxxxxxxxxxxxxxxxxxxx.supabase.co');else if(!sbSetUrl(v))alert('Не похоже на адрес проекта. Нужен вид https://xxxxxxxxxxxxxxxxxxxx.supabase.co (или только 20-символьный id)');acctRender();}};
+  box.appendChild(b);
 }
 function acctBoards(box){
   const mk=(title,order,hint)=>{
