@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Chess — подтверждение почты</title>
+<style>
+  :root{color-scheme:dark}
+  *{box-sizing:border-box}
+  body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:#12121a;color:#eee;font:15px/1.45 system-ui,sans-serif;padding:16px}
+  .card{width:min(94vw,420px);background:#1d1d25;border-radius:16px;padding:26px 22px;box-shadow:0 10px 40px rgba(0,0,0,.6);text-align:center}
+  .icon{font-size:46px;margin-bottom:6px}
+  h1{font-size:21px;margin:0 0 8px}
+  p{margin:0 0 14px;color:#b8b8c6}
+  input{width:100%;margin:4px 0;padding:11px 12px;border-radius:9px;border:1px solid #444;background:#12121a;color:#fff;font-size:15px}
+  .btn{display:inline-block;margin-top:8px;padding:11px 18px;border-radius:10px;border:0;background:#2ea6ff;color:#fff;font-size:15px;cursor:pointer;text-decoration:none}
+  .btn:disabled{opacity:.6;cursor:default}
+  .msg{min-height:20px;margin-top:10px;font-size:13px;color:#ffb020}
+  .msg.err{color:#ff7070}
+  .hide{display:none}
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="icon" id="icon">⏳</div>
+  <h1 id="title">Проверяю ссылку…</h1>
+  <p id="text"></p>
+
+  <div id="reset" class="hide">
+    <input type="password" id="p1" placeholder="Новый пароль (от 6 символов)" autocomplete="new-password">
+    <input type="password" id="p2" placeholder="Повтори пароль" autocomplete="new-password">
+    <button class="btn" id="save">Сохранить пароль</button>
+    <div class="msg" id="msg"></div>
+  </div>
+
+  <a class="btn hide" id="back" href="#">Вернуться в игру</a>
+</div>
+
+<script>
+/* ═══════════════════════════════════════════════════════════════
+   НАСТРОЙКИ — впиши свои значения
+   ═══════════════════════════════════════════════════════════════ */
+var SB_URL = 'https://wlirbdneulstqsjburjh.supabase.co';          // Project URL (как в accounts.js)
+var SB_KEY = 'sb_publishable_l5GduuCh5WB5DI5ecqAc-g_HjGZK802';    // публичный ключ (как в accounts.js)
+var GAME_URL = 'https://darkstalke5r.github.io/ChessRandom/';   // адрес игры, куда вернуть человека, например 'https://мой-сайт.netlify.app/'. Пусто — кнопки не будет
+
+var $ = function(id){ return document.getElementById(id); };
+function show(icon, title, text){ $('icon').textContent = icon; $('title').textContent = title; $('text').textContent = text || ''; }
+function showBack(){ if(GAME_URL){ $('back').href = GAME_URL; $('back').classList.remove('hide'); } }
+
+// Supabase кладёт данные в #hash: #access_token=...&type=signup  или  #error=...&error_code=otp_expired
+var params = new URLSearchParams(location.hash.replace(/^#/, ''));
+try{ history.replaceState(null, '', location.pathname); }catch(e){}   // токен из адресной строки убираем
+var type = params.get('type'), token = params.get('access_token'), err = params.get('error');
+
+if(err){
+  var expired = /otp_expired|expired/i.test((params.get('error_code') || '') + ' ' + (params.get('error_description') || ''));
+  show('⚠️', expired ? 'Ссылка устарела' : 'Не удалось открыть ссылку',
+    expired ? 'Ссылка из письма уже использована или просрочена. Вернись в игру и запроси новое письмо (для пароля — «Забыл пароль?»).'
+            : 'Что-то пошло не так. Вернись в игру и попробуй ещё раз.');
+  showBack();
+}else if(type === 'recovery' && token){
+  show('🔑', 'Новый пароль', 'Придумай новый пароль для своего аккаунта.');
+  $('reset').classList.remove('hide');
+  var go = function(){
+    var a = $('p1').value, b = $('p2').value, msg = $('msg');
+    msg.className = 'msg';
+    if(a.length < 6){ msg.textContent = 'Пароль слишком короткий (минимум 6 символов)'; return; }
+    if(a !== b){ msg.textContent = 'Пароли не совпадают'; return; }
+    $('save').disabled = true; msg.textContent = 'Сохраняю…';
+    fetch(SB_URL + '/auth/v1/user', {
+      method: 'PUT',
+      headers: {apikey: SB_KEY, Authorization: 'Bearer ' + token, 'Content-Type': 'application/json'},
+      body: JSON.stringify({password: a})
+    }).then(function(r){ return r.json().catch(function(){ return {}; }).then(function(j){ return {ok: r.ok, j: j}; }); })
+    .then(function(res){
+      if(!res.ok){
+        var m = res.j.msg || res.j.message || res.j.error_description || 'Ошибка';
+        if(/different from the old/i.test(m)) m = 'Новый пароль должен отличаться от старого';
+        else if(/expired|invalid|session/i.test(m)) m = 'Ссылка устарела — запроси новую через «Забыл пароль?» в игре';
+        msg.className = 'msg err'; msg.textContent = m; $('save').disabled = false; return;
+      }
+      $('reset').classList.add('hide');
+      show('✅', 'Пароль изменён', 'Теперь вернись в игру и войди с новым паролем.');
+      showBack();
+    }).catch(function(){ msg.className = 'msg err'; msg.textContent = 'Нет связи с сервером'; $('save').disabled = false; });
+  };
+  $('save').onclick = go;
+  ['p1','p2'].forEach(function(id){ $(id).addEventListener('keydown', function(e){ if(e.key === 'Enter') go(); }); });
+}else if(token && (type === 'signup' || type === 'magiclink' || type === 'email_change' || type === 'invite')){
+  show('✅', type === 'email_change' ? 'Новая почта подтверждена' : 'Почта подтверждена',
+       'Аккаунт готов. Вернись в игру и войди — результаты будут попадать в таблицу лидеров.');
+  showBack();
+}else{
+  show('♟️', 'Chess', 'Эта страница открывается по ссылке из письма (подтверждение почты или сброс пароля).');
+  showBack();
+}
+</script>
+</body>
+</html>

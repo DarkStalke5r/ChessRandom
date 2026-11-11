@@ -64,7 +64,7 @@ async function sbFetch(path,opts,token){
   if(token)h.Authorization='Bearer '+token;   // publishable-ключ — не JWT, в Authorization отправляем только токен пользователя
   let r;
   try{r=await fetch(sbUrl()+path,Object.assign({},opts,{headers:h}));}
-  catch(e){throw new Error('Нет связи с Supabase ('+sbUrl().replace(/^https?:\/\//,'')+'). Проверь адрес проекта (кнопка «Адрес проекта» ниже) и интернет.');}
+  catch(e){throw new Error('Нет связи с Supabase ('+sbUrl().replace(/^https?:\/\//,'')+'). Проверь интернет и попробуй ещё раз.');}
   let j=null;try{j=await r.json();}catch(e){}
   if(!r.ok){
     let m=(j&&(j.msg||j.message||j.error_description||j.error))||('Ошибка '+r.status);
@@ -74,6 +74,8 @@ async function sbFetch(path,opts,token){
       [/rate limit|too many/i,'Слишком много попыток или писем. Подожди или отключи подтверждение email в Supabase'],
       [/already registered|already been registered/i,'Этот email уже зарегистрирован — нажми «У меня есть аккаунт» и войди'],
       [/password should be at least/i,'Пароль слишком короткий (минимум 6 символов)'],
+      [/different from the old password/i,'Новый пароль должен отличаться от старого'],
+      [/otp_expired|token has expired|expired or is invalid|session missing|invalid jwt/i,'Ссылка из письма устарела или уже использована — запроси новую через «Забыл пароль?»'],
       [/duplicate key|23505/i,'Такой ник уже занят'],
       [/row-level security|42501/i,'Нет прав записи — запусти обновлённый supabase_setup.sql в Supabase'],
       [/relation .* does not exist|could not find the table|PGRST205|PGRST202/i,'В базе нет нужных таблиц — запусти supabase_setup.sql в Supabase'],
@@ -98,13 +100,18 @@ async function sbToken(){
   }
   return sbSession.access_token;
 }
+// Куда Supabase перекинет по ссылке из письма (подтверждение почты / сброс пароля).
+// Впиши адрес страницы auth.html после выкладки в интернет, например 'https://мой-сайт.netlify.app/auth.html'.
+// Пусто — Supabase использует Site URL из настроек проекта.
+const AUTH_PAGE_URL='https://darkstalke5r.github.io/ChessRandom/auth.html';
+function authBack(){return AUTH_PAGE_URL?'?redirect_to='+encodeURIComponent(AUTH_PAGE_URL):'';}
 function sbNick(){
   if(sbSession){const u=sbSession.user;return (u&&u.user_metadata&&u.user_metadata.nickname)||((u&&u.email)||'').split('@')[0];}
   return openAcc?openAcc.nickname:'';
 }
 // --- обычный аккаунт (email + пароль) ---
 async function sbSignUp(email,password,nick){
-  const back=/^https?:$/.test(location.protocol)?'?redirect_to='+encodeURIComponent(location.origin+location.pathname):'';
+  const back=authBack();
   const j=await sbFetch('/auth/v1/signup'+back,{method:'POST',body:JSON.stringify({email,password,data:{nickname:nick}})});
   const s=sbMakeSession(j);
   if(s){openSave(null);sbSave(s);return 'ok';}
@@ -127,6 +134,14 @@ async function sbOpenLogin(nick){
   const rows=await sbFetch('/rest/v1/open_accounts?select=nickname&nick_lc=eq.'+encodeURIComponent(nick.toLowerCase())+'&limit=1');
   if(!rows||!rows.length)throw new Error('Открытого аккаунта с таким ником нет — создай его через «Создать аккаунт»');
   sbSave(null);openSave({nickname:rows[0].nickname});
+}
+// --- сброс пароля: письмо со ссылкой → возврат на сайт с токеном в #hash → новый пароль ---
+async function sbRecover(email){
+  const back=authBack();
+  await sbFetch('/auth/v1/recover'+back,{method:'POST',body:JSON.stringify({email})});
+}
+async function sbSetPassword(token,password){
+  return await sbFetch('/auth/v1/user',{method:'PUT',body:JSON.stringify({password})},token);
 }
 async function sbSignOut(){
   try{const t=await sbToken();if(t)await sbFetch('/auth/v1/logout',{method:'POST'},t);}catch(e){}
@@ -175,7 +190,214 @@ async function finishResult(d){
 
 // ---- интерфейс ----
 function el(tag,css,txt,props){const e=document.createElement(tag);if(css)e.style.cssText=css;if(txt!=null)e.textContent=txt;if(props)Object.assign(e,props);return e;}
-let acctOverlay=null,acctTab='acct',acctMode='in',acctOpenMode=false,acctDraft={};
+let acctOverlay=null,acctTab='acct',acctMode='in',acctOpenMode=false,acctDraft={},recov=null,acctNote='';
+const CODE_COMMENTS=[
+"craft: discard 2 identical + 1 any this turn → nuclear",
+"white turn budget in boss mode: 4 moves, max 2 per piece, 1 attack",
+"if player king dies in boss fight — AI takes white army",
+"Layered Teto is always shown. Optional src can be used later for alt outfits.",
+"Keep fallback hidden while layers load.",
+"one eye shifts more, opposite eye shifts less opposite direction",
+"white, black, neutral are all allies vs boss",
+"Boss / radio mega-pawn: players don't control boss",
+"empty forward — but boss footprint counts as attack square",
+"allies block but not capturable",
+"Boss fight: approach from diagonal — 8-dir step + «вверх затем вправо» за один ход",
+"combined two orthogonal steps (e.g. up then right) as one move",
+"same axis twice → handled as 2 budget moves",
+"intermediate must be empty or boss footprint",
+"colored attackers + neutrals threaten everyone",
+"no checks between sides in boss fight",
+"boss fight: no inter-side checks/mates — all legal raw moves vs boss only",
+"With nuclear — only fire nuclear, no normal play",
+"if nuclear in hand but ritual not started, start or wait",
+"shouldn't craft as AI often — if somehow has card, force fire aim after short delay",
+"after card effect, make a normal move",
+"King always flees as far as possible.",
+"maximize distance from boss",
+"king should not tank the boss",
+"prefer safer distance (~4–6), never stand adjacent",
+"attack only if already in range ≤2 and this move hits",
+"don't dive in just to poke",
+"don't wander closer without a hit",
+"base chance ~45% to consider a card",
+"find 3x3 with most white material (prefer not empty)",
+"protect valuable black piece under threat or king",
+"angel on advanced or valuable piece without angel",
+"hide a hanging valuable piece",
+"spawn near center or near white king",
+"during nuke fire phase, only nuclear is usable",
+"Chaos card face flash 0.1–1s",
+"randomize interval feel: occasionally skip frames via opacity tick",
+"skip → up to ~1s perceived",
+"Put hand card into reserve only on your turn",
+"ready: can select anytime (even opponent turn)",
+"never draw glyph on boss footprint — sprite covers 3×3",
+"empty cell visual under sprite",
+"boss sprites stretched over exact 3×3 cells",
+"positions relative to boardEl",
+"pawns outside step 2 in any direction → fewer half-moves",
+"move toward the nearest edge of the board (into play)",
+"clamp to nearest in-bounds",
+"capture enemy / be blocked by ally",
+"never resize during boss fight",
+"angel disabled while standing in demon aura",
+"1 second pause after card vanishes, before effect",
+"standard order on back rank",
+"Keep merge extras + buffs from the actual piece taken from the pool",
+"if original base type differed (e.g. merged queen placed on rook home), keep that movement too",
+"also transfer buffs from the sacrificed extra piece itself",
+"reset castling rights lightly",
+"also by reference miss: clear first matching type if still present",
+"already removed from hand?",
+"don't consume until confirmed in picker",
+"random effect among: bang, demon, airstrike, spawn, shield",
+"empty: spawn neutral demon knight",
+"try place nearby or offboard",
+"3 width × 4 height, centered on impact",
+"Teto splash covers nuclear owner's cards",
+"AI protects 3 valuable pieces",
+"auto-continue if user slow",
+"main slots of the side WITHOUT nuclear slide off-screen",
+"clear their hand → will refill with futures",
+"defender is the side WITHOUT nuclear",
+"aim near white king or center",
+"consume nuclear from AI hand",
+"protected → future for 2 pairs of turns (4 half-moves) — guaranteed survival",
+"8s silence, then rocket",
+"rebirth as red at same cells",
+"prefer axis toward epicenter, one cell",
+"if target occupied by another red, still try alternate",
+"clear remaining reds into boss",
+"clear all leftover red walkers everywhere",
+"up to 2 red pawns near boss, normal size, oneshot, move like boss",
+"oneshot minions of boss shouldn't be on footprint anyway",
+"move all minions one step same direction as boss (if free)",
+"move from far side first to avoid collisions",
+"oneshot capture anything they step on",
+"strip any remaining white kings just in case",
+"expand board to 13×13, keep pieces centered",
+"footprint always counts in boss mode even if glyph missing",
+"resync mega origin to actual piece",
+"if piece not at top-left of footprint, move reference",
+"Phase 2 at 5 HP: becomes officer (bishop), 5 diagonal moves",
+"distance to nearest cell of footprint",
+"Boss fight: loss if not a single white piece is left (on board or waiting in the future)",
+"crush anyone already standing inside",
+"refill minions up to 2",
+"aggro: nearest non-boss, non-red piece",
+"clear NEW footprint completely (no skip — was letting kings live inside)",
+"spend remaining white budget attacking boss / repositioning",
+"doMove may afterMove or leave budget",
+"With nuclear in hand — only nuclear actions allowed",
+"auto-select nuclear if present",
+"hand only on your turn",
+"hard-clear so king cannot be saved again by the same card",
+"boss-mode budgets for white: 4 moves total, max 2 per unique piece, 1 attack",
+"oneshot red minions: any hit kills them",
+"boss hit: damage instead of capturing block",
+"if somehow standing on footprint after — digest next",
+"mega slide (non-boss controlled rare)",
+"Shield on target: bounce attacker back, drop shield (other states stay)",
+"Angel glow protection for defender's side: 78% reflect like shield",
+"attacker stays on kill square for visual",
+"promote after friendly merge too (pawn-base merges)",
+"Returning into boss footprint → boss eats the piece (never overwrite boss)",
+"ally merge: stack movement + buffs",
+"in boss fight kings dying doesn't end the game (white army → AI)",
+"black king death also doesn't end boss fight",
+"King away (future/frozen) or pieces blocked — do NOT softlock: skip turn",
+"caller / skip handles pass",
+"true stalemate/mate with king on board",
+"Always allow skip on your turn (except game over)",
+"only store player-turn checkpoints",
+"also highlight remaining kings",
+"re-render with kill highlights",
+"approach medium range / boss",
+"Boss mode: white → black → neutral → boss → white",
+"recover missing boss before continuing cycle",
+"after neutral move, boss acts",
+"force-unlock stuck animation flags so skip always works on your turn",
+"mobile: prefer pointerup so tap isn't swallowed",
+"failsafe: unstick UI locks and refresh skip button",
+"стартовые карты — полностью случайные (по 3 на сторону)",
+"AI: 70% future already in reserve (auto king-save)",
+"player can receive future in normal rotation",
+"Мёбиус ∞: лента 16×4 (8 секторов на кольцо × 4 дорожки) — сплошная восьмёрка",
+"стандартная шахматная доска 8×8",
+"ширина поля (для Мёбиуса 7, иначе 8)",
+"для 7 клеток: R N B Q K B N  (без второй ладьи) или R N B K B N R",
+"гарантируем короля в центре-ish",
+"Универсальный шаг: на Мёбиусе учитывает переворот через шов",
+"пешка: вперёд (с возможным двойным) и взятие по диагонали",
+"рокировка: король и ладья на стартовых местах, между ними пусто (≥2 клетки)",
+"идущие: фигуры за краем поля по клетке за ход идут к ближайшей клетке поля",
+"Мёбиус ∞: слегка меняем число секторов / дорожек",
+"сначала самые «свежие» погибшие",
+"нейтральные фигуры ходят раз в круг: бьют самое ценное, что достанут",
+"кто из врагов может взять клетку (x,y) следующим ходом",
+"ИИ: выход из-под шаха, не подставляет фигуры, уводит атакованные, берёт ценное",
+"оставить короля под ударом нельзя",
+"увести фигуру из-под боя",
+"ИИ тянется к пистолету",
+"полёт карты из слота на поле, затем эффект",
+"цель пересчитывается каждый кадр: карта «прикреплена» к клетке и едет вместе с полем, а не с экраном",
+"полёт фигуры между клетками",
+"карты босса разыгрываются в его ход, потом выдаются новые",
+"id пира (меняется при каждом подключении)",
+"постоянный id игрока в комнате (переживает переподключение)",
+"заменяем старое подключение этого игрока",
+"игрок уже подключился заново",
+"возвращение хоста после перезагрузки страницы: комната и партия восстанавливаются из сохранённого состояния",
+"старая регистрация на брокере может держаться до минуты",
+"страница была перезагружена — поднимаем партию заново",
+"потеря связи у гостя: сами пытаемся вернуться по тому же коду",
+"если партия идёт — баннер уберёт сообщение «resume»",
+"Полный снимок Plus-партии для синхронизации",
+"подряд идущие снимки — берём последний",
+"ядерка у остальных: те же подсветка зоны, отсчёт и ракета (сами изменения придут снимками)",
+"ИИ за пустые места считает только хост, чтобы у всех было одно и то же",
+"wait for players then start",
+"host still picks board, then lobby",
+"клетка занята своей — ждём ещё круг",
+"ИИ только если за эту сторону никто не сидит онлайн",
+"запись «Вид:команда» — файл показывается как есть, без окраски (для особых фигур конкретной команды)",
+"умножение на цвет команды: белое → цвет команды, чёрная обводка остаётся чёрной",
+"строго в пределах видимой области viewport",
+"толщина всей ленты (шире клетки)",
+"hit-area layer (transparent divs for clicks)",
+"half columns → left circle, half → right",
+"highlight classes via data",
+"center of sector for piece + hit",
+"selection / moves overlay",
+"тап по клетке: считаем по координатам (pointer capture камеры гасит обычный click)",
+"кнопки: старые обработчики заменяем, старые «обновлялки» отключаем",
+"шанс появления Шута за круг (когда он не на поле)",
+"пауза после ухода Шута, кругов",
+"сколько кругов короли стоят за границей",
+"шанс падения пистолета за круг",
+"максимум пистолетов в игре (на полу + в руках)",
+"дальность выстрела (клеток, по кругу вокруг фигуры)",
+"минимум особых фигур у каждой шахматной стороны",
+"шанс, что ладья/конь/слон в начале игры окажется особой фигурой",
+"шанс, что конь при первом ходе окажется пони",
+"на сколько клеток падает Высокая Тура",
+"раз в 2 круга: исчезнуть / встать (иначе продолжает лежать)",
+"пистолет на полу (с анимацией падения с неба)",
+"выстрел: фигура не двигается, цель падает (лежит)",
+"подбираем пистолет, если фигура стоит на его клетке",
+"достаёт тростью через клетку — король может быть обложен своими фигурами",
+"перепрыгиваем через фигуры, если рядом всё занято",
+"Шут забирает обоих королей за границу поля",
+"какой стандартной фигурой считаются при «Сбросе»",
+"пони: обычный конь, уменьшенный в 2.5 раза",
+"Высокая Тура: нижний пиксель текстуры — к нижнему краю клетки, остальное торчит вверх",
+"Хтонь: пугает всех, кого «атакует» (линии ферзя и ходы коня, первая фигура на линии)",
+"три хода подряд за один ход",
+"Цыганский конь: переманивает фигуру на свою сторону",
+"Высокая Тура: падает и превращается в стену",
+"страховка, если расстановка шла другим путём"
+];
 function acctBuild(){
   const st=document.createElement('style');
   st.textContent='#acct-bar{position:fixed;top:6px;left:6px;z-index:10000;display:flex;gap:6px}'
@@ -224,13 +446,64 @@ function acctHeader(box,title){
   show();row.appendChild(badge);box.appendChild(row);
   if(sbOk())sbStats().then(()=>{if(badge.isConnected)show();});
 }
+// вместо адреса проекта — случайный комментарий из кода игры (клик — другой)
 function acctUrlBtn(box){
-  const b=el('button','margin-top:10px;background:none;border:0;color:#7aa7ff;font-size:12px;cursor:pointer;padding:0;text-decoration:underline','Адрес проекта: '+sbUrl().replace(/^https?:\/\//,''));
-  b.onclick=()=>{const v=prompt('Project URL из Supabase → Project Settings → API\n(вида https://xxxxxxxxxxxxxxxxxxxx.supabase.co или только 20-символьный id)',sbUrl());if(v!==null){if(/^sb_(publishable|secret)/i.test(v.trim()))alert('Это ключ, а не адрес. Ключ уже вписан в игру. Нужен Project URL вида https://xxxxxxxxxxxxxxxxxxxx.supabase.co');else if(!sbSetUrl(v))alert('Не похоже на адрес проекта. Нужен вид https://xxxxxxxxxxxxxxxxxxxx.supabase.co (или только 20-символьный id)');acctRender();}};
-  box.appendChild(b);
+  const pick=()=>'// '+CODE_COMMENTS[Math.floor(Math.random()*CODE_COMMENTS.length)];
+  const d=el('div','margin-top:12px;color:#6f7d8c;font:11px/1.4 ui-monospace,Consolas,monospace;word-break:break-word;cursor:pointer;user-select:none',pick(),{title:'Нажми — другой комментарий'});
+  d.onclick=()=>{d.textContent=pick();};
+  box.appendChild(d);
+}
+function acctForgot(box){
+  acctHeader(box,'Сброс пароля');
+  box.appendChild(el('div','color:#aaa;font-size:13px;margin-bottom:6px','Введи email, с которым регистрировался — пришлю ссылку для нового пароля.'));
+  const msg=el('div','margin-top:8px;min-height:18px;color:#ffb020');
+  const em=el('input',null,null,{type:'email',placeholder:'Email',autocomplete:'email',value:acctDraft.email||''});
+  const go=el('button','margin-top:6px','Отправить ссылку',{className:'ab'});
+  const bk=el('button','margin-top:6px;margin-left:6px','Назад',{className:'ab sec'});
+  bk.onclick=()=>{acctDraft.email=em.value;acctMode='in';acctRender();};
+  const run=async()=>{
+    const email=em.value.trim();msg.style.color='#ffb020';
+    if(!sbOk()){msg.textContent='Не задан ключ Supabase';return;}
+    if(!/^\S+@\S+\.\S+$/.test(email)){msg.textContent='Введи корректный email';return;}
+    go.disabled=true;msg.textContent='Подождите…';
+    try{
+      await sbRecover(email);acctDraft.email=email;
+      msg.style.color='#7be07b';msg.textContent='Если такой email зарегистрирован, письмо со ссылкой отправлено (проверь «Спам»). Открой ссылку на этом же сайте.';
+    }catch(e){msg.style.color='#ff7070';msg.textContent=e.message;}
+    go.disabled=false;
+  };
+  go.onclick=run;em.addEventListener('keydown',e=>{if(e.key==='Enter')run();});
+  box.appendChild(em);box.appendChild(go);box.appendChild(bk);box.appendChild(msg);
+  acctUrlBtn(box);
+}
+function acctReset(box){
+  acctHeader(box,'Новый пароль');
+  const msg=el('div','margin-top:8px;min-height:18px;color:#ffb020');
+  const p1=el('input',null,null,{type:'password',placeholder:'Новый пароль (от 6 символов)',autocomplete:'new-password'});
+  const p2=el('input',null,null,{type:'password',placeholder:'Повтори пароль',autocomplete:'new-password'});
+  const go=el('button','margin-top:6px','Сохранить пароль',{className:'ab'});
+  const run=async()=>{
+    msg.style.color='#ffb020';
+    if(p1.value.length<6){msg.textContent='Пароль слишком короткий (минимум 6 символов)';return;}
+    if(p1.value!==p2.value){msg.textContent='Пароли не совпадают';return;}
+    go.disabled=true;msg.textContent='Подождите…';
+    try{
+      const u=await sbSetPassword(recov.access_token,p1.value);
+      openSave(null);sbSave({access_token:recov.access_token,refresh_token:recov.refresh_token,expires_at:recov.expires_at,user:u});
+      recov=null;acctMode='in';acctDraft={};
+      if(pendingResult&&!resultSent){await sendResult(pendingResult);}
+      acctRender();
+    }catch(e){msg.style.color='#ff7070';msg.textContent=e.message;go.disabled=false;}
+  };
+  go.onclick=run;[p1,p2].forEach(i=>i.addEventListener('keydown',e=>{if(e.key==='Enter')run();}));
+  box.appendChild(p1);box.appendChild(p2);box.appendChild(go);box.appendChild(msg);
+  acctUrlBtn(box);
 }
 function acctForm(box){
+  if(acctMode==='reset'&&recov){acctReset(box);return;}
+  if(acctMode==='forgot'&&!isLogged()){acctForgot(box);return;}
   const msg=el('div','margin-top:8px;min-height:18px;color:#ffb020');
+  if(acctNote){msg.style.color='#ff7070';msg.textContent=acctNote;acctNote='';}
   if(isLogged()){
     acctHeader(box,'Аккаунт');
     box.appendChild(el('div','font-size:17px;margin-bottom:4px','Привет, '+sbNick()+'!'));
@@ -286,6 +559,11 @@ function acctForm(box){
   };
   go.onclick=run;[em,pw,nk].forEach(i=>i.addEventListener('keydown',e=>{if(e.key==='Enter')run();}));
   box.appendChild(go);box.appendChild(sw);box.appendChild(msg);
+  if(!up&&!open){
+    const fg=el('button','margin-top:6px;background:none;border:0;color:#7aa7ff;font-size:13px;cursor:pointer;padding:0;text-decoration:underline','Забыл пароль?');
+    fg.onclick=()=>{acctDraft={email:em.value,pass:'',nick:nk.value};acctMode='forgot';acctRender();};
+    box.appendChild(fg);
+  }
   if(up&&open)box.appendChild(el('div','margin-top:10px;padding:8px 10px;border-radius:8px;background:rgba(255,176,32,.12);color:#ffcf70;font-size:12px','⚠ Открытый аккаунт создаётся без пароля и почты: в него сможет войти кто угодно, зная ник, и записывать результаты от твоего имени. Не используй его для чего-то важного.'));
   acctUrlBtn(box);
 }
@@ -314,6 +592,22 @@ function acctBoards(box){
   mk('⚡ Самая быстрая победа','asc','Меньше всего ходов в выигранной партии');
 }
 acctBuild();
+
+// Возврат по ссылке из письма: Supabase кладёт токен в #hash (type=recovery) или ошибку (ссылка устарела)
+(function(){
+  const h=location.hash;if(!h||h.length<2)return;
+  let p;try{p=new URLSearchParams(h.slice(1));}catch(e){return;}
+  const clean=()=>{try{history.replaceState(null,'',location.pathname+location.search);}catch(e){}};
+  if(p.get('type')==='recovery'&&p.get('access_token')){
+    recov={access_token:p.get('access_token'),refresh_token:p.get('refresh_token'),
+      expires_at:Number(p.get('expires_at'))||(Math.floor(Date.now()/1000)+(Number(p.get('expires_in'))||3600))};
+    clean();acctMode='reset';acctOpen('acct');
+  }else if(p.get('error')&&(p.get('error_code')||p.get('error_description'))){
+    clean();acctMode='in';acctOpenMode=false;
+    acctNote='Ссылка из письма устарела или уже использована. Для сброса пароля нажми «Забыл пароль?»';
+    acctOpen('acct');
+  }
+})();
 
 /* ══════════════════════════════════════════════════════════════════════════
    ◄── СВЯЗЬ С ИГРОЙ (index.html): подписка на события игры
