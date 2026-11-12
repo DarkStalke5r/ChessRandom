@@ -453,119 +453,46 @@ function acctUrlBtn(box){
   d.onclick=()=>{d.textContent=pick();};
   box.appendChild(d);
 }
-function acctForgot(box){
-  acctHeader(box,'Сброс пароля');
-  box.appendChild(el('div','color:#aaa;font-size:13px;margin-bottom:6px','Введи email, с которым регистрировался — пришлю ссылку для нового пароля.'));
-  const msg=el('div','margin-top:8px;min-height:18px;color:#ffb020');
-  const em=el('input',null,null,{type:'email',placeholder:'Email',autocomplete:'email',value:acctDraft.email||''});
-  const go=el('button','margin-top:6px','Отправить ссылку',{className:'ab'});
-  const bk=el('button','margin-top:6px;margin-left:6px','Назад',{className:'ab sec'});
-  bk.onclick=()=>{acctDraft.email=em.value;acctMode='in';acctRender();};
-  const run=async()=>{
-    const email=em.value.trim();msg.style.color='#ffb020';
-    if(!sbOk()){msg.textContent='Не задан ключ Supabase';return;}
-    if(!/^\S+@\S+\.\S+$/.test(email)){msg.textContent='Введи корректный email';return;}
-    go.disabled=true;msg.textContent='Подождите…';
-    try{
-      await sbRecover(email);acctDraft.email=email;
-      msg.style.color='#7be07b';msg.textContent='Если такой email зарегистрирован, письмо со ссылкой отправлено (проверь «Спам»). Открой ссылку на этом же сайте.';
-    }catch(e){msg.style.color='#ff7070';msg.textContent=e.message;}
-    go.disabled=false;
-  };
-  go.onclick=run;em.addEventListener('keydown',e=>{if(e.key==='Enter')run();});
-  box.appendChild(em);box.appendChild(go);box.appendChild(bk);box.appendChild(msg);
-  acctUrlBtn(box);
-}
-function acctReset(box){
-  acctHeader(box,'Новый пароль');
-  const msg=el('div','margin-top:8px;min-height:18px;color:#ffb020');
-  const p1=el('input',null,null,{type:'password',placeholder:'Новый пароль (от 6 символов)',autocomplete:'new-password'});
-  const p2=el('input',null,null,{type:'password',placeholder:'Повтори пароль',autocomplete:'new-password'});
-  const go=el('button','margin-top:6px','Сохранить пароль',{className:'ab'});
-  const run=async()=>{
-    msg.style.color='#ffb020';
-    if(p1.value.length<6){msg.textContent='Пароль слишком короткий (минимум 6 символов)';return;}
-    if(p1.value!==p2.value){msg.textContent='Пароли не совпадают';return;}
-    go.disabled=true;msg.textContent='Подождите…';
-    try{
-      const u=await sbSetPassword(recov.access_token,p1.value);
-      openSave(null);sbSave({access_token:recov.access_token,refresh_token:recov.refresh_token,expires_at:recov.expires_at,user:u});
-      recov=null;acctMode='in';acctDraft={};
-      if(pendingResult&&!resultSent){await sendResult(pendingResult);}
-      acctRender();
-    }catch(e){msg.style.color='#ff7070';msg.textContent=e.message;go.disabled=false;}
-  };
-  go.onclick=run;[p1,p2].forEach(i=>i.addEventListener('keydown',e=>{if(e.key==='Enter')run();}));
-  box.appendChild(p1);box.appendChild(p2);box.appendChild(go);box.appendChild(msg);
-  acctUrlBtn(box);
+const AUTH_SITE='https://chessrandomiauth.devs.li/',ERR_SITE='http://chessrandomierr.duckdns.org/';   // ERR — http, не https
+let acctInfo='';
+function errGo(reason){location.href=ERR_SITE+'?from=game&reason='+reason+'&back='+encodeURIComponent(location.origin+location.pathname);}
+// переход на сайт входа; если он лежит или на нём тех. работы (status.json) — уходим на резервный
+async function goAuth(mode){
+  const sig=()=>{const c=new AbortController();setTimeout(()=>c.abort(),6000);return c.signal;};
+  let ok=false,maint=false;
+  try{const r=await fetch(AUTH_SITE+'status.json?'+Date.now(),{cache:'no-store',signal:sig()});if(r.ok){const j=await r.json().catch(()=>({}));maint=!!j.maintenance;}ok=true;}
+  catch(e){try{await fetch(AUTH_SITE,{mode:'no-cors',cache:'no-store',signal:sig()});ok=true;}catch(e2){}}
+  if(!ok)return errGo('auth_unreachable');
+  if(maint)return errGo('maintenance');
+  const st=Math.random().toString(36).slice(2);
+  try{sessionStorage.setItem('ca_state',st);if(pendingResult)localStorage.setItem('ca_pending',JSON.stringify(pendingResult));}catch(e){}
+  location.href=AUTH_SITE+'?return='+encodeURIComponent(location.origin+location.pathname)+'&state='+st+(mode?'&mode='+mode:'');
 }
 function acctForm(box){
-  if(acctMode==='reset'&&recov){acctReset(box);return;}
-  if(acctMode==='forgot'&&!isLogged()){acctForgot(box);return;}
-  const msg=el('div','margin-top:8px;min-height:18px;color:#ffb020');
-  if(acctNote){msg.style.color='#ff7070';msg.textContent=acctNote;acctNote='';}
+  const msg=el('div','margin-top:8px;min-height:18px;color:#7be07b');
+  if(acctInfo){msg.textContent=acctInfo;acctInfo='';}
   if(isLogged()){
     acctHeader(box,'Аккаунт');
     box.appendChild(el('div','font-size:17px;margin-bottom:4px','Привет, '+sbNick()+'!'));
-    box.appendChild(el('div','color:#aaa;margin-bottom:8px',sbSession?((sbSession.user&&sbSession.user.email)||''):'🔓 Открытый аккаунт (без пароля)'));
+    box.appendChild(el('div','color:#aaa;margin-bottom:8px',sbSession?((sbSession.user&&sbSession.user.email)||'Вход через соцсеть'):'🔓 Открытый аккаунт (без пароля)'));
     box.appendChild(el('div','margin-bottom:10px','Ходов в текущей партии: '+curMoves));
     if(pendingResult){
       const pb=el('button',null,'Записать результат ('+pendingResult.moves+' ход.)',{className:'ab'});
-      pb.onclick=async()=>{msg.textContent='Отправляю…';msg.textContent=await sendResult(pendingResult);acctRender();};
-      box.appendChild(pb);
+      pb.onclick=async()=>{acctInfo=await sendResult(pendingResult);acctRender();};box.appendChild(pb);
     }
     const lo=el('button','margin-left:6px','Выйти',{className:'ab sec'});
-    lo.onclick=async()=>{await sbSignOut();acctRender();};box.appendChild(lo);box.appendChild(msg);acctUrlBtn(box);return;
+    lo.onclick=async()=>{await sbSignOut();acctRender();};box.appendChild(lo);
+    const sw=el('button','margin-left:6px','Сменить',{className:'ab sec'});sw.onclick=()=>goAuth('');box.appendChild(sw);
+  }else{
+    acctHeader(box,'Вход');
+    box.appendChild(el('div','color:#aaa;margin-bottom:6px','Вход и регистрация — на отдельном сайте: почта, Discord, GitHub, Google и другие способы. Результаты попадут в таблицу лидеров.'));
+    [['🔑 Войти',''],['✨ Регистрация','signup'],['🔓 Открытый аккаунт (только ник)','open']].forEach(([t,m],i)=>{
+      const b=el('button','display:block;width:100%;margin-top:6px',t,{className:'ab'+(i?' sec':'')});
+      b.onclick=async()=>{b.disabled=true;b.textContent='Открываю…';await goAuth(m);b.disabled=false;b.textContent=t;};box.appendChild(b);
+    });
+    if(pendingResult)box.appendChild(el('div','margin-top:8px;color:#ffcf70;font-size:12px','Результат ('+pendingResult.moves+' ход.) запишется после входа'));
   }
-  const up=acctMode==='up',open=acctOpenMode;
-  acctHeader(box,up?'Регистрация':'Вход');
-  const d=acctDraft;
-  const em=el('input',null,null,{type:'email',placeholder:'Email (для входа — не ник)',autocomplete:'email',value:d.email||''});
-  const pw=el('input',null,null,{type:'password',placeholder:'Пароль (от 6 символов)',autocomplete:up?'new-password':'current-password',value:d.pass||''});
-  const nk=el('input',null,null,{type:'text',placeholder:open?'Ник':'Ник (для таблицы лидеров)',maxLength:24,value:d.nick||''});
-  if(!open)box.appendChild(em);
-  if(up||open)box.appendChild(nk);
-  if(!open)box.appendChild(pw);
-  const lab=el('label','display:flex;gap:8px;align-items:center;margin:8px 0 2px;font-size:13px;color:#cde;cursor:pointer');
-  const cb=el('input',null,null,{type:'checkbox',checked:open});cb.style.cssText='width:auto;margin:0';
-  cb.onchange=()=>{acctDraft={email:em.value,pass:pw.value,nick:nk.value};acctOpenMode=cb.checked;acctRender();};
-  lab.appendChild(cb);lab.appendChild(el('span',null,up?'Открытый аккаунт: без пароля и почты':'Войти в открытый аккаунт (только ник)'));
-  box.appendChild(lab);
-  const go=el('button','margin-top:6px',up?'Зарегистрироваться':'Войти',{className:'ab'});
-  const sw=el('button','margin-top:6px;margin-left:6px',up?'У меня есть аккаунт':'Создать аккаунт',{className:'ab sec'});
-  sw.onclick=()=>{acctDraft={email:em.value,pass:pw.value,nick:nk.value};acctMode=up?'in':'up';acctRender();};
-  const run=async()=>{
-    const email=em.value.trim(),pass=pw.value,nick=nk.value.trim();
-    msg.style.color='#ffb020';
-    if(!sbOk()){msg.textContent='Не задан ключ Supabase';return;}
-    if(open){
-      if(!nickOk(nick)){msg.textContent='Введи ник (1–24 символа)';return;}
-    }else{
-      if(!email||!pass){msg.textContent='Введи email и пароль';return;}
-      if(!/^\S+@\S+\.\S+$/.test(email)){msg.style.color='#ff7070';msg.textContent='Для входа нужен email (тот, что указан при регистрации), а не ник';return;}
-      if(up&&!nickOk(nick)){msg.textContent='Введи ник (1–24 символа)';return;}
-    }
-    go.disabled=true;msg.textContent='Подождите…';
-    try{
-      if(open){if(up)await sbOpenCreate(nick);else await sbOpenLogin(nick);}
-      else if(up){
-        const r=await sbSignUp(email,pass,nick);
-        if(r==='confirm'){msg.style.color='#7be07b';msg.textContent='Готово! Если подтверждение включено — открой ссылку из письма (проверь «Спам»), затем войди.';acctMode='in';go.disabled=false;return;}
-      }else await sbSignIn(email,pass);
-      acctDraft={};
-      if(pendingResult&&!resultSent){await sendResult(pendingResult);}
-      acctRender();
-    }catch(e){msg.style.color='#ff7070';msg.textContent=e.message;go.disabled=false;}
-  };
-  go.onclick=run;[em,pw,nk].forEach(i=>i.addEventListener('keydown',e=>{if(e.key==='Enter')run();}));
-  box.appendChild(go);box.appendChild(sw);box.appendChild(msg);
-  if(!up&&!open){
-    const fg=el('button','margin-top:6px;background:none;border:0;color:#7aa7ff;font-size:13px;cursor:pointer;padding:0;text-decoration:underline','Забыл пароль?');
-    fg.onclick=()=>{acctDraft={email:em.value,pass:'',nick:nk.value};acctMode='forgot';acctRender();};
-    box.appendChild(fg);
-  }
-  if(up&&open)box.appendChild(el('div','margin-top:10px;padding:8px 10px;border-radius:8px;background:rgba(255,176,32,.12);color:#ffcf70;font-size:12px','⚠ Открытый аккаунт создаётся без пароля и почты: в него сможет войти кто угодно, зная ник, и записывать результаты от твоего имени. Не используй его для чего-то важного.'));
-  acctUrlBtn(box);
+  box.appendChild(msg);acctUrlBtn(box);
 }
 function acctBoards(box){
   acctHeader(box,'Лидеры');
@@ -593,20 +520,23 @@ function acctBoards(box){
 }
 acctBuild();
 
-// Возврат по ссылке из письма: Supabase кладёт токен в #hash (type=recovery) или ошибку (ссылка устарела)
+// Возврат с сайта входа: данные приходят в #ca=<base64url JSON> (токен в адресной строке сразу убираем)
 (function(){
-  const h=location.hash;if(!h||h.length<2)return;
-  let p;try{p=new URLSearchParams(h.slice(1));}catch(e){return;}
-  const clean=()=>{try{history.replaceState(null,'',location.pathname+location.search);}catch(e){}};
-  if(p.get('type')==='recovery'&&p.get('access_token')){
-    recov={access_token:p.get('access_token'),refresh_token:p.get('refresh_token'),
-      expires_at:Number(p.get('expires_at'))||(Math.floor(Date.now()/1000)+(Number(p.get('expires_in'))||3600))};
-    clean();acctMode='reset';acctOpen('acct');
-  }else if(p.get('error')&&(p.get('error_code')||p.get('error_description'))){
-    clean();acctMode='in';acctOpenMode=false;
-    acctNote='Ссылка из письма устарела или уже использована. Для сброса пароля нажми «Забыл пароль?»';
+  const m=location.hash.match(/[#&]ca=([^&]+)/);if(!m)return;
+  try{history.replaceState(null,'',location.pathname+location.search);}catch(e){}
+  let p;try{p=JSON.parse(decodeURIComponent(escape(atob(m[1].replace(/-/g,'+').replace(/_/g,'/')))));}catch(e){return;}
+  let st=null;try{st=sessionStorage.getItem('ca_state');sessionStorage.removeItem('ca_state');}catch(e){}
+  (async()=>{
+    if(!(p.state&&p.state===st)&&!confirm('Войти в игру как «'+(p.nick||p.nickname||'игрок')+'»?'))return;   // защита от чужой ссылки
+    try{
+      if(p.t==='open')await sbOpenLogin(p.nickname);
+      else{const u=await sbFetch('/auth/v1/user',{},p.access_token);   // пользователя берём у сервера, а не из ссылки
+        sbSave({access_token:p.access_token,refresh_token:p.refresh_token,expires_at:p.expires_at,user:u});openSave(null);}
+      let pr=null;try{pr=JSON.parse(localStorage.getItem('ca_pending')||'null');localStorage.removeItem('ca_pending');}catch(e){}
+      acctInfo=pr?await sendResult(pr):'✅ Вы вошли';
+    }catch(e){acctInfo='⚠ '+e.message;}
     acctOpen('acct');
-  }
+  })();
 })();
 
 /* ══════════════════════════════════════════════════════════════════════════
