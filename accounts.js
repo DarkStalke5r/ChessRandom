@@ -520,6 +520,14 @@ function acctBoards(box){
 }
 acctBuild();
 
+// Страховка: если Supabase вернул токен/ошибку прямо в игру (адрес сайта входа не в Redirect URLs) — отдаём их сайту входа
+(function(){
+  const h=location.hash;
+  if(!/[#&](access_token|error)=/.test(h)||/[#&]ca=/.test(h))return;
+  let st='';try{st=sessionStorage.getItem('ca_state')||'';}catch(e){}
+  location.replace(AUTH_SITE+'?return='+encodeURIComponent(location.origin+location.pathname)+(st?'&state='+st:'')+h);
+})();
+
 // Возврат с сайта входа: данные приходят в #ca=<base64url JSON> (токен в адресной строке сразу убираем)
 (function(){
   const m=location.hash.match(/[#&]ca=([^&]+)/);if(!m)return;
