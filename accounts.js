@@ -453,7 +453,7 @@ function acctUrlBtn(box){
   d.onclick=()=>{d.textContent=pick();};
   box.appendChild(d);
 }
-const AUTH_SITE='https://chessrandomiauth.devs.li/',ERR_SITE='http://chessrandomierr.duckdns.org/';   // ERR — http, не https
+const AUTH_SITE='https://https://github.com/Darkstalke5r/Slugebniy-O-auth-ChessRandom',ERR_SITE='http://chessrandomierr.duckdns.org/';   // ERR — http, не https
 let acctInfo='';
 function errGo(reason){location.href=ERR_SITE+'?from=game&reason='+reason+'&back='+encodeURIComponent(location.origin+location.pathname);}
 // переход на сайт входа; если он лежит или на нём тех. работы (status.json) — уходим на резервный
