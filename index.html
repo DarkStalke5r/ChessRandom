@@ -4645,21 +4645,58 @@ const KN=[[1,2],[2,1],[-1,2],[-2,1],[1,-2],[2,-1],[-1,-2],[-2,-1]];
 let CFG={shape:'p',army:'mixed',teams:4,craft:true,boss:true},grave=[],RULE,FW,ARMY,SL,B,G,ti,over,sel,moves,round,extra,skipT,selSlot,CS,fut,R,fresh,busy=false,chain=false,hl=[],undoSt=[],undos=0,ritual=null,bossSt=null,pile=[],craftRound=0,nukeDone=false;
 window.AI_DIFF=(function(){try{return localStorage.getItem('chaos_ai_diff')||'normal';}catch(e){return 'normal';}})();
 function getAIDiff(){return window.AI_DIFF||'normal';}
-window.TEX_PACK=(function(){try{return JSON.parse(localStorage.getItem('chaos_tex_pack')||'null');}catch(e){return null;}})();
-function applyTexPackFromHash(){
-  const m=location.hash.match(/[#&]texpack=([^&]+)/);if(!m)return;
-  try{
-    const json=decodeURIComponent(escape(atob(m[1].replace(/-/g,'+').replace(/_/g,'/'))));
-    const p=JSON.parse(json);
-    if(p&&p.base){
-      window.TEX_PACK=p;
-      try{localStorage.setItem('chaos_tex_pack',JSON.stringify(p));}catch(e){}
-      try{history.replaceState(null,'',location.pathname+location.search);}catch(e){}
-      try{if(typeof log==='function')log('🎨 Пак текстур: '+(p.name||p.id));}catch(e){}
-    }
-  }catch(e){console.warn('texpack hash',e);}
+window.TEX_SITE='https://darkstalke5r.github.io/Slugebniy-TexturesCore-ChessRandom/';
+function texPackValid(p){return !!(p&&typeof p.base==='string'&&/^https?:\/\//i.test(p.base));}
+function texPackNorm(p){
+  if(!texPackValid(p))return null;
+  return {id:String(p.id||'pack'),name:String(p.name||p.id||'pack'),base:p.base.endsWith('/')?p.base:p.base+'/',
+    map:(p.map&&typeof p.map==='object')?p.map:{},files:Array.isArray(p.files)?p.files.map(String):[]};
 }
-applyTexPackFromHash();
+window.TEX_PACK=(function(){try{return texPackNorm(JSON.parse(localStorage.getItem('chaos_tex_pack')||'null'));}catch(e){return null;}})();
+// применить (или сбросить, p=null) пак текстур; reload=true — сразу перерисовать фигуры
+function setTexPack(p,reload){
+  p=p?texPackNorm(p):null;
+  window.TEX_PACK=p;
+  try{if(p)localStorage.setItem('chaos_tex_pack',JSON.stringify(p));else localStorage.removeItem('chaos_tex_pack');}catch(e){}
+  if(reload){
+    try{figReloadPack();}catch(e){}
+    try{if(typeof log==='function')log(p?'🎨 Пак текстур: '+p.name:'🎨 Текстуры: стандарт игры');}catch(e){}
+    try{if(window.refreshTexUI)window.refreshTexUI();}catch(e){}
+  }
+}
+// канал 1: #texpack=... в адресе (запасной, работает всегда)
+function applyTexPackFromHash(reload){
+  const m=location.hash.match(/[#&]texpack=([^&]+)/);if(!m)return false;
+  try{
+    if(m[1]==='reset')setTexPack(null,reload);
+    else{
+      const p=JSON.parse(decodeURIComponent(escape(atob(m[1].replace(/-/g,'+').replace(/_/g,'/')))));
+      if(!texPackValid(p))throw new Error('bad pack');
+      setTexPack(p,reload);
+    }
+    try{history.replaceState(null,'',location.pathname+location.search);}catch(e){}
+    return true;
+  }catch(e){console.warn('texpack hash',e);return false;}
+}
+applyTexPackFromHash(false);
+window.addEventListener('hashchange',()=>applyTexPackFromHash(true));
+// канал 2: postMessage от открытой вкладки «Текстуры» (игра не перезагружается)
+window.addEventListener('message',e=>{
+  const d=e.data;if(!d||d.type!=='chaos-texpack')return;
+  let siteOrigin='';try{siteOrigin=new URL(window.TEX_SITE).origin;}catch(_){}
+  if(e.origin!==location.origin&&e.origin!==siteOrigin)return;
+  if(d.pack!==null&&!texPackValid(d.pack))return;
+  setTexPack(d.pack,true);
+  try{e.source&&e.source.postMessage({type:'chaos-texpack-ack',id:d.pack?d.pack.id:null},e.origin);}catch(_){}
+});
+// канал 3: общий localStorage (если страницы на одном домене github.io)
+window.addEventListener('storage',e=>{
+  if(e.key!=='chaos_tex_pack')return;
+  let p=null;try{p=JSON.parse(e.newValue||'null');}catch(_){}
+  window.TEX_PACK=texPackNorm(p);
+  try{figReloadPack();}catch(_){}
+  try{if(window.refreshTexUI)window.refreshTexUI();}catch(_){}
+});
 function texPackBase(){return (window.TEX_PACK&&window.TEX_PACK.base)||null;}
 function texPackMap(){return (window.TEX_PACK&&window.TEX_PACK.map)||{};}
 
@@ -6654,51 +6691,81 @@ function figSchedule(){
     figTries=0;try{draw();}catch(e){}
   },60);
 }
+const PACK_FILES={};
+const FIG_EXTS=['png','webp','svg','jpg','jpeg'];
+function figAbs(u){return /^(https?:)?\/\//i.test(u)||/^data:/i.test(u);}
+function figMkImg(src){
+  const im=new Image();
+  try{if(/^https?:\/\//i.test(src)&&new URL(src,location.href).origin!==location.origin)im.crossOrigin='anonymous';}catch(e){}
+  return im;
+}
 function figLoad(k){
   if(!figReady)return {status:'loading'};
   if(figState[k])return figState[k];
   const st=figState[k]={status:'loading',img:null};
-  const c=[];
-  const pmap=typeof texPackMap==='function'?texPackMap():{};
-  const base=typeof texPackBase==='function'?texPackBase():null;
-  if(FIGURE_FILES[k])c.push(FIGURE_FILES[k]);
-  if(base&&pmap[k])c.push(base+pmap[k]);
-  const dir=base||FIG_DIR;
-  (FIG_NAMES[k]||[k]).forEach(n=>['png','webp','svg'].forEach(e=>{c.push(dir+n+'.'+e);if(!base)c.push(n+'.'+e);}));
+  const c=[],add=u=>{if(u&&c.indexOf(u)<0)c.push(u);};
+  const names=FIG_NAMES[k]||[k];
+  const pmap=texPackMap(),base=texPackBase(),pf=(window.TEX_PACK&&window.TEX_PACK.files)||[];
+  // 1) выбранный пак
+  if(base){
+    if(PACK_FILES[k])add(PACK_FILES[k]);
+    if(pmap[k])add(figAbs(String(pmap[k]))?String(pmap[k]):base+pmap[k]);
+    if(pf.length){
+      names.forEach(n=>{const nl=n.toLowerCase();pf.forEach(f=>{
+        const stem=String(f).replace(/\.[^.\/]+$/,'').split('/').pop().toLowerCase();
+        if(stem===nl)add(base+f);
+      });});
+    }else names.forEach(n=>FIG_EXTS.forEach(e=>add(base+n+'.'+e)));
+  }
+  // 2) запасной вариант: текстуры из репозитория самой игры
+  if(FIGURE_FILES[k])add(FIGURE_FILES[k]);
+  names.forEach(n=>FIG_EXTS.forEach(e=>{add(FIG_DIR+n+'.'+e);add(n+'.'+e);}));
   let i=0;
   const next=()=>{
     if(i>=c.length){st.status='none';return;}
-    const im=new Image();
+    const src=c[i++],im=figMkImg(src);
     im.onload=()=>{st.img=im;st.status='ok';figSchedule();};
-    im.onerror=next;im.src=c[i++];
+    im.onerror=next;im.src=src;
   };
   next();return st;
 }
-// необязательный список figures/figures.json: {"N":"конница.png","R":"tower.png","Q:black":"queen_dark.png","mycustom":"x.png"}
-// запись «Вид:команда» — файл показывается как есть, без окраски (для особых фигур конкретной команды)
+// необязательные списки figures.json: {"N":"конница.png","Q:black":"queen_dark.png"}
+// у игры: figures/figures.json (запасной), у пака: <папка пака>/figures.json (приоритетный)
+// запись «Вид:команда» — файл показывается как есть, без окраски
+let figTok=0,figDefaultsP=null;
+function figFetchJSON(u){
+  return fetch(u,{cache:'no-cache'}).then(r=>r.ok?r.text():'').then(t=>{try{return t?JSON.parse(t):{};}catch(e){return {};}}).catch(()=>({}));
+}
 function figReloadPack(){
   Object.keys(figState).forEach(k=>delete figState[k]);
   Object.keys(figTint).forEach(k=>delete figTint[k]);
   Object.keys(figTeamImg).forEach(k=>delete figTeamImg[k]);
+  Object.keys(PACK_FILES).forEach(k=>delete PACK_FILES[k]);
   figReady=false;
   figPreload();
 }
 function figPreload(){
   if(figReady)return;
-  const go=()=>{figReady=true;Object.keys(FIG_NAMES).concat(Object.keys(FIGURE_FILES).filter(k=>k.indexOf(':')<0)).forEach(figLoad);figSchedule();};
-  const dir=typeof getFigDir==='function'?getFigDir():FIG_DIR;
-  const pmap=typeof texPackMap==='function'?texPackMap():{};
-  if(Object.keys(pmap).length){go();return;}
-  try{
-    fetch(dir+'figures.json',{cache:'no-cache'}).then(r=>r.ok?r.json():{}).catch(()=>({})).then(j=>{
-      Object.keys(j||{}).forEach(k=>{const v=String(j[k]);FIGURE_FILES[k]=/^(https?:)?\//.test(v)||v.indexOf('figures/')===0||v.indexOf('packs/')===0?v:dir+v;});go();
-    });
-  }catch(e){go();}
+  const tok=++figTok;
+  const base=texPackBase(),pmap=texPackMap(),pf=(window.TEX_PACK&&window.TEX_PACK.files)||[];
+  if(!figDefaultsP)figDefaultsP=figFetchJSON(FIG_DIR+'figures.json').then(j=>{
+    Object.keys(j||{}).forEach(k=>{const v=String(j[k]);
+      if(!FIGURE_FILES[k])FIGURE_FILES[k]=figAbs(v)||v.indexOf('figures/')===0||v.indexOf('packs/')===0?v:FIG_DIR+v;});
+  });
+  const packP=(base&&!Object.keys(pmap).length&&!pf.length)
+    ?figFetchJSON(base+'figures.json').then(j=>{Object.keys(j||{}).forEach(k=>{const v=String(j[k]);PACK_FILES[k]=figAbs(v)?v:base+v;});})
+    :Promise.resolve();
+  Promise.all([figDefaultsP,packP]).then(()=>{
+    if(tok!==figTok)return;
+    figReady=true;
+    Object.keys(FIG_NAMES).concat(Object.keys(FIGURE_FILES).filter(k=>k.indexOf(':')<0)).forEach(figLoad);
+    figSchedule();
+  });
 }
 function figTeamFile(k,team){
-  const path=FIGURE_FILES[k+':'+team];if(!path)return null;
+  const path=PACK_FILES[k+':'+team]||FIGURE_FILES[k+':'+team];if(!path)return null;
   let st=figTeamImg[path];
-  if(!st){st=figTeamImg[path]={ok:false};const im=new Image();im.onload=()=>{st.ok=true;figSchedule();};im.src=path;st.src=path;}
+  if(!st){st=figTeamImg[path]={ok:false,src:path};const im=new Image();im.onload=()=>{st.ok=true;figSchedule();};im.src=path;}
   return st.ok?st.src:null;
 }
 function figRGB(team){
@@ -7599,7 +7666,7 @@ if(rs)showResumeDialog(rs,had);else if(!had)openSetup(true);
 
 <script>
 (function(){
-  const TEXTURES_URL = 'https://darkstalke5r.github.io/Slugebniy-TexturesCore-ChessRandom/';
+  const TEXTURES_URL = window.TEX_SITE || 'https://darkstalke5r.github.io/Slugebniy-TexturesCore-ChessRandom/';
   const DIFF_LABELS = { easy:'Лёгкая', normal:'Средняя', hard:'Сложная' };
   function el(id){return document.getElementById(id);}
   function closePanels(){
@@ -7618,6 +7685,7 @@ if(rs)showResumeDialog(rs,had);else if(!had)openSetup(true);
     const p=window.TEX_PACK;
     note.textContent = p ? ('Текстуры: «'+(p.name||p.id)+'»') : 'Текстуры: стандарт игры';
   }
+  window.refreshTexUI=refreshTexUI;
   function setDiff(level){
     window.AI_DIFF=level;
     try{localStorage.setItem('chaos_ai_diff',level);}catch(e){}
@@ -7643,7 +7711,9 @@ if(rs)showResumeDialog(rs,had);else if(!had)openSetup(true);
   if(el('sp-textures')) el('sp-textures').onclick=()=>{
     const ret=encodeURIComponent(location.origin+location.pathname);
     const join = TEXTURES_URL.indexOf('?')>=0 ? '&' : '?';
-    window.open(TEXTURES_URL+join+'return='+ret, '_blank', 'noopener');
+    // без noopener: страница текстур должна уметь отправить выбор обратно в эту вкладку
+    const w=window.open(TEXTURES_URL+join+'return='+ret, '_blank');
+    if(!w) location.href=TEXTURES_URL+join+'return='+ret;
   };
   document.addEventListener('pointerdown', function(e){
     const sp=el('settings-panel');
