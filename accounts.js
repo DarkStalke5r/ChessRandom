@@ -400,7 +400,7 @@ const CODE_COMMENTS=[
 ];
 function acctBuild(){
   const st=document.createElement('style');
-  st.textContent='#acct-bar{position:fixed;top:6px;left:6px;z-index:10000;display:flex;gap:6px}'
+  st.textContent='#acct-bar{position:fixed;top:6px;left:6px;z-index:10000;display:none!important;gap:6px}'
    +'#acct-bar button{width:34px;height:34px;border-radius:10px;border:1px solid rgba(255,255,255,.18);background:rgba(30,30,38,.9);color:#fff;font-size:17px;cursor:pointer;padding:0}'
    +'#acct-ov{position:fixed;inset:0;z-index:10001;background:rgba(0,0,0,.6);display:none;align-items:center;justify-content:center}'
    +'#acct-ov.show{display:flex}'

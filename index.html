@@ -338,37 +338,70 @@
     }
     #fp-cancel { background: #444 !important; }
 
-    #dbg-btn, #cmd-btn, #inspect-btn, #spell-btn, #shop-btn {
-      position: fixed;
-      top: 6px;
-      z-index: 70;
-      width: 30px;
-      height: 30px;
-      border-radius: 50%;
-      border: 1px solid rgba(255,255,255,0.22);
-      background: rgba(30,30,34,0.92);
-      color: var(--text);
-      font-size: 14px;
-      line-height: 1;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      backdrop-filter: blur(6px);
-      cursor: pointer;
-      padding: 0;
+    #dbg-btn, #cmd-btn, #inspect-btn, #spell-btn, #shop-btn, #plus-teto-btn, #acct-bar {
+      display: none !important;
     }
-    #dbg-btn { right: 8px; }
-    #cmd-btn { right: 44px; }
-    #inspect-btn { right: 80px; }
-    #spell-btn { right: 116px; }
-    #shop-btn { right: 152px; }
     #inspect-btn.on {
       outline: 2px solid #e8b84a;
       box-shadow: 0 0 0 2px rgba(232,184,74,0.35);
     }
+    #main-tabs {
+      position: fixed; top: 6px; left: 6px; z-index: 10000;
+      display: flex; gap: 6px;
+    }
+    #main-tabs button {
+      width: 38px; height: 38px; border-radius: 11px;
+      border: 1px solid rgba(255,255,255,0.18);
+      background: rgba(30,30,38,0.92); color: #fff;
+      font-size: 18px; cursor: pointer; padding: 0;
+      backdrop-filter: blur(6px);
+      display: flex; align-items: center; justify-content: center;
+    }
+    #main-tabs button.active {
+      outline: 2px solid #e8b84a;
+      box-shadow: 0 0 0 2px rgba(232,184,74,0.3);
+    }
+    #settings-panel {
+      display: none; position: fixed; top: 50px; left: 6px;
+      z-index: 10002;
+      background: #1d1d25; color: #eee;
+      border-radius: 14px; padding: 12px;
+      border: 1px solid rgba(255,255,255,0.12);
+      width: min(300px, 92vw);
+      box-shadow: 0 10px 40px rgba(0,0,0,0.55);
+      font: 14px/1.35 system-ui, sans-serif;
+      max-height: 80vh; overflow: auto;
+    }
+    #settings-panel.show { display: block; }
+    #settings-panel .sp-title {
+      font-size: 12px; color: #9ad; text-transform: uppercase;
+      letter-spacing: 0.04em; margin-bottom: 8px;
+    }
+    #settings-panel .sp-row {
+      display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px;
+    }
+    #settings-panel .sp-btn {
+      width: 100%; padding: 9px 12px; border-radius: 9px; border: 0;
+      background: #2ea6ff; color: #fff; font-size: 13px; font-weight: 600;
+      cursor: pointer; text-align: left;
+    }
+    #settings-panel .sp-btn.sec { background: #33333f; }
+    #settings-panel .sp-sub {
+      display: none; flex-wrap: wrap; gap: 5px; margin: 4px 0 6px;
+      padding: 6px; background: #12121a; border-radius: 8px;
+    }
+    #settings-panel .sp-sub.show { display: flex; }
+    #settings-panel .sp-sub button {
+      padding: 6px 10px; border-radius: 7px; border: 1px solid rgba(255,255,255,0.15);
+      background: rgba(255,255,255,0.08); color: #fff; font-size: 12px; cursor: pointer;
+    }
+    #settings-panel .sp-sub button.on { background: #2ea6ff; border-color: transparent; }
+    #settings-panel .sp-note {
+      font-size: 11px; color: #8e8e93; margin-top: 4px; line-height: 1.3;
+    }
     #cmd-panel, #dbg-panel {
-      display: none; position: fixed; top: 42px; right: 8px;
-      z-index: 75;
+      display: none; position: fixed; top: 50px; left: 6px; right: auto;
+      z-index: 10003;
       background: var(--secondary, #1c1c1e); border-radius: 10px; padding: 10px;
       border: 1px solid rgba(255,255,255,0.12); width: min(280px, 92vw);
       box-shadow: 0 8px 28px rgba(0,0,0,0.45);
@@ -429,10 +462,10 @@
     }
 
     #dbg-panel {
-      display: none; position: fixed; top: 8px; left: 50%; transform: translateX(-50%);
-      z-index: 60;
+      display: none; position: fixed; top: 50px; left: 6px; transform: none;
+      z-index: 10003;
       background: var(--secondary); border-radius: 10px; padding: 8px;
-      border: 1px solid rgba(255,255,255,0.12); width: min(260px, 90vw);
+      border: 1px solid rgba(255,255,255,0.12); width: min(280px, 92vw);
     }
     #dbg-panel.show { display: block; }
     #dbg-panel input {
@@ -762,23 +795,45 @@
   </style>
 </head>
 <body>
-  <button id="inspect-btn" title="Осмотр фигур и карт">🔍</button>
-  <button id="cmd-btn" title="Коды игры (не читы)">⌘</button>
+  <div id="main-tabs">
+    <button type="button" id="tab-settings" title="Настройки">⚙</button>
+    <button type="button" id="tab-account" title="Аккаунт и лидеры">👤</button>
+  </div>
+  <div id="settings-panel">
+    <div class="sp-title">Настройки</div>
+    <div class="sp-row">
+      <button type="button" class="sp-btn" id="sp-setup">♟ Поле и армия</button>
+      <button type="button" class="sp-btn sec" id="sp-codes">⌘ Коды игры</button>
+      <button type="button" class="sp-btn sec" id="sp-debug">🔧 Читы / debug</button>
+      <button type="button" class="sp-btn sec" id="sp-inspect">🔍 Осмотр фигур</button>
+      <button type="button" class="sp-btn sec" id="sp-diff">🎯 Сложность ИИ</button>
+      <div class="sp-sub" id="sp-diff-sub">
+        <button type="button" data-diff="easy">Лёгкая</button>
+        <button type="button" data-diff="normal">Средняя</button>
+        <button type="button" data-diff="hard">Сложная</button>
+      </div>
+      <button type="button" class="sp-btn sec" id="sp-textures">🎨 Текстуры</button>
+      <div class="sp-note" id="sp-diff-note"></div>
+      <div class="sp-note" id="sp-tex-note"></div>
+    </div>
+  </div>
+  <button id="inspect-btn" title="Осмотр фигур и карт" style="display:none">🔍</button>
+  <button id="cmd-btn" title="Коды игры (не читы)" style="display:none">⌘</button>
   <div id="cmd-panel">
     <div class="cmd-title">Коды игры</div>
     <input id="cmd-input" placeholder="HELP, TUT, BUY S…" />
     <button type="button" class="cmd-run" id="cmd-run-btn">Выполнить</button>
     <div class="cmd-hints">
       <button type="button" data-cmd="HELP">HELP</button>
-      <button type="button" data-cmd="TUT">TUT</button>
+          <button type="button" data-cmd="TUT">TUT</button>
       <button type="button" data-cmd="LOG">LOG</button>
       <button type="button" data-cmd="BUY S">BUY S</button>
       <button type="button" data-cmd="BUY C">BUY C</button>
       <button type="button" data-cmd="BUY O">BUY O</button>
     </div>
-    <div class="cmd-help">Магазин за медали, обучение, лог. Читы — ⚙ справа.</div>
+    <div class="cmd-help">Магазин за медали, обучение, лог.</div>
   </div>
-  <button id="dbg-btn" title="debug / читы">⚙</button>
+  <button id="dbg-btn" title="debug / читы" style="display:none">⚙</button>
   <div id="dbg-panel">
     <div class="cmd-title">Читы / debug</div>
     <input id="debug-input" placeholder="A1, CE, MEDAL…" />
@@ -4588,6 +4643,26 @@ const VALS={E:8,C:4,H:5,T:5,Y:2,G:4,P:1,N:3,B:3,R:5,Q:9,K:100,m:1,d:5,X:8};
 const O=[[1,0],[-1,0],[0,1],[0,-1]],D=[[1,1],[1,-1],[-1,1],[-1,-1]];
 const KN=[[1,2],[2,1],[-1,2],[-2,1],[1,-2],[2,-1],[-1,-2],[-2,-1]];
 let CFG={shape:'p',army:'mixed',teams:4,craft:true,boss:true},grave=[],RULE,FW,ARMY,SL,B,G,ti,over,sel,moves,round,extra,skipT,selSlot,CS,fut,R,fresh,busy=false,chain=false,hl=[],undoSt=[],undos=0,ritual=null,bossSt=null,pile=[],craftRound=0,nukeDone=false;
+window.AI_DIFF=(function(){try{return localStorage.getItem('chaos_ai_diff')||'normal';}catch(e){return 'normal';}})();
+function getAIDiff(){return window.AI_DIFF||'normal';}
+window.TEX_PACK=(function(){try{return JSON.parse(localStorage.getItem('chaos_tex_pack')||'null');}catch(e){return null;}})();
+function applyTexPackFromHash(){
+  const m=location.hash.match(/[#&]texpack=([^&]+)/);if(!m)return;
+  try{
+    const json=decodeURIComponent(escape(atob(m[1].replace(/-/g,'+').replace(/_/g,'/'))));
+    const p=JSON.parse(json);
+    if(p&&p.base){
+      window.TEX_PACK=p;
+      try{localStorage.setItem('chaos_tex_pack',JSON.stringify(p));}catch(e){}
+      try{history.replaceState(null,'',location.pathname+location.search);}catch(e){}
+      try{if(typeof log==='function')log('🎨 Пак текстур: '+(p.name||p.id));}catch(e){}
+    }
+  }catch(e){console.warn('texpack hash',e);}
+}
+applyTexPackFromHash();
+function texPackBase(){return (window.TEX_PACK&&window.TEX_PACK.base)||null;}
+function texPackMap(){return (window.TEX_PACK&&window.TEX_PACK.map)||{};}
+
 let JEST=null,GUNS=[],FALLEN=[],TQ=[],htChain=null,lastFrom=null,shootMode=false;
 const PC={
   shield:{n:'Щит',i:'🔵',c:'H',desc:'Ставит щит на твою фигуру.',target:1},future:{n:'Будущее',i:'⏳',c:'F',desc:'Твоя фигура (кроме короля) уходит в будущее и возвращается на то же место через 2 круга, если клетка свободна.',target:1},spawn:{n:'Спавн',i:'✨',c:'S',desc:'Создаёт твою новую фигуру на выбранной пустой клетке.',target:1},
@@ -5087,7 +5162,10 @@ function aiPickMove(t,ms){
     }
     for(let i=snap.length-1;i>=0;i--)B[snap[i][1]][snap[i][0]]=snap[i][2];
     const fw=(m.x-m.fx)*FW[t][0]+(m.y-m.fy)*FW[t][1];
-    let sc=Math.random()*0.7;
+    const _diff=(typeof getAIDiff==='function'?getAIDiff():'normal');
+    const rndScale=_diff==='easy'?6.0:(_diff==='hard'?0.12:0.7);
+    let sc=Math.random()*rndScale;
+    if(_diff==='easy'&&Math.random()<0.35){sc+=(Math.random()-0.5)*40;}
     if(!safe)sc-=4000;                 // оставить короля под ударом нельзя
     if(inCheck&&safe)sc+=400;          // вышел из-под шаха
     if(cp)sc+=cp.k==='K'?5000:(cp.boss?0:(VALS[cp.k]||1)*10);
@@ -6551,6 +6629,7 @@ function cardEl(type,cls,fn){
 /* ===== Фигуры из папки figures/ (белые PNG с чёрной обводкой), окрашиваются в цвет команды ===== */
 // Если файлы названы иначе — впиши точные пути здесь, например: FIGURE_FILES.K='figures/MyKing.png'
 const FIGURE_FILES=window.FIGURE_FILES||{};
+function getFigDir(){const b=typeof texPackBase==='function'?texPackBase():null;return b||'figures/';}
 const FIG_DIR='figures/';
 const FIG_NAMES={
   K:['king','King','K','король','Король','korol'],
@@ -6579,8 +6658,13 @@ function figLoad(k){
   if(!figReady)return {status:'loading'};
   if(figState[k])return figState[k];
   const st=figState[k]={status:'loading',img:null};
-  const c=[];if(FIGURE_FILES[k])c.push(FIGURE_FILES[k]);
-  (FIG_NAMES[k]||[k]).forEach(n=>['png','webp','svg'].forEach(e=>{c.push(FIG_DIR+n+'.'+e);c.push(n+'.'+e);}));
+  const c=[];
+  const pmap=typeof texPackMap==='function'?texPackMap():{};
+  const base=typeof texPackBase==='function'?texPackBase():null;
+  if(FIGURE_FILES[k])c.push(FIGURE_FILES[k]);
+  if(base&&pmap[k])c.push(base+pmap[k]);
+  const dir=base||FIG_DIR;
+  (FIG_NAMES[k]||[k]).forEach(n=>['png','webp','svg'].forEach(e=>{c.push(dir+n+'.'+e);if(!base)c.push(n+'.'+e);}));
   let i=0;
   const next=()=>{
     if(i>=c.length){st.status='none';return;}
@@ -6592,12 +6676,22 @@ function figLoad(k){
 }
 // необязательный список figures/figures.json: {"N":"конница.png","R":"tower.png","Q:black":"queen_dark.png","mycustom":"x.png"}
 // запись «Вид:команда» — файл показывается как есть, без окраски (для особых фигур конкретной команды)
+function figReloadPack(){
+  Object.keys(figState).forEach(k=>delete figState[k]);
+  Object.keys(figTint).forEach(k=>delete figTint[k]);
+  Object.keys(figTeamImg).forEach(k=>delete figTeamImg[k]);
+  figReady=false;
+  figPreload();
+}
 function figPreload(){
   if(figReady)return;
   const go=()=>{figReady=true;Object.keys(FIG_NAMES).concat(Object.keys(FIGURE_FILES).filter(k=>k.indexOf(':')<0)).forEach(figLoad);figSchedule();};
+  const dir=typeof getFigDir==='function'?getFigDir():FIG_DIR;
+  const pmap=typeof texPackMap==='function'?texPackMap():{};
+  if(Object.keys(pmap).length){go();return;}
   try{
-    fetch(FIG_DIR+'figures.json',{cache:'no-cache'}).then(r=>r.ok?r.json():{}).catch(()=>({})).then(j=>{
-      Object.keys(j||{}).forEach(k=>{const v=String(j[k]);FIGURE_FILES[k]=/^(https?:)?\/|^figures\//.test(v)?v:FIG_DIR+v;});go();
+    fetch(dir+'figures.json',{cache:'no-cache'}).then(r=>r.ok?r.json():{}).catch(()=>({})).then(j=>{
+      Object.keys(j||{}).forEach(k=>{const v=String(j[k]);FIGURE_FILES[k]=/^(https?:)?\//.test(v)||v.indexOf('figures/')===0||v.indexOf('packs/')===0?v:dir+v;});go();
     });
   }catch(e){go();}
 }
@@ -6963,13 +7057,7 @@ updateSkipBtn=function(){};updateUndoBtn=function(){};
 ['skip-btn','undo-btn'].forEach(id=>{const o=document.getElementById(id);if(!o)return;const n=o.cloneNode(true);o.replaceWith(n);n.onclick=id==='skip-btn'?skip:undo;});
 setInterval(()=>{const n=Date.now();if(hl.length&&hl.some(h=>h.until<=n)&&!busy){hl=hl.filter(h=>h.until>n);draw();}},400);
 window.setupStartPosition=()=>start();
-(function(){
-  const btn=document.createElement('button');btn.id='plus-teto-btn';btn.title='Настройки игры (поле и армия)';
-  btn.style.cssText='position:fixed;top:4px;left:6px;z-index:55;width:46px;height:60px;padding:0;border:none;background:transparent;cursor:pointer;display:flex;align-items:flex-end;justify-content:center';
-  btn.appendChild(makeTeto(60));
-  btn.onclick=()=>openSetup(false);
-  document.body.appendChild(btn);
-})();
+(function(){ /* настройки — вкладка ⚙ */ })();
 /* ===== Шут, пистолет и раненые фигуры ===== */
 // Настройки (можно менять)
 const JESTER_CHANCE=0.25;     // шанс появления Шута за круг (когда он не на поле)
@@ -7508,5 +7596,65 @@ const rs=netLoadSession();
 if(rs)showResumeDialog(rs,had);else if(!had)openSetup(true);
 })();
 </script>
+
+<script>
+(function(){
+  const TEXTURES_URL = 'https://darkstalke5r.github.io/Slugebniy-TexturesCore-ChessRandom/';
+  const DIFF_LABELS = { easy:'Лёгкая', normal:'Средняя', hard:'Сложная' };
+  function el(id){return document.getElementById(id);}
+  function closePanels(){
+    const sp=el('settings-panel'); if(sp) sp.classList.remove('show');
+    try{el('cmd-panel').classList.remove('show');}catch(e){}
+    try{el('dbg-panel').classList.remove('show');}catch(e){}
+    const ts=el('tab-settings'); if(ts) ts.classList.remove('active');
+  }
+  function refreshDiffUI(){
+    const sub=el('sp-diff-sub'), note=el('sp-diff-note'), cur=window.AI_DIFF||'normal';
+    if(sub) sub.querySelectorAll('[data-diff]').forEach(b=>b.classList.toggle('on', b.getAttribute('data-diff')===cur));
+    if(note) note.textContent='Сложность: '+(DIFF_LABELS[cur]||cur);
+  }
+  function refreshTexUI(){
+    const note=el('sp-tex-note'); if(!note) return;
+    const p=window.TEX_PACK;
+    note.textContent = p ? ('Текстуры: «'+(p.name||p.id)+'»') : 'Текстуры: стандарт игры';
+  }
+  function setDiff(level){
+    window.AI_DIFF=level;
+    try{localStorage.setItem('chaos_ai_diff',level);}catch(e){}
+    refreshDiffUI();
+    try{if(typeof log==='function')log('Сложность ИИ: '+(DIFF_LABELS[level]||level));}catch(e){}
+  }
+  const tabS=el('tab-settings'), tabA=el('tab-account');
+  if(tabS) tabS.onclick=function(){
+    const sp=el('settings-panel'); const open=!sp.classList.contains('show');
+    closePanels();
+    if(open){sp.classList.add('show');this.classList.add('active');refreshDiffUI();refreshTexUI();}
+  };
+  if(tabA) tabA.onclick=function(){
+    closePanels();
+    if(window.Accounts&&Accounts.open) Accounts.open('acct');
+  };
+  if(el('sp-setup')) el('sp-setup').onclick=()=>{closePanels(); if(typeof openSetup==='function') openSetup(false);};
+  if(el('sp-codes')) el('sp-codes').onclick=()=>{closePanels(); const p=el('cmd-panel'); if(p){p.classList.add('show'); const inp=el('cmd-input'); if(inp) setTimeout(()=>inp.focus(),40);} };
+  if(el('sp-debug')) el('sp-debug').onclick=()=>{closePanels(); const p=el('dbg-panel'); if(p){p.classList.add('show'); const inp=el('debug-input'); if(inp) setTimeout(()=>inp.focus(),40);} };
+  if(el('sp-inspect')) el('sp-inspect').onclick=function(){ const insp=el('inspect-btn'); if(insp) insp.click(); this.textContent=window.inspectMode?'🔍 Осмотр ВКЛ':'🔍 Осмотр фигур'; };
+  if(el('sp-diff')) el('sp-diff').onclick=()=>{ const sub=el('sp-diff-sub'); if(sub) sub.classList.toggle('show'); refreshDiffUI(); };
+  document.querySelectorAll('#sp-diff-sub [data-diff]').forEach(b=>{ b.onclick=function(e){ e.stopPropagation(); setDiff(this.getAttribute('data-diff')); }; });
+  if(el('sp-textures')) el('sp-textures').onclick=()=>{
+    const ret=encodeURIComponent(location.origin+location.pathname);
+    const join = TEXTURES_URL.indexOf('?')>=0 ? '&' : '?';
+    window.open(TEXTURES_URL+join+'return='+ret, '_blank', 'noopener');
+  };
+  document.addEventListener('pointerdown', function(e){
+    const sp=el('settings-panel');
+    if(!sp||!sp.classList.contains('show')) return;
+    if(e.target.closest('#settings-panel')||e.target.closest('#main-tabs')) return;
+    closePanels();
+  });
+  if(window.TEX_PACK){ try{ if(typeof figReloadPack==='function') figReloadPack(); }catch(e){} }
+  setTimeout(function(){ refreshDiffUI(); refreshTexUI(); }, 200);
+})();
+</script>
+
 </body>
 </html>
