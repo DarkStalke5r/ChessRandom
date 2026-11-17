@@ -338,7 +338,7 @@
     }
     #fp-cancel { background: #444 !important; }
 
-    #dbg-btn, #cmd-btn, #inspect-btn, #spell-btn, #shop-btn, #plus-teto-btn, #acct-bar {
+    #dbg-btn, #cmd-btn, #inspect-btn, #spell-btn, #shop-btn, #acct-bar {
       display: none !important;
     }
     #inspect-btn.on {
@@ -360,6 +360,21 @@
     #main-tabs button.active {
       outline: 2px solid #e8b84a;
       box-shadow: 0 0 0 2px rgba(232,184,74,0.3);
+    }
+    #plus-teto-btn {
+      position: fixed; top: 6px; right: 6px; z-index: 10000;
+      width: 38px; height: 38px; border-radius: 11px; padding: 0; overflow: hidden;
+      border: 1px solid rgba(255,255,255,0.18);
+      background: rgba(30,30,38,0.92); color: #fff;
+      font-size: 18px; font-weight: 700; cursor: pointer;
+      backdrop-filter: blur(6px);
+      display: flex; align-items: center; justify-content: center;
+    }
+    #plus-teto-btn:hover { border-color: rgba(232,184,74,0.6); }
+    #plus-teto-btn:active { transform: scale(0.94); }
+    #plus-teto-btn img {
+      position: absolute; inset: 0; width: 100%; height: 100%;
+      object-fit: cover; object-position: 50% 14%; pointer-events: none;
     }
     #settings-panel {
       display: none; position: fixed; top: 50px; left: 6px;
@@ -431,7 +446,7 @@
       margin-top: 8px; font-size: 10px; color: var(--hint, #8e8e93); line-height: 1.35;
     }
     #online-badge {
-      position: fixed; top: 40px; right: 8px; z-index: 70;
+      position: fixed; top: 50px; right: 8px; z-index: 70;
       font-size: 10px; padding: 3px 8px; border-radius: 8px;
       background: rgba(42,171,238,0.9); color: #fff; display: none;
     }
@@ -792,6 +807,18 @@
     }
     .card.ai-card { transform: scale(0.9); }
 
+  
+    /* ========== VTuber (Live2D Cubism) — стоит рядом с картами, смотрит за анимациями ========== */
+    #vt-wrap {
+      position: fixed; left: 2px; bottom: 110px;
+      width: 160px; height: 230px;
+      z-index: 18;
+      pointer-events: none !important;   /* никогда не перехватывает нажатия — кнопки под ним работают */
+      display: none;
+      filter: drop-shadow(0 6px 10px rgba(0,0,0,0.45));
+    }
+    #vt-wrap.on { display: block; }
+    #vt-wrap canvas { width: 100%; height: 100%; display: block; pointer-events: none !important; }
   </style>
 </head>
 <body>
@@ -799,6 +826,7 @@
     <button type="button" id="tab-settings" title="Настройки">⚙</button>
     <button type="button" id="tab-account" title="Аккаунт и лидеры">👤</button>
   </div>
+  <button type="button" id="plus-teto-btn" title="Тето: режим, поле, армия">Т<img src="teto-layers/Teto.png" alt="" onerror="this.remove()" /></button>
   <div id="settings-panel">
     <div class="sp-title">Настройки</div>
     <div class="sp-row">
@@ -7700,8 +7728,9 @@ if(rs)showResumeDialog(rs,had);else if(!had)openSetup(true);
   };
   if(tabA) tabA.onclick=function(){
     closePanels();
-    if(window.Accounts&&Accounts.open) Accounts.open('acct');
+    if(window.Accounts&&Accounts.open) Accounts.open('acct'); else { try{ document.getElementById('log').textContent='Аккаунты недоступны: accounts.js не загрузился (проверь, что файл лежит рядом с index.html).'; }catch(e){} }
   };
+  if(el('plus-teto-btn')) el('plus-teto-btn').onclick=()=>{closePanels(); if(typeof openSetup==='function') openSetup(false);};
   if(el('sp-setup')) el('sp-setup').onclick=()=>{closePanels(); if(typeof openSetup==='function') openSetup(false);};
   if(el('sp-codes')) el('sp-codes').onclick=()=>{closePanels(); const p=el('cmd-panel'); if(p){p.classList.add('show'); const inp=el('cmd-input'); if(inp) setTimeout(()=>inp.focus(),40);} };
   if(el('sp-debug')) el('sp-debug').onclick=()=>{closePanels(); const p=el('dbg-panel'); if(p){p.classList.add('show'); const inp=el('debug-input'); if(inp) setTimeout(()=>inp.focus(),40);} };
@@ -7723,6 +7752,198 @@ if(rs)showResumeDialog(rs,had);else if(!had)openSetup(true);
   });
   if(window.TEX_PACK){ try{ if(typeof figReloadPack==='function') figReloadPack(); }catch(e){} }
   setTimeout(function(){ refreshDiffUI(); refreshTexUI(); }, 200);
+})();
+</script>
+
+
+<script>
+/* =====================================================================
+   VTuber (Live2D Cubism) — модель из папки  cubmodel/  в корне сайта.
+   • стоит над рядом с картами игрока (левый нижний угол поля);
+   • взгляд/голова следят за: летящей фигурой (#fly), летящей картой (#fly-card),
+     подсвеченными целями, картами, которые выдаются / используются / выбраны,
+     выбранной клеткой; в покое — осматривает доску и карты.
+   Файл модели ищется сам (cubmodel/*.model3.json). Если не находится —
+   задай вручную:  window.CUB_MODEL_URL = 'cubmodel/ИМЯ.model3.json'
+   или открой страницу с ?cubmodel=cubmodel/ИМЯ.model3.json
+   ===================================================================== */
+(function(){
+  'use strict';
+  const CFG = {
+    dir: 'cubmodel/',
+    url: window.CUB_MODEL_URL || (function(){try{return new URLSearchParams(location.search).get('cubmodel');}catch(e){return null;}})(),
+    guess: ['model3.json','model.model3.json','index.model3.json','cubmodel.model3.json'],
+    maxW: 160, maxH: 230,     // размер окна модели, px
+    zoom: 1.0,                // >1 — крупнее (обрезает ноги)
+    headY: 0.30,              // где у модели «голова» (доля высоты окна) — от неё считается направление взгляда
+    holdMs: 650,              // сколько «провожать взглядом» цель после конца анимации
+    libs: {
+      core:   'https://cubism.live2d.com/sdk-web/cubismcore/live2dcubismcore.min.js',
+      pixi:   'https://cdn.jsdelivr.net/npm/pixi.js@6.5.10/dist/browser/pixi.min.js',
+      live2d: 'https://cdn.jsdelivr.net/npm/pixi-live2d-display@0.4.0/dist/cubism4.min.js'
+    }
+  };
+
+  const $ = id => document.getElementById(id);
+  const say = t => { try{ const l=$('log'); if(l) l.textContent=t; }catch(e){} console.warn('[VTuber]', t); };
+
+  /* ---------------- 1. ЧЬЮ СМОТРИМ: выбор цели взгляда ---------------- */
+  const els = {};
+  function ref(){ els.fly=$('fly'); els.fcard=$('fly-card'); els.vp=$('viewport'); els.pc=$('player-cards'); els.ac=$('ai-cards'); els.board=$('board'); }
+  function shown(el){ return !!el && getComputedStyle(el).display!=='none'; }
+  function centerOf(el){
+    if(!el) return null; const r=el.getBoundingClientRect();
+    if(!r.width && !r.height) return null;
+    return { x:r.left+r.width/2, y:r.top+r.height/2 };
+  }
+  function avgCenter(list){
+    let sx=0,sy=0,n=0; list.forEach(e=>{const c=centerOf(e); if(c){sx+=c.x;sy+=c.y;n++;}});
+    return n?{x:sx/n,y:sy/n}:null;
+  }
+
+  // «медленные» цели (подсветки, карты в руке) — ищем раз в ~120 мс, чтобы не грузить кадр
+  let scanAt=0, scanned=null;
+  function scan(now){
+    if(now-scanAt<120) return scanned; scanAt=now; scanned=null;
+    let list=document.querySelectorAll('.cell.target-hl,.cell.scatter-hl,.cell.effect-hl,.cell.nuke-blast');
+    if(list.length){ scanned={ p:avgCenter(Array.from(list).slice(0,9)), k:'highlight' }; return scanned; }
+    let e=document.querySelector('.card.using');
+    if(e){ scanned={ p:centerOf(e), k:'card-used' }; return scanned; }
+    e=document.querySelector('.card.deal-in');
+    if(e){ scanned={ p:centerOf(e), k:'card-deal' }; return scanned; }
+    e=document.querySelector('.card.active');
+    if(e){ scanned={ p:centerOf(e), k:'card-active' }; return scanned; }
+    e=document.querySelector('.cell.protect-pick,.cell.selected');
+    if(e){ scanned={ p:centerOf(e), k:'selected' }; return scanned; }
+    return null;
+  }
+
+  let held=null, heldUntil=0;
+  function pick(now){
+    now = now || performance.now();
+    if(!els.fly) ref();
+    // 1) летящая карта и 2) летящая фигура — следим за ними КАЖДЫЙ кадр (они движутся)
+    if(shown(els.fcard) && parseFloat(getComputedStyle(els.fcard).opacity)>0.05){
+      const p=centerOf(els.fcard); if(p){ held={p,k:'card-fly'}; heldUntil=now+CFG.holdMs; return held; }
+    }
+    if(shown(els.fly)){
+      const p=centerOf(els.fly); if(p){ held={p,k:'piece-fly'}; heldUntil=now+CFG.holdMs; return held; }
+    }
+    // 3) только что закончилась анимация — ещё чуть провожаем взглядом место, куда долетело
+    if(held && now<heldUntil) return held;
+    // 4) подсветки / карты / выбранная клетка
+    const s=scan(now); if(s && s.p) return s;
+    // 5) покой: доска → мои карты → карты соперников
+    const cyc=(now/1000)%9, vr=els.vp&&els.vp.getBoundingClientRect();
+    if(cyc<5 && vr) return { p:{ x:vr.left+vr.width/2+Math.sin(now/1700)*vr.width*0.18, y:vr.top+vr.height/2+Math.cos(now/2300)*vr.height*0.12 }, k:'idle-board' };
+    if(cyc<7.2){ const p=centerOf(els.pc); if(p) return { p, k:'idle-cards' }; }
+    const p=centerOf(els.ac); if(p) return { p, k:'idle-ai' };
+    return { p:{x:innerWidth/2,y:innerHeight/2}, k:'idle' };
+  }
+  window.VTuberGaze = { pick };   // для отладки: VTuberGaze.pick()
+
+  /* ---------------- 2. ЗАГРУЗКА БИБЛИОТЕК И МОДЕЛИ ---------------- */
+  function loadScript(src){
+    return new Promise((res,rej)=>{
+      const s=document.createElement('script'); s.src=src; s.async=false;
+      s.onload=()=>res(); s.onerror=()=>rej(new Error('не загрузился '+src));
+      document.head.appendChild(s);
+    });
+  }
+  async function tryJSON(url){
+    try{ const r=await fetch(url,{cache:'no-cache'}); if(!r.ok) return null; const j=await r.json(); return j; }catch(e){ return null; }
+  }
+  async function listDir(dirUrl){
+    try{
+      const r=await fetch(dirUrl,{cache:'no-cache'}); if(!r.ok) return null;
+      const t=await r.text(); if(!/<a\s/i.test(t)) return null;
+      const out=[]; t.replace(/href\s*=\s*["']([^"']+)["']/gi,(m,h)=>{ out.push(h); return m; });
+      return out.map(h=>{ try{ return new URL(h, new URL(dirUrl, location.href)).href; }catch(e){ return null; } }).filter(Boolean);
+    }catch(e){ return null; }
+  }
+  async function findModel(){
+    if(CFG.url) return new URL(CFG.url, location.href).href;
+    const base=new URL(CFG.dir, location.href).href;
+    // а) листинг папки (работает на локальных серверах и там, где включён autoindex)
+    const top=await listDir(base);
+    if(top){
+      const m=top.find(u=>/\.model3\.json(\?|$)/i.test(u)); if(m) return m;
+      const m2=top.find(u=>/\.model\.json(\?|$)/i.test(u)); if(m2) return m2;
+      for(const sub of top.filter(u=>/\/$/.test(u) && u!==base && u.indexOf(base)===0).slice(0,6)){
+        const l2=await listDir(sub); const f=l2&&l2.find(u=>/\.model3\.json(\?|$)/i.test(u)); if(f) return f;
+      }
+    }
+    // б) типичные имена
+    for(const g of CFG.guess){
+      const j=await tryJSON(base+g);
+      if(j && (j.FileReferences||j.model)) return base+g;
+    }
+    return null;
+  }
+
+  function layout(wrap, app, model){
+    const bu=$('bottom-ui');
+    const topOfBottom = bu ? bu.getBoundingClientRect().top : innerHeight-110;
+    const bottom = Math.max(0, innerHeight - topOfBottom);
+    const h = Math.round(Math.min(CFG.maxH, Math.max(120, innerHeight*0.30)));
+    const w = Math.round(h*CFG.maxW/CFG.maxH);
+    wrap.style.bottom = bottom+'px'; wrap.style.width=w+'px'; wrap.style.height=h+'px';
+    if(app && app.renderer){
+      app.renderer.resize(w,h);
+      if(model){
+        const iw=model.internalModel.originalWidth||model.width, ih=model.internalModel.originalHeight||model.height;
+        const s=Math.min(w/iw, h/ih)*CFG.zoom;
+        model.anchor.set(0.5,1); model.scale.set(s); model.position.set(w/2, h);
+      }
+    }
+  }
+
+  async function boot(){
+    ref();
+    if(window.__VT_TEST) return;                // в автотестах библиотеки не грузим
+    const url = await findModel();
+    if(!url){ say('VTuber: не нашёл модель в '+CFG.dir+' (*.model3.json). Задай window.CUB_MODEL_URL.'); return; }
+    if(/\.model\.json(\?|$)/i.test(url) && !/model3/i.test(url)){ say('VTuber: это Cubism 2 (.model.json); нужна модель Cubism 4/5 (.model3.json).'); return; }
+    try{
+      if(!window.Live2DCubismCore) await loadScript(CFG.libs.core);
+      if(!window.PIXI)             await loadScript(CFG.libs.pixi);
+      if(!(window.PIXI && PIXI.live2d)) await loadScript(CFG.libs.live2d);
+    }catch(e){ say('VTuber: '+e.message); return; }
+
+    const wrap=document.createElement('div'); wrap.id='vt-wrap';
+    const canvas=document.createElement('canvas'); wrap.appendChild(canvas);
+    document.body.appendChild(wrap);
+    let app, model;
+    try{
+      app=new PIXI.Application({ view:canvas, width:CFG.maxW, height:CFG.maxH, backgroundAlpha:0, antialias:true, autoDensity:true, resolution:Math.min(devicePixelRatio||1,2) });
+      try{ PIXI.live2d.Live2DModel.registerTicker(PIXI.Ticker); }catch(e){}
+      model=await PIXI.live2d.Live2DModel.from(url,{ autoInteract:false });   // свою мышь не слушаем — смотрим на игру
+      app.stage.addChild(model);
+    }catch(e){ console.error(e); say('VTuber: модель не загрузилась ('+(e&&e.message||e)+')'); wrap.remove(); return; }
+
+    layout(wrap,app,model); wrap.classList.add('on');
+    addEventListener('resize',()=>layout(wrap,app,model));
+    try{ new ResizeObserver(()=>layout(wrap,app,model)).observe($('bottom-ui')); }catch(e){}
+
+    // ---- взгляд: каждый кадр наводим голову/глаза на текущую цель ----
+    const fc = model.internalModel && model.internalModel.focusController;
+    let sx=0, sy=0;                                   // сглаженный взгляд
+    app.ticker.add(()=>{
+      const t=pick(); if(!t||!t.p) return;
+      const r=canvas.getBoundingClientRect();
+      const hx=r.left+r.width/2, hy=r.top+r.height*CFG.headY;
+      const R=Math.max(140, Math.min(innerWidth,innerHeight)*0.5);   // на каком расстоянии поворот максимальный
+      const fast = (t.k==='piece-fly'||t.k==='card-fly') ? 0.35 : 0.12;
+      const tx=Math.max(-1,Math.min(1,(t.p.x-hx)/R)), ty=Math.max(-1,Math.min(1,-(t.p.y-hy)/R));
+      sx+=(tx-sx)*fast; sy+=(ty-sy)*fast;
+      if(fc && fc.focus) fc.focus(sx,sy);
+      else model.focus(t.p.x-r.left, t.p.y-r.top);
+    });
+    window.VTuber={ app, model, url };
+    console.log('[VTuber] ok:', url);
+  }
+
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',boot); else boot();
 })();
 </script>
 
