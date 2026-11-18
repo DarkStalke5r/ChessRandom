@@ -819,6 +819,9 @@
     }
     #vt-wrap.on { display: block; }
     #vt-wrap canvas { width: 100%; height: 100%; display: block; pointer-events: none !important; }
+
+    /* подсказка-обучение не должна «запирать» игру: фон кликабелен, кнопки выше системной панели */
+    #tutorial { padding-bottom: max(24px, calc(env(safe-area-inset-bottom, 0px) + 20px)) !important; }
   </style>
 </head>
 <body>
@@ -7764,15 +7767,15 @@ if(rs)showResumeDialog(rs,had);else if(!had)openSetup(true);
      подсвеченными целями, картами, которые выдаются / используются / выбраны,
      выбранной клеткой; в покое — осматривает доску и карты.
    Файл модели ищется сам (cubmodel/*.model3.json). Если не находится —
-   задай вручную:  window.CUB_MODEL_URL = 'cubmodel/Чиби Эмми D_maf.model3.json'
+   задай вручную:  window.CUB_MODEL_URL = 'cubmodel/ИМЯ.model3.json'
    или открой страницу с ?cubmodel=cubmodel/ИМЯ.model3.json
    ===================================================================== */
 (function(){
   'use strict';
   const CFG = {
-    dir: 'cubmodel/',
+    dirs: ['cubmodel/','cubModel/','CubModel/','cubemodel/'],   // где лежит модель (регистр важен на хостинге)
     url: window.CUB_MODEL_URL || (function(){try{return new URLSearchParams(location.search).get('cubmodel');}catch(e){return null;}})(),
-    guess: ['model3.json','model.model3.json','index.model3.json','cubmodel.model3.json'],
+    guess: ['Чиби Эмми D_maf.model3.json','model3.json','model.model3.json','index.model3.json','cubmodel.model3.json'],
     maxW: 160, maxH: 230,     // размер окна модели, px
     zoom: 1.0,                // >1 — крупнее (обрезает ноги)
     headY: 0.30,              // где у модели «голова» (доля высоты окна) — от неё считается направление взгляда
@@ -7840,7 +7843,7 @@ if(rs)showResumeDialog(rs,had);else if(!had)openSetup(true);
     const p=centerOf(els.ac); if(p) return { p, k:'idle-ai' };
     return { p:{x:innerWidth/2,y:innerHeight/2}, k:'idle' };
   }
-  window.VTuberGaze = { pick };   // для отладки: VTuberGaze.pick()
+  window.VTuberGaze = { pick, find:()=>findModel(), build:u=>buildSettings(u) };   // для отладки: VTuberGaze.pick()
 
   /* ---------------- 2. ЗАГРУЗКА БИБЛИОТЕК И МОДЕЛИ ---------------- */
   function loadScript(src){
@@ -7861,24 +7864,44 @@ if(rs)showResumeDialog(rs,had);else if(!had)openSetup(true);
       return out.map(h=>{ try{ return new URL(h, new URL(dirUrl, location.href)).href; }catch(e){ return null; } }).filter(Boolean);
     }catch(e){ return null; }
   }
-  async function findModel(){
-    if(CFG.url) return new URL(CFG.url, location.href).href;
-    const base=new URL(CFG.dir, location.href).href;
-    // а) листинг папки (работает на локальных серверах и там, где включён autoindex)
+  async function findInDir(dir){
+    const base=new URL(dir, location.href).href;
+    // а) листинг папки (локальные серверы / autoindex)
     const top=await listDir(base);
     if(top){
       const m=top.find(u=>/\.model3\.json(\?|$)/i.test(u)); if(m) return m;
-      const m2=top.find(u=>/\.model\.json(\?|$)/i.test(u)); if(m2) return m2;
       for(const sub of top.filter(u=>/\/$/.test(u) && u!==base && u.indexOf(base)===0).slice(0,6)){
         const l2=await listDir(sub); const f=l2&&l2.find(u=>/\.model3\.json(\?|$)/i.test(u)); if(f) return f;
       }
     }
-    // б) типичные имена
+    // б) известные имена (кириллицу и пробелы кодируем)
     for(const g of CFG.guess){
-      const j=await tryJSON(base+g);
-      if(j && (j.FileReferences||j.model)) return base+g;
+      const u=base+encodeURIComponent(g);
+      const j=await tryJSON(u);
+      if(j && j.FileReferences) return u;
     }
     return null;
+  }
+  async function findModel(){
+    if(CFG.url) return new URL(CFG.url, location.href).href;
+    for(const d of CFG.dirs){ const u=await findInDir(d); if(u) return u; }
+    return null;
+  }
+  // model3.json ссылается на текстуры в подпапке («…4096/texture_00.png»). Если файлы выложены плоско,
+  // подменяем пути на имя файла рядом с моделью, чтобы ничего не надо было переносить.
+  async function buildSettings(url){
+    const j=await tryJSON(url); if(!j||!j.FileReferences) return url;
+    const base=url.slice(0,url.lastIndexOf('/')+1);
+    const probe=src=>new Promise(r=>{ const im=new Image(); im.onload=()=>r(true); im.onerror=()=>r(false); im.src=src; });
+    const tex=j.FileReferences.Textures||[];
+    for(let i=0;i<tex.length;i++){
+      const full=tex[i], enc=new URL(full.split('/').map(encodeURIComponent).join('/'), base).href;
+      if(await probe(enc)) continue;
+      const flat=full.split('/').pop();
+      if(await probe(new URL(encodeURIComponent(flat), base).href)) tex[i]=flat;
+    }
+    j.url=url;
+    return j;
   }
 
   function layout(wrap, app, model){
@@ -7902,7 +7925,7 @@ if(rs)showResumeDialog(rs,had);else if(!had)openSetup(true);
     ref();
     if(window.__VT_TEST) return;                // в автотестах библиотеки не грузим
     const url = await findModel();
-    if(!url){ say('VTuber: не нашёл модель в '+CFG.dir+' (*.model3.json). Задай window.CUB_MODEL_URL.'); return; }
+    if(!url){ say('VTuber: не нашёл модель ('+CFG.dirs[0]+' … *.model3.json). Задай window.CUB_MODEL_URL = \'cubmodel/ИМЯ.model3.json\'.'); return; }
     if(/\.model\.json(\?|$)/i.test(url) && !/model3/i.test(url)){ say('VTuber: это Cubism 2 (.model.json); нужна модель Cubism 4/5 (.model3.json).'); return; }
     try{
       if(!window.Live2DCubismCore) await loadScript(CFG.libs.core);
@@ -7917,7 +7940,7 @@ if(rs)showResumeDialog(rs,had);else if(!had)openSetup(true);
     try{
       app=new PIXI.Application({ view:canvas, width:CFG.maxW, height:CFG.maxH, backgroundAlpha:0, antialias:true, autoDensity:true, resolution:Math.min(devicePixelRatio||1,2) });
       try{ PIXI.live2d.Live2DModel.registerTicker(PIXI.Ticker); }catch(e){}
-      model=await PIXI.live2d.Live2DModel.from(url,{ autoInteract:false });   // свою мышь не слушаем — смотрим на игру
+      model=await PIXI.live2d.Live2DModel.from(await buildSettings(url),{ autoInteract:false });   // свою мышь не слушаем — смотрим на игру
       app.stage.addChild(model);
     }catch(e){ console.error(e); say('VTuber: модель не загрузилась ('+(e&&e.message||e)+')'); wrap.remove(); return; }
 
@@ -7944,6 +7967,22 @@ if(rs)showResumeDialog(rs,had);else if(!had)openSetup(true);
   }
 
   if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',boot); else boot();
+})();
+</script>
+
+<script>
+/* Обучающая подсказка (#tutorial) перекрывает весь экран — пока её не закрыть, остальные кнопки «не работают».
+   Теперь её можно закрыть тапом по тёмному фону, клавишей Esc, и она сама закрывается через 12 с. */
+(function(){
+  const t=document.getElementById('tutorial'); if(!t) return;
+  const close=()=>{ const b=document.getElementById('tut-next')||document.getElementById('tut-skip'); if(b) b.click(); };
+  t.addEventListener('click',e=>{ if(e.target===t) close(); });
+  addEventListener('keydown',e=>{ if(e.key==='Escape' && t.classList.contains('show')) close(); });
+  let timer=null;
+  new MutationObserver(()=>{
+    clearTimeout(timer);
+    if(t.classList.contains('show')) timer=setTimeout(()=>{ if(t.classList.contains('show')) close(); },12000);
+  }).observe(t,{attributes:true,attributeFilter:['class']});
 })();
 </script>
 
