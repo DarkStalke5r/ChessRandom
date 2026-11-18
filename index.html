@@ -810,14 +810,23 @@
   
     /* ========== VTuber (Live2D Cubism) — стоит рядом с картами, смотрит за анимациями ========== */
     #vt-wrap {
-      position: fixed; left: 2px; bottom: 110px;
-      width: 160px; height: 230px;
-      z-index: 18;
+      position: fixed; right: 2px; top: 2px;          /* вместо кнопки «Т» */
+      width: 120px; height: 172px;
+      z-index: 10000;
       pointer-events: none !important;   /* никогда не перехватывает нажатия — кнопки под ним работают */
       display: none;
       filter: drop-shadow(0 6px 10px rgba(0,0,0,0.45));
     }
     #vt-wrap.on { display: block; }
+    #vt-wrap.press { transform: scale(0.96); transform-origin: 50% 100%; }
+    /* кликабельна только область головы и корпуса — остальное окно (прозрачное) не мешает кнопкам под ним */
+    #vt-hit {
+      position: absolute; left: 22%; top: 6%; width: 56%; height: 52%;
+      pointer-events: auto !important; cursor: pointer;
+      background: transparent; border: 0; padding: 0; margin: 0; outline: none;
+      -webkit-tap-highlight-color: transparent; touch-action: manipulation;
+    }
+    body.vt-on #plus-teto-btn { display: none !important; }   /* старая «Т» прячется, когда модель загрузилась */
     #vt-wrap canvas { width: 100%; height: 100%; display: block; pointer-events: none !important; }
 
     /* подсказка-обучение не должна «запирать» игру: фон кликабелен, кнопки выше системной панели */
@@ -6275,6 +6284,7 @@ function onlineDisconnect(){
   onlineHumanSeats = {white:true};
 }
 
+window.openSetup = openSetup;   // доступна кнопкам «Т» (модель) и «♟ Поле и армия» из другого скрипта
 function openSetup(first){
   const old=document.getElementById('plus-setup');if(old)old.remove();
   const ov=document.createElement('div');ov.id='plus-setup';
@@ -7983,12 +7993,9 @@ if(rs)showResumeDialog(rs,had);else if(!had)openSetup(true);
   }
 
   function layout(wrap, app, model){
-    const bu=$('bottom-ui');
-    const topOfBottom = bu ? bu.getBoundingClientRect().top : innerHeight-110;
-    const bottom = Math.max(0, innerHeight - topOfBottom);
     const h = Math.round(Math.min(CFG.maxH, Math.max(90, innerHeight*CFG.vhFrac)));
     const w = Math.round(h*CFG.maxW/CFG.maxH);
-    wrap.style.bottom = bottom+'px'; wrap.style.width=w+'px'; wrap.style.height=h+'px';
+    wrap.style.width=w+'px'; wrap.style.height=h+'px';
     if(app && app.renderer){
       app.renderer.resize(w,h);
       if(model){
@@ -8022,9 +8029,15 @@ if(rs)showResumeDialog(rs,had);else if(!had)openSetup(true);
       app.stage.addChild(model);
     }catch(e){ console.error(e); say('VTuber: модель не загрузилась ('+(e&&e.message||e)+')'); wrap.remove(); return; }
 
-    layout(wrap,app,model); wrap.classList.add('on');
+    // модель = кнопка «Т»: нажатие делает то же самое (окно Тето: режим, поле, армия)
+    const hit=document.createElement('button'); hit.type='button'; hit.id='vt-hit';
+    hit.title='Тето: режим, поле, армия'; hit.setAttribute('aria-label','Тето: режим, поле, армия');
+    hit.addEventListener('click',e=>{ e.stopPropagation(); const t=$('plus-teto-btn'); if(t) t.click(); });
+    hit.addEventListener('pointerdown',()=>wrap.classList.add('press'));
+    ['pointerup','pointerleave','pointercancel'].forEach(ev=>hit.addEventListener(ev,()=>wrap.classList.remove('press')));
+    wrap.appendChild(hit);
+    layout(wrap,app,model); wrap.classList.add('on'); document.body.classList.add('vt-on');
     addEventListener('resize',()=>layout(wrap,app,model));
-    try{ new ResizeObserver(()=>layout(wrap,app,model)).observe($('bottom-ui')); }catch(e){}
 
     // ---- взгляд: каждый кадр наводим голову/глаза на текущую цель ----
     const fc = model.internalModel && model.internalModel.focusController;
