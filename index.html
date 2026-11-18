@@ -7776,9 +7776,22 @@ if(rs)showResumeDialog(rs,had);else if(!had)openSetup(true);
     dirs: ['cubmodel/','cubModel/','CubModel/','cubemodel/'],   // где лежит модель (регистр важен на хостинге)
     url: window.CUB_MODEL_URL || (function(){try{return new URLSearchParams(location.search).get('cubmodel');}catch(e){return null;}})(),
     guess: ['Чиби Эмми D_maf.model3.json','model3.json','model.model3.json','index.model3.json','cubmodel.model3.json'],
-    maxW: 160, maxH: 230,     // размер окна модели, px
+    maxW: 120, maxH: 172,     // размер окна модели, px (было 160×230 → на 25% меньше)
+    vhFrac: 0.225,            // но не выше такой доли высоты экрана (было 0.30)
     zoom: 1.0,                // >1 — крупнее (обрезает ноги)
     headY: 0.30,              // где у модели «голова» (доля высоты окна) — от неё считается направление взгляда
+    // ---- одежда и эмоции (параметры-переключатели модели, 0..1) ----
+    par: { empty:'Param95',      // «Пустые глаза»
+           hearts:'Param102',    // «Сердечки»
+           sparkle:'Param101',   // «Большие блики» (большие зрачки)
+           jacket:'Param92',     // «Кофта» (куртка)
+           braids:'Param69',     // «Косички»
+           ears:'Param82' },     // «Уши кролика» (значение 1 = «off», т.е. уши убраны)
+    braidsValue: 0,             // косички ВСЕГДА выключены
+    earsValue: 0,               // заячьи уши ВСЕГДА видны (если у тебя наоборот — поставь 1)
+    jacketChance: 0.60,         // шанс, что куртка надета (перебрасывается с каждой новой партией)
+    nearAbs: 3,                 // «близко к концу»: у стороны осталось ≤ стольких фигур…
+    nearRatio: 0.34,            // …или их меньше трети от фигур другой стороны
     holdMs: 650,              // сколько «провожать взглядом» цель после конца анимации
     libs: {
       core:   'https://cubism.live2d.com/sdk-web/cubismcore/live2dcubismcore.min.js',
@@ -7843,7 +7856,45 @@ if(rs)showResumeDialog(rs,had);else if(!had)openSetup(true);
     const p=centerOf(els.ac); if(p) return { p, k:'idle-ai' };
     return { p:{x:innerWidth/2,y:innerHeight/2}, k:'idle' };
   }
-  window.VTuberGaze = { pick, find:()=>findModel(), build:u=>buildSettings(u) };   // для отладки: VTuberGaze.pick()
+  window.VTuberGaze = { pick, find:()=>findModel(), build:u=>buildSettings(u), emotion:()=>decideEmotion(), counts:()=>teamCounts() };   // для отладки: VTuberGaze.pick()
+
+  /* ---------------- 1b. ЭМОЦИИ: что сейчас на доске ---------------- */
+  // считаем фигуры по цвету прямо в DOM (цвет фигуры задаётся инлайном)
+  function teamOf(p){
+    const cl=(p.className||'')+'';
+    if(/\bwhite\b/.test(cl)) return 'white'; if(/\bblack\b/.test(cl)) return 'black';
+    if(/\bred-boss\b|\bneutral\b/.test(cl)) return null;
+    const c=(p.style.color||'').replace(/\s/g,'').toLowerCase();
+    if(c==='rgb(255,255,255)'||c==='#fff'||c==='#ffffff'||c==='rgb(248,248,248)') return 'white';
+    if(c==='rgb(17,17,17)'||c==='#111'||c==='#111111'||c==='rgb(26,26,26)') return 'black';
+    if(c==='rgb(255,111,181)') return 'pink';
+    if(c==='rgb(74,144,255)') return 'blue';
+    return null;
+  }
+  function teamCounts(){
+    const n={white:0,black:0,pink:0,blue:0};
+    document.querySelectorAll('#board .piece').forEach(p=>{
+      if(p.parentElement && p.parentElement.style.opacity==='0.55') return;   // «ушедшие/в тюрьме» не считаем
+      const t=teamOf(p); if(t) n[t]++;
+    });
+    return n;
+  }
+  // Какая эмоция нужна сейчас (одна из: 'sparkle' | 'hearts' | 'empty' | null). Одновременно — только одна.
+  function decideEmotion(){
+    const go=$('game-over');
+    if(go && go.classList.contains('show')){
+      const t=(($('go-text')||{}).textContent||'');
+      return /побед/i.test(t) ? 'sparkle' : 'hearts';   // победа → большие зрачки; поражение = победили чёрные → сердечки
+    }
+    const c=teamCounts(), W=c.white, E=c.black+c.pink+c.blue;
+    if(W+E===0) return null;
+    // близкая победа ЧЁРНЫХ (белых почти не осталось)
+    if(W>0 && c.black>=Math.max(c.pink,c.blue) &&
+       ((W<=CFG.nearAbs && c.black>=W*2) || (c.black>=6 && W<=c.black*CFG.nearRatio))) return 'hearts';
+    // близкое поражение ПРОТИВНИКА (врагов почти не осталось)
+    if(E>0 && ((E<=CFG.nearAbs && W>=E*2) || (W>=6 && E<=W*CFG.nearRatio))) return 'empty';
+    return null;
+  }
 
   /* ---------------- 2. ЗАГРУЗКА БИБЛИОТЕК И МОДЕЛИ ---------------- */
   function loadScript(src){
@@ -7908,7 +7959,7 @@ if(rs)showResumeDialog(rs,had);else if(!had)openSetup(true);
     const bu=$('bottom-ui');
     const topOfBottom = bu ? bu.getBoundingClientRect().top : innerHeight-110;
     const bottom = Math.max(0, innerHeight - topOfBottom);
-    const h = Math.round(Math.min(CFG.maxH, Math.max(120, innerHeight*0.30)));
+    const h = Math.round(Math.min(CFG.maxH, Math.max(90, innerHeight*CFG.vhFrac)));
     const w = Math.round(h*CFG.maxW/CFG.maxH);
     wrap.style.bottom = bottom+'px'; wrap.style.width=w+'px'; wrap.style.height=h+'px';
     if(app && app.renderer){
@@ -7962,7 +8013,33 @@ if(rs)showResumeDialog(rs,had);else if(!had)openSetup(true);
       if(fc && fc.focus) fc.focus(sx,sy);
       else model.focus(t.p.x-r.left, t.p.y-r.top);
     });
-    window.VTuber={ app, model, url };
+    // ---- одежда и эмоции: пишем параметры модели каждый кадр ----
+    const core=model.internalModel.coreModel, P=CFG.par;
+    const val={ empty:0, hearts:0, sparkle:0 };      // текущая «сила» каждой эмоции 0..1
+    let want=null, shown=null, lastEval=0, jacketOn=Math.random()<CFG.jacketChance, wasOver=false;
+    const setP=(id,v)=>{ try{ core.setParameterValueById(id,v); }catch(e){} };
+    const apply=()=>{
+      setP(P.empty,val.empty); setP(P.hearts,val.hearts); setP(P.sparkle,val.sparkle);
+      setP(P.jacket,jacketOn?1:0);
+      setP(P.braids,CFG.braidsValue);     // косички — всегда выкл
+      setP(P.ears,CFG.earsValue);         // заячьи уши — всегда видны
+    };
+    try{ model.internalModel.on('beforeMotionUpdate',apply); model.internalModel.on('beforeModelUpdate',apply); }
+    catch(e){ app.ticker.add(apply); }
+    app.ticker.add(()=>{
+      const now=performance.now();
+      // новая партия (оверлей конца игры закрылся) → заново бросаем кубик на куртку
+      const over=!!($('game-over')&&$('game-over').classList.contains('show'));
+      if(wasOver && !over) jacketOn=Math.random()<CFG.jacketChance;
+      wasOver=over;
+      if(now-lastEval>400){ lastEval=now; want=decideEmotion(); }
+      // эмоции не накладываются: сначала старая плавно гаснет, потом новая плавно включается
+      if(shown!==want){
+        if(shown){ val[shown]=Math.max(0,val[shown]-0.08); if(val[shown]<=0.001){ val[shown]=0; shown=null; } }
+        if(!shown) shown=want;
+      } else if(shown){ val[shown]=Math.min(1,val[shown]+0.06); }
+    });
+    window.VTuber={ app, model, url, state:()=>({want,shown,val:{...val},jacketOn}) };
     console.log('[VTuber] ok:', url);
   }
 
