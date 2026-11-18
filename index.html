@@ -7790,6 +7790,9 @@ if(rs)showResumeDialog(rs,had);else if(!had)openSetup(true);
     braidsValue: 0,             // косички ВСЕГДА выключены
     earsValue: 0,               // заячьи уши ВСЕГДА видны (если у тебя наоборот — поставь 1)
     jacketChance: 0.60,         // шанс, что куртка надета (перебрасывается с каждой новой партией)
+    flashMs: 2200,              // сколько секунд длится реакция на взятие фигуры
+    elimMs: 4500,               // и на полное уничтожение стороны (чёрных → большие зрачки, белых → сердечки)
+    nearEnabled: false,         // старые «эмоции по близкому концу партии» (выключены: теперь реакция на взятие фигур)
     nearAbs: 3,                 // «близко к концу»: у стороны осталось ≤ стольких фигур…
     nearRatio: 0.34,            // …или их меньше трети от фигур другой стороны
     holdMs: 650,              // сколько «провожать взглядом» цель после конца анимации
@@ -7856,7 +7859,7 @@ if(rs)showResumeDialog(rs,had);else if(!had)openSetup(true);
     const p=centerOf(els.ac); if(p) return { p, k:'idle-ai' };
     return { p:{x:innerWidth/2,y:innerHeight/2}, k:'idle' };
   }
-  window.VTuberGaze = { pick, find:()=>findModel(), build:u=>buildSettings(u), emotion:()=>decideEmotion(), counts:()=>teamCounts() };   // для отладки: VTuberGaze.pick()
+  window.VTuberGaze = { pick, find:()=>findModel(), build:u=>buildSettings(u), emotion:()=>decideEmotion(), counts:()=>teamCounts(), flash:()=>flash };   // для отладки: VTuberGaze.pick()
 
   /* ---------------- 1b. ЭМОЦИИ: что сейчас на доске ---------------- */
   // считаем фигуры по цвету прямо в DOM (цвет фигуры задаётся инлайном)
@@ -7880,12 +7883,16 @@ if(rs)showResumeDialog(rs,had);else if(!had)openSetup(true);
     return n;
   }
   // Какая эмоция нужна сейчас (одна из: 'sparkle' | 'hearts' | 'empty' | null). Одновременно — только одна.
-  function decideEmotion(){
+  let flash=null;   // {emo, until} — короткая реакция на взятие фигуры
+  function decideEmotion(now){
+    now = now || performance.now();
     const go=$('game-over');
     if(go && go.classList.contains('show')){
       const t=(($('go-text')||{}).textContent||'');
       return /побед/i.test(t) ? 'sparkle' : 'hearts';   // победа → большие зрачки; поражение = победили чёрные → сердечки
     }
+    if(flash && now<flash.until) return flash.emo;
+    if(!CFG.nearEnabled) return null;
     const c=teamCounts(), W=c.white, E=c.black+c.pink+c.blue;
     if(W+E===0) return null;
     // близкая победа ЧЁРНЫХ (белых почти не осталось)
@@ -7896,6 +7903,26 @@ if(rs)showResumeDialog(rs,had);else if(!had)openSetup(true);
     return null;
   }
 
+  // Следим за числом фигур: упало у белых → их взяли (сердечки), упало у чёрных → взяли чёрную (пустые глаза).
+  let prevCnt=null, lastLog='', watchAt=0;
+  function watchCaptures(now){
+    if(now-watchAt<100) return; watchAt=now;
+    const go=$('game-over');
+    if((go&&go.classList.contains('show')) || $('plus-setup')){ prevCnt=null; return; }   // игра окончена / идёт настройка
+    const c=teamCounts(), logNow=(($('log')||{}).textContent||'');
+    if(prevCnt){
+      const dw=prevCnt.white-c.white, db=prevCnt.black-c.black;
+      const merged = logNow!==lastLog && /Слиян/i.test(logNow);       // слияние своих фигур — это не взятие
+      const reset  = dw>0 && db>0;                                     // обе стороны разом «похудели» — новая партия/режим
+      if(!merged && !reset){
+        if(prevCnt.black>0 && c.black===0)      flash={ emo:'sparkle', until:now+CFG.elimMs };   // чёрные уничтожены
+        else if(prevCnt.white>0 && c.white===0) flash={ emo:'hearts',  until:now+CFG.elimMs };   // белые уничтожены
+        else if(dw>0)                           flash={ emo:'hearts',  until:now+CFG.flashMs };  // взяли белую
+        else if(db>0)                           flash={ emo:'empty',   until:now+CFG.flashMs };  // взяли чёрную
+      }
+    }
+    prevCnt=c; lastLog=logNow;
+  }
   /* ---------------- 2. ЗАГРУЗКА БИБЛИОТЕК И МОДЕЛИ ---------------- */
   function loadScript(src){
     return new Promise((res,rej)=>{
@@ -8032,7 +8059,8 @@ if(rs)showResumeDialog(rs,had);else if(!had)openSetup(true);
       const over=!!($('game-over')&&$('game-over').classList.contains('show'));
       if(wasOver && !over) jacketOn=Math.random()<CFG.jacketChance;
       wasOver=over;
-      if(now-lastEval>400){ lastEval=now; want=decideEmotion(); }
+      watchCaptures(now);
+      if(now-lastEval>100){ lastEval=now; want=decideEmotion(now); }
       // эмоции не накладываются: сначала старая плавно гаснет, потом новая плавно включается
       if(shown!==want){
         if(shown){ val[shown]=Math.max(0,val[shown]-0.08); if(val[shown]<=0.001){ val[shown]=0; shown=null; } }
