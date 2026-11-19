@@ -826,7 +826,27 @@
       background: transparent; border: 0; padding: 0; margin: 0; outline: none;
       -webkit-tap-highlight-color: transparent; touch-action: manipulation;
     }
-    body.vt-on #plus-teto-btn { display: none !important; }   /* старая «Т» прячется, когда модель загрузилась */
+    body.vt-on #plus-teto-btn { display: none !important; }
+    /* реплики модели */
+    #vt-bubble {
+      position: absolute; right: 6px; width: max-content; max-width: min(180px, 62vw);
+      padding: 7px 11px; border-radius: 13px;
+      background: #fbf6e8; color: #2d2538; border: 1px solid rgba(0,0,0,.12);
+      font: 500 13px/1.3 system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+      box-shadow: 0 4px 14px rgba(0,0,0,.35);
+      opacity: 0; transform: translateY(4px) scale(.97); transform-origin: 85% 0;
+      transition: opacity .25s ease, transform .25s ease;
+      pointer-events: none !important; z-index: 2;
+    }
+    #vt-bubble.show { opacity: 1; transform: none; }
+    #vt-bubble.below { top: calc(100% + 2px); }
+    #vt-bubble.above { bottom: calc(100% + 2px); transform-origin: 85% 100%; }
+    #vt-bubble::after {                       /* хвостик к голове модели */
+      content: ''; position: absolute; right: 44px; width: 10px; height: 10px;
+      background: inherit; border: inherit; transform: rotate(45deg);
+    }
+    #vt-bubble.below::after { top: -6px; border-right: 0; border-bottom: 0; }
+    #vt-bubble.above::after { bottom: -6px; border-left: 0; border-top: 0; }   /* старая «Т» прячется, когда модель загрузилась */
     #vt-wrap canvas { width: 100%; height: 100%; display: block; pointer-events: none !important; }
 
     /* подсказка-обучение не должна «запирать» игру: фон кликабелен, кнопки выше системной панели */
@@ -8135,14 +8155,101 @@ if(rs)showResumeDialog(rs,had);else if(!had)openSetup(true);
       const merged = logNow!==lastLog && /Слиян/i.test(logNow);       // слияние своих фигур — это не взятие
       const reset  = dw>0 && db>0;                                     // обе стороны разом «похудели» — новая партия/режим
       if(!merged && !reset){
-        if(prevCnt.black>0 && c.black===0)      flash={ emo:'sparkle', until:now+CFG.elimMs };   // чёрные уничтожены
+        if(prevCnt.black>0 && c.black===0)      { flash={ emo:'sparkle', until:now+CFG.elimMs }; vtSay('sparkle',{force:true,chance:0.8}); }   // чёрные уничтожены
         else if(prevCnt.white>0 && c.white===0) flash={ emo:'hearts',  until:now+CFG.elimMs };   // белые уничтожены
-        else if(dw>0)                           flash={ emo:'hearts',  until:now+CFG.flashMs };  // взяли белую
-        else if(db>0)                           flash={ emo:'empty',   until:now+CFG.flashMs };  // взяли чёрную
+        else if(dw>0)                           { flash={ emo:'hearts',  until:now+CFG.flashMs }; vtSay('hearts',{chance:0.4}); }  // взяли белую
+        else if(db>0)                           { flash={ emo:'empty',   until:now+CFG.flashMs }; vtSay('empty',{chance:0.4}); }  // взяли чёрную
       }
     }
     prevCnt=c; lastLog=logNow;
   }
+  /* ---------------- 1c. РЕПЛИКИ (бабл над/под моделью) ---------------- */
+  // Говорит негромко и по делу, без «ура!» и восклицаний: пара слов в тишине и редкие реакции на события.
+  const SAY = {
+    idle: [
+      'Хм, тихо тут.', 'Так, дай подумать.', 'Ну, посмотрим, что дальше.', 'Интересная расстановка.',
+      'Не торопись, ходи спокойно.', 'Я пока просто смотрю.', 'Тут главное не спешить.',
+      'Надо присмотреться вон к тем фигурам.', 'Чай бы сейчас.', 'Угу, понятно.',
+      'Что-то мне подсказывает, что будет интересно.', 'Ладно, не буду мешать.',
+      'Доска сегодня какая-то необычная.', 'Если что, я рядом.', 'Нормально идём.'
+    ],
+    hearts: [ 'Ай, это неприятно.', 'Жалко, она неплохо стояла.', 'Ладно, бывает.', 'Хм, придётся отыгрываться.', 'Ну вот, на одну меньше.' ],
+    empty:  [ 'Один готов.', 'Ну вот, на одного меньше.', 'Хороший размен, если честно.', 'Неплохо вышло.', 'Так-то аккуратно.' ],
+    sparkle:[ 'Надо же, получилось.', 'Даже не думала, что так выйдет.', 'Ну… неплохо, да.' ],
+    win:    [ 'Ну вот, получилось.', 'Хорошая партия.', 'Приятно играть.' ],
+    lose:   [ 'Эх. В другой раз.', 'Бывает. Давай ещё раз?', 'Жаль. Но партия была интересная.' ],
+    boss:   [ 'Босс опять кого-то зовёт.', 'Он зовёт подмогу, надо следить.', 'Приспешников становится больше.' ],
+    eat:    [ 'Приспешники тоже не дремлют.', 'Эти ребята не шутят.' ],
+    merge:  [ 'Слились. Теперь ходят по-другому.', 'Интересно, как это сыграет.' ],
+    card:   [ 'Любопытная карта.', 'Это ещё что за карта?', 'Так, карты пошли в ход.' ],
+    start:  [ 'Ну что, начнём?', 'Поехали, не спеша.' ]
+  };
+  let bubbleEl=null, speakUntil=0, bubbleHide=0, lastSayAt=-1e9, nextIdleAt=0, lastKind='';
+  const recent=[];
+  function allowedToSpeak(){
+    if($('plus-setup')) return false;
+    const t=$('tutorial'); if(t && t.classList.contains('show')) return false;
+    return !!bubbleEl;
+  }
+  function pickLine(kind){
+    const pool=(SAY[kind]||SAY.idle).filter(x=>recent.indexOf(x)<0);
+    const arr=pool.length?pool:(SAY[kind]||SAY.idle);
+    const line=arr[Math.floor(Math.random()*arr.length)];
+    recent.push(line); if(recent.length>6) recent.shift();
+    return line;
+  }
+  function placeBubble(){
+    const wrap=$('vt-wrap'); if(!wrap||!bubbleEl) return;
+    const r=wrap.getBoundingClientRect(), h=bubbleEl.offsetHeight||40;
+    const above = r.top > h+14;                    // сверху есть место → над головой, иначе под моделью
+    bubbleEl.classList.toggle('above',above); bubbleEl.classList.toggle('below',!above);
+  }
+  // force=true — реплика на важное событие (но всё равно не чаще, чем раз в несколько секунд)
+  function vtSay(kind, opts){
+    opts=opts||{};
+    if(!allowedToSpeak()) return false;
+    const now=performance.now();
+    const gap = opts.force ? 4500 : 9000;
+    if(now-lastSayAt<gap) return false;
+    if(opts.chance!=null && Math.random()>opts.chance) return false;
+    const text=pickLine(kind);
+    bubbleEl.textContent=text; placeBubble();
+    bubbleEl.classList.add('show');
+    const dur=Math.min(6500, 2200+text.length*55);
+    speakUntil=now+Math.min(dur-300, 400+text.length*65);      // рот двигается, пока «говорит»
+    clearTimeout(bubbleHide); bubbleHide=setTimeout(()=>bubbleEl&&bubbleEl.classList.remove('show'),dur);
+    lastSayAt=now; lastKind=kind;
+    return true;
+  }
+  window.VTuberSay = vtSay;     // отладка: VTuberSay('idle')
+  function scheduleIdle(now){ nextIdleAt = now + 28000 + Math.random()*32000; }   // раз в 28–60 с
+
+  // слушаем лог игры: босс, слияния, съеденные фигуры, начало партии
+  function watchLog(){
+    const l=$('log'); if(!l||!window.MutationObserver) return;
+    new MutationObserver(()=>{
+      const t=l.textContent||'';
+      if(/Босс разыграл/i.test(t)) vtSay('boss',{chance:0.5});
+      else if(/Приспешник босса.*съел/i.test(t)) vtSay('eat',{chance:0.4});
+      else if(/Слияние/i.test(t)) vtSay('merge',{chance:0.4});
+      else if(/Особые фигуры в партии/i.test(t)) vtSay('start',{chance:0.6});
+    }).observe(l,{childList:true,characterData:true,subtree:true});
+  }
+  let cardSeen=false, overSaid=false;
+  function talkTick(now){
+    if(!bubbleEl) return;
+    if(!nextIdleAt) scheduleIdle(now);
+    // карта в полёте (применили карту)
+    const fc=$('fly-card'), flying=fc && getComputedStyle(fc).display!=='none';
+    if(flying && !cardSeen){ cardSeen=true; vtSay('card',{chance:0.35}); } else if(!flying) cardSeen=false;
+    // конец партии
+    const go=$('game-over'), over=!!(go && go.classList.contains('show'));
+    if(over && !overSaid){ overSaid=true; const w=/побед/i.test((($('go-text')||{}).textContent||'')); setTimeout(()=>vtSay(w?'win':'lose',{force:true}),900); }
+    if(!over) overSaid=false;
+    // тишина → случайная фраза
+    if(now>nextIdleAt){ scheduleIdle(now); vtSay('idle'); }
+  }
+
   /* ---------------- 2. ЗАГРУЗКА БИБЛИОТЕК И МОДЕЛИ ---------------- */
   function loadScript(src){
     return new Promise((res,rej)=>{
@@ -8246,6 +8353,8 @@ if(rs)showResumeDialog(rs,had);else if(!had)openSetup(true);
     hit.addEventListener('pointerdown',()=>wrap.classList.add('press'));
     ['pointerup','pointerleave','pointercancel'].forEach(ev=>hit.addEventListener(ev,()=>wrap.classList.remove('press')));
     wrap.appendChild(hit);
+    bubbleEl=document.createElement('div'); bubbleEl.id='vt-bubble'; bubbleEl.className='below'; bubbleEl.setAttribute('role','status'); wrap.appendChild(bubbleEl);
+    watchLog();
     layout(wrap,app,model); wrap.classList.add('on'); document.body.classList.add('vt-on');
     addEventListener('resize',()=>layout(wrap,app,model));
 
@@ -8268,11 +8377,15 @@ if(rs)showResumeDialog(rs,had);else if(!had)openSetup(true);
     const val={ empty:0, hearts:0, sparkle:0 };      // текущая «сила» каждой эмоции 0..1
     let want=null, shown=null, lastEval=0, jacketOn=Math.random()<CFG.jacketChance, wasOver=false;
     const setP=(id,v)=>{ try{ core.setParameterValueById(id,v); }catch(e){} };
+    let mouthOn=false;
     const apply=()=>{
       setP(P.empty,val.empty); setP(P.hearts,val.hearts); setP(P.sparkle,val.sparkle);
       setP(P.jacket,jacketOn?1:0);
       setP(P.braids,CFG.braidsValue);     // косички — всегда выкл
       setP(P.hair,CFG.hairValue);         // длинные волосы — всегда вкл
+      const nt=performance.now();
+      if(nt<speakUntil){ mouthOn=true; setP('ParamMouthOpenY', 0.12+0.5*Math.abs(Math.sin(nt/95)*Math.sin(nt/260+1))); }   // говорит
+      else if(mouthOn){ mouthOn=false; setP('ParamMouthOpenY',0); }                                                         // закрыть рот один раз
       setP(P.ears,CFG.earsValue);         // заячьи уши — всегда видны
     };
     try{ model.internalModel.on('beforeMotionUpdate',apply); model.internalModel.on('beforeModelUpdate',apply); }
@@ -8284,6 +8397,7 @@ if(rs)showResumeDialog(rs,had);else if(!had)openSetup(true);
       if(wasOver && !over) jacketOn=Math.random()<CFG.jacketChance;
       wasOver=over;
       watchCaptures(now);
+      talkTick(now);
       if(now-lastEval>100){ lastEval=now; want=decideEmotion(now); }
       // эмоции не накладываются: сначала старая плавно гаснет, потом новая плавно включается
       if(shown!==want){
