@@ -411,6 +411,7 @@
       background: rgba(255,255,255,0.08); color: #fff; font-size: 12px; cursor: pointer;
     }
     #settings-panel .sp-sub button.on { background: #2ea6ff; border-color: transparent; }
+    #settings-panel .sp-sub button.locked { opacity: 0.55; border-style: dashed; }
     #settings-panel .sp-note {
       font-size: 11px; color: #8e8e93; margin-top: 4px; line-height: 1.3;
     }
@@ -886,6 +887,9 @@
         <button type="button" data-diff="hard">Сложная</button>
         <button type="button" data-diff="boss" style="font-family:ui-monospace,Menlo,Consolas,monospace;color:#9dffb0">0.boss.ai</button>
       </div>
+      <button type="button" class="sp-btn sec" id="sp-sfx">🔊 Звуки: вкл</button>
+      <button type="button" class="sp-btn sec" id="sp-music">🎵 Музыка: вкл</button>
+      <input type="range" id="sp-vol" min="0" max="100" step="5" value="80" aria-label="Громкость" style="width:100%;accent-color:#2ea6ff">
       <button type="button" class="sp-btn sec" id="sp-textures">🎨 Текстуры</button>
       <div class="sp-note" id="sp-diff-note"></div>
       <div class="sp-note" id="sp-tex-note"></div>
@@ -4705,6 +4709,329 @@ window.GameAPI={
   showResultNote:function(text){var g=document.getElementById('go-reason');if(g)g.textContent+=' · '+text;}
 };
 </script>
+<script id="cc-audio">
+/* =====================================================================
+   ЗВУК И МУЗЫКА (всё синтезируется WebAudio — внешних файлов нет)
+   • 4 фоновых трека: easy / normal / hard / boss (меняются вместе со сложностью ИИ)
+   • эффекты: ход, взятие, слияние, выстрел, карты, спавн, авиаудар, ядерка, босс, победа, поражение…
+   • прогресс: счётчик побед над ИИ (localStorage) — открывает 0.boss.ai после 1-й победы
+   Консоль: CCAudio.setMusic(false) / CCAudio.setSfx(false) / CCProgress.addWin()
+   ===================================================================== */
+(function(){
+'use strict';
+const LS={
+  get(k,d){try{const v=localStorage.getItem(k);return v===null?d:v;}catch(e){return d;}},
+  set(k,v){try{localStorage.setItem(k,v);}catch(e){}}
+};
+
+/* ---------- прогресс: победы над ИИ ---------- */
+const WIN_KEY='chaos_wins_vs_ai';
+window.CCProgress={
+  wins(){return parseInt(LS.get(WIN_KEY,'0'),10)||0;},
+  addWin(){const n=this.wins()+1;LS.set(WIN_KEY,String(n));return n;},
+  bossUnlocked(){return this.wins()>=1;}      // ← сколько побед нужно для 0.boss.ai
+};
+
+/* ---------- состояние ---------- */
+let ctx=null,master=null,musicBus=null,sfxBus=null,noiseBuf=null;
+let sfxOn=LS.get('chaos_snd_sfx','1')==='1';
+let musicOn=LS.get('chaos_snd_music','1')==='1';
+let vol=parseFloat(LS.get('chaos_snd_vol','0.8'));if(!(vol>=0&&vol<=1))vol=0.8;
+let unlocked=false,wantTrack=null,curName=null,curTrack=null,trackBus=null,trackFx=null,timer=null,nextTime=0,step=0;
+const MUSIC_LEVEL=0.55;
+
+function ensure(){
+  if(ctx)return ctx;
+  const AC=window.AudioContext||window.webkitAudioContext;if(!AC)return null;
+  try{ctx=new AC();}catch(e){return null;}
+  master=ctx.createGain();master.gain.value=vol;
+  const comp=ctx.createDynamicsCompressor();
+  comp.threshold.value=-16;comp.ratio.value=4;comp.attack.value=0.004;comp.release.value=0.2;
+  master.connect(comp);comp.connect(ctx.destination);
+  musicBus=ctx.createGain();musicBus.gain.value=musicOn?MUSIC_LEVEL:0;musicBus.connect(master);
+  sfxBus=ctx.createGain();sfxBus.gain.value=sfxOn?1:0;sfxBus.connect(master);
+  const len=ctx.sampleRate;noiseBuf=ctx.createBuffer(1,len,ctx.sampleRate);
+  const d=noiseBuf.getChannelData(0);for(let i=0;i<len;i++)d[i]=Math.random()*2-1;
+  return ctx;
+}
+function unlock(){
+  if(!ensure())return;
+  if(ctx.state!=='running'){try{ctx.resume();}catch(e){}}
+  if(!unlocked){
+    unlocked=true;
+    try{const b=ctx.createBuffer(1,1,22050),s=ctx.createBufferSource();s.buffer=b;s.connect(ctx.destination);s.start(0);}catch(e){}  // iOS
+    if(wantTrack)startMusic(wantTrack);
+  }
+}
+['pointerup','touchend','click','keydown'].forEach(ev=>document.addEventListener(ev,unlock,{capture:true,passive:true}));
+document.addEventListener('visibilitychange',()=>{
+  if(!ctx)return;
+  if(document.hidden){try{ctx.suspend();}catch(e){}}
+  else if(unlocked){try{ctx.resume();}catch(e){}}
+});
+
+/* ---------- примитивы ---------- */
+const mf=n=>440*Math.pow(2,(n-69)/12);
+const rnd=(a,b)=>a+Math.random()*(b-a);
+function env(g,t,atk,dur,rel,v){
+  v=Math.max(0.0002,v);atk=Math.min(atk,dur);
+  g.gain.cancelScheduledValues(t);
+  g.gain.setValueAtTime(0.0001,t);
+  g.gain.exponentialRampToValueAtTime(v,t+atk);
+  g.gain.setValueAtTime(v,t+dur);
+  g.gain.exponentialRampToValueAtTime(0.0001,t+dur+rel);
+}
+function tone(bus,t,f,dur,o){
+  o=o||{};
+  const osc=ctx.createOscillator(),g=ctx.createGain();
+  osc.type=o.type||'sine';osc.frequency.setValueAtTime(f,t);
+  if(o.to)osc.frequency.exponentialRampToValueAtTime(Math.max(20,o.to),t+(o.glide||dur));
+  if(o.det)osc.detune.value=o.det;
+  let node=osc;
+  if(o.lp){
+    const fl=ctx.createBiquadFilter();fl.type='lowpass';fl.frequency.setValueAtTime(o.lp,t);
+    if(o.lpTo)fl.frequency.exponentialRampToValueAtTime(Math.max(40,o.lpTo),t+dur);
+    fl.Q.value=o.q||0.7;osc.connect(fl);node=fl;
+  }
+  node.connect(g);g.connect(bus);
+  const rel=o.rel==null?0.08:o.rel;
+  env(g,t,o.atk||0.005,dur,rel,o.vol||0.2);
+  osc.start(t);osc.stop(t+dur+rel+0.05);
+}
+function noise(bus,t,dur,o){
+  o=o||{};
+  const src=ctx.createBufferSource();src.buffer=noiseBuf;src.loop=true;
+  const g=ctx.createGain();let node=src;
+  if(o.hp){const f=ctx.createBiquadFilter();f.type='highpass';f.frequency.value=o.hp;node.connect(f);node=f;}
+  if(o.bp){const f=ctx.createBiquadFilter();f.type='bandpass';f.frequency.setValueAtTime(o.bp,t);
+    if(o.bpTo)f.frequency.exponentialRampToValueAtTime(Math.max(40,o.bpTo),t+dur);f.Q.value=o.q||1;node.connect(f);node=f;}
+  if(o.lp){const f=ctx.createBiquadFilter();f.type='lowpass';f.frequency.setValueAtTime(o.lp,t);
+    if(o.lpTo)f.frequency.exponentialRampToValueAtTime(Math.max(40,o.lpTo),t+dur);node.connect(f);node=f;}
+  node.connect(g);g.connect(bus);
+  const rel=o.rel==null?0.05:o.rel;
+  env(g,t,o.atk||0.002,dur,rel,o.vol||0.2);
+  src.start(t,Math.random()*0.5);src.stop(t+dur+rel+0.05);
+}
+const kick=(b,t,v)=>tone(b,t,150,0.16,{to:45,glide:0.12,vol:v,atk:0.002,rel:0.06});
+const snare=(b,t,v)=>{noise(b,t,0.12,{hp:1500,vol:v*0.8});tone(b,t,190,0.08,{to:120,type:'triangle',vol:v*0.5});};
+const hat=(b,t,v,open)=>noise(b,t,open?0.16:0.035,{hp:7000,vol:v,rel:open?0.1:0.02});
+function pad(b,t,notes,dur,v,lp,type){
+  notes.forEach(n=>[-7,7].forEach(d=>tone(b,t,mf(n),dur,{type:type||'sawtooth',det:d,vol:v,atk:0.4,rel:0.5,lp:lp||900})));
+}
+
+/* ---------- фоновые треки ---------- */
+// B = {out: шина трека, crush: «битcrush»-вход, dist: «перегруз»-вход}
+const TRACKS={
+  /* ЛЁГКАЯ — светлая, добрая: C — Am — F — G, колокольчики и мягкая арпеджио */
+  easy:{bpm:104,
+    chords:[{r:48,t:[60,64,67]},{r:45,t:[57,60,64]},{r:41,t:[53,57,60]},{r:43,t:[55,59,62]}],
+    mel:[
+      [[0,76,2],[3,79,1],[4,76,2],[8,74,2],[10,72,2],[12,74,3]],
+      [[0,72,2],[2,76,2],[4,81,3],[8,79,2],[10,76,2],[12,72,3]],
+      [[0,81,2],[3,79,1],[4,77,2],[8,76,2],[10,72,2],[12,77,3]],
+      [[0,74,2],[2,79,2],[4,83,2],[8,81,2],[10,79,2],[12,74,3]]],
+    play(s,t,sd,B){
+      const bar=Math.floor(s/16)%4,i=s%16,cyc=Math.floor(s/64)%2,ch=this.chords[bar];
+      if(i===0)pad(B.out,t,ch.t,sd*16,0.03,1400,'triangle');
+      if(i===0||i===8)tone(B.out,t,mf(ch.r),sd*3,{type:'triangle',vol:0.22,atk:0.01,rel:0.1});
+      if(i===10)tone(B.out,t,mf(ch.r+7),sd*2,{type:'triangle',vol:0.13,atk:0.01});
+      if(i%2===0||cyc===1){const k=[0,1,2,1,0,1,2,1][(i>>1)%8];tone(B.out,t,mf(ch.t[k]+12),sd*1.8,{type:'triangle',vol:0.065,rel:0.12});}
+      this.mel[bar].forEach(([st,n,len])=>{if(st===i)tone(B.out,t,mf(n-(cyc?12:0)),sd*len*0.95,{vol:0.11,atk:0.01,rel:0.25});});
+      if(i===0||i===8)kick(B.out,t,0.3);
+      if(i===4||i===12)snare(B.out,t,0.08);
+      if(i%2===0)hat(B.out,t,0.025,false);
+    }},
+
+  /* СРЕДНЯЯ — ровный марш в Am: Am — F — C — G, пульсирующий бас */
+  normal:{bpm:112,
+    chords:[{r:45,t:[57,60,64]},{r:41,t:[53,57,60]},{r:48,t:[60,64,67]},{r:43,t:[55,59,62]}],
+    mel:[null,[[0,76,2],[4,74,2],[8,72,4]],null,[[0,71,2],[4,72,2],[8,74,2],[12,71,3]]],
+    play(s,t,sd,B){
+      const bar=Math.floor(s/16)%4,i=s%16,cyc=Math.floor(s/64)%2,ch=this.chords[bar];
+      if(i===0)pad(B.out,t,ch.t,sd*16,0.028,700);
+      if([0,3,6,8,11,14].includes(i))tone(B.out,t,mf(ch.r-(i===6||i===14?0:0)),sd*2,{type:'sawtooth',vol:0.18,lp:520,atk:0.005,rel:0.06});
+      if(i%2===0){const k=[0,1,2,1][(i>>1)%4];tone(B.out,t,mf(ch.t[k]+12),sd*1.5,{type:'square',vol:0.045,lp:1800,rel:0.08});}
+      if(cyc===1&&this.mel[bar])this.mel[bar].forEach(([st,n,len])=>{if(st===i)tone(B.out,t,mf(n),sd*len*0.9,{type:'square',vol:0.06,lp:2500,atk:0.01,rel:0.15});});
+      if(i===0||i===8||i===10)kick(B.out,t,0.42);
+      if(i===4||i===12)snare(B.out,t,0.22);
+      if(i%2===0)hat(B.out,t,0.04,i%4===2&&i===14);
+    }},
+
+  /* СЛОЖНАЯ — напористый Em: Em — C — D — B, ровная бочка, злые стабы */
+  hard:{bpm:132,
+    chords:[{r:40,t:[52,55,59]},{r:36,t:[48,52,55]},{r:38,t:[50,54,57]},{r:35,t:[47,51,54]}],
+    play(s,t,sd,B){
+      const bar=Math.floor(s/16)%4,i=s%16,cyc=Math.floor(s/64)%2,ch=this.chords[bar];
+      if(i===0)pad(B.out,t,ch.t.map(n=>n+12),sd*16,0.028,1000);
+      if(i%2===0)tone(B.out,t,mf(ch.r+(i%8===6?12:0)),sd*1.6,{type:'sawtooth',vol:0.2,lp:420,lpTo:260,atk:0.004,rel:0.05});
+      if([0,3,6,10].includes(i))ch.t.forEach(n=>tone(B.out,t,mf(n+12),sd*1.4,{type:'sawtooth',vol:0.032,lp:2200,atk:0.004,rel:0.05}));
+      if(cyc===1&&i%2===1)tone(B.out,t,mf(ch.t[(i>>1)%3]+24),sd*0.9,{type:'square',vol:0.04,lp:3000,atk:0.003,rel:0.04});
+      if(i%4===0)kick(B.out,t,0.55);
+      if(i===4||i===12)snare(B.out,t,0.3);
+      if(i%2===0)hat(B.out,t,0.05,false);
+      if(i%4===2)hat(B.out,t,0.06,true);
+      if(cyc===1&&i%2===1)hat(B.out,t,0.02,false);
+      if(bar===3&&i>=8)noise(B.out,t,sd,{hp:1800+(i-8)*700,vol:0.035+(i-8)*0.006});   // нарастающий «райзер»
+    }},
+
+  /* 0.boss.ai — «сломанный» C#-фригийский, тритон, перегруз и случайные глитчи */
+  boss:{bpm:148,
+    roots:[37,37,38,43],
+    scale:[61,62,64,66,67,69,73,74],
+    play(s,t,sd,B){
+      const bar=Math.floor(s/16)%4,i=s%16,cyc=Math.floor(s/64),r=this.roots[bar];
+      if(i===0)tone(B.out,t,mf(r-12),sd*16,{vol:0.3,atk:0.05,rel:0.3});
+      if([0,3,6,10,11,14].includes(i))tone(B.dist,t,mf(r),sd*1.4,{type:'sawtooth',vol:0.5,lp:520,lpTo:200,atk:0.003,rel:0.05});
+      if(i===0&&bar===2)[r+12,r+18].forEach(n=>tone(B.dist,t,mf(n),sd*3,{type:'sawtooth',vol:0.3,lp:1500,atk:0.004}));
+      if([0,3,6,10].includes(i)||(cyc%2===1&&i===13))kick(B.out,t,0.6);
+      if(i===4||i===12){snare(B.out,t,0.3);tone(B.dist,t,mf(r+24),sd*0.8,{type:'square',vol:0.2,lp:2000,atk:0.002});}
+      else if(Math.random()<0.12)snare(B.out,t,0.1);
+      if(Math.random()>0.22){hat(B.out,t,0.05,false);if(Math.random()<0.12)hat(B.out,t+sd/2,0.04,false);}
+      if(i%2===0&&Math.random()<0.45){
+        const n=this.scale[Math.floor(Math.random()*this.scale.length)],f=mf(n);
+        tone(B.crush,t,f,sd*1.6,{type:'square',vol:0.9,to:Math.random()<0.2?f/2:null,glide:sd*1.4,atk:0.002,rel:0.04});
+      }
+      if(bar===3&&i===8)tone(B.crush,t,300,sd*8,{type:'sine',vol:0.9,to:1400,glide:sd*8,atk:0.02,rel:0.1});   // сирена
+      if(Math.random()<0.07)noise(B.out,t,rnd(0.02,0.08),{hp:5000,vol:0.07});                                 // глитч
+    }}
+};
+
+function mkShaper(curveFn,post){
+  const n=2048,c=new Float32Array(n);
+  for(let i=0;i<n;i++)c[i]=curveFn(i/(n-1)*2-1);
+  const w=ctx.createWaveShaper();w.curve=c;
+  const g=ctx.createGain();g.gain.value=post;w.connect(g);
+  return {inp:w,out:g};
+}
+function startMusic(name){
+  if(!ctx||!unlocked){wantTrack=name;return;}
+  stopMusic(true);
+  wantTrack=name;curName=name;curTrack=TRACKS[name]||TRACKS.normal;step=0;
+  trackBus=ctx.createGain();trackBus.gain.value=0.0001;trackBus.connect(musicBus);
+  trackBus.gain.setTargetAtTime(1,ctx.currentTime,0.25);
+  const crush=mkShaper(x=>Math.round(x*5)/5,0.07),dist=mkShaper(x=>Math.tanh(x*4)*0.8,0.3);
+  crush.out.connect(trackBus);dist.out.connect(trackBus);
+  trackFx={out:trackBus,crush:crush.inp,dist:dist.inp};
+  nextTime=ctx.currentTime+0.08;
+  timer=setInterval(tick,25);
+}
+function stopMusic(quick){
+  if(timer){clearInterval(timer);timer=null;}
+  if(trackBus&&ctx){
+    const b=trackBus;
+    try{b.gain.cancelScheduledValues(ctx.currentTime);b.gain.setTargetAtTime(0.0001,ctx.currentTime,quick?0.08:0.35);}catch(e){}
+    setTimeout(()=>{try{b.disconnect();}catch(e){}},quick?700:2000);
+  }
+  trackBus=null;trackFx=null;curTrack=null;curName=null;
+}
+function tick(){
+  if(!ctx||!curTrack||!trackFx)return;
+  if(nextTime<ctx.currentTime-0.15)nextTime=ctx.currentTime+0.05;
+  const sd=60/curTrack.bpm/4;
+  while(nextTime<ctx.currentTime+0.14){
+    if(musicOn){try{curTrack.play(step,nextTime,sd,trackFx);}catch(e){}}
+    nextTime+=sd;step++;
+  }
+}
+function playMusic(name){
+  wantTrack=name;
+  if(!unlocked)return;
+  if(curName===name&&timer)return;
+  startMusic(name);
+}
+
+/* ---------- эффекты ---------- */
+const SFX={
+  ui(t){tone(sfxBus,t,1400,0.03,{type:'square',vol:0.04,rel:0.02});},
+  select(t){tone(sfxBus,t,660,0.05,{type:'triangle',vol:0.12});tone(sfxBus,t+0.05,990,0.07,{type:'triangle',vol:0.1});},
+  slide(t){noise(sfxBus,t,0.18,{bp:700,bpTo:1600,q:0.8,vol:0.05,atk:0.05,rel:0.1});},
+  move(t){tone(sfxBus,t,260,0.07,{to:140,vol:0.3,atk:0.002,rel:0.04});noise(sfxBus,t,0.03,{bp:1800,q:2,vol:0.12,rel:0.02});},
+  capture(t){
+    tone(sfxBus,t,180,0.16,{to:50,vol:0.42,atk:0.002,rel:0.08});
+    noise(sfxBus,t,0.09,{bp:1200,q:0.7,vol:0.3,rel:0.05});
+    tone(sfxBus,t+0.01,520,0.05,{type:'square',to:200,vol:0.09,rel:0.03});
+  },
+  merge(t){[523,659,784].forEach((f,i)=>tone(sfxBus,t+i*0.06,f,0.18,{type:'triangle',vol:0.14}));noise(sfxBus,t+0.1,0.15,{hp:6000,vol:0.04});},
+  shoot(t){noise(sfxBus,t,0.12,{hp:1200,vol:0.35});tone(sfxBus,t,1200,0.2,{type:'sawtooth',to:90,vol:0.14,lp:3000});},
+  draw(t){noise(sfxBus,t,0.05,{hp:3000,vol:0.12});tone(sfxBus,t,880,0.06,{type:'triangle',vol:0.08});},
+  card(t){noise(sfxBus,t,0.25,{bp:400,bpTo:3000,q:1,vol:0.14,atk:0.05});tone(sfxBus,t,500,0.2,{to:900,vol:0.1});},
+  spawn(t){
+    [523,659,784,1047,1319].forEach((f,i)=>tone(sfxBus,t+i*0.055,f,0.16,{type:'triangle',vol:0.12}));
+    tone(sfxBus,t,300,0.35,{to:1200,vol:0.08});noise(sfxBus,t,0.3,{hp:6000,vol:0.05,atk:0.05});
+  },
+  airstrike(t){
+    tone(sfxBus,t,1900,0.7,{to:220,vol:0.12,rel:0.05});
+    noise(sfxBus,t+0.7,0.6,{lp:900,lpTo:120,vol:0.5,rel:0.2});tone(sfxBus,t+0.7,90,0.6,{to:30,vol:0.5,rel:0.2});
+  },
+  nuke(t){
+    noise(sfxBus,t,0.15,{hp:4000,vol:0.3});
+    noise(sfxBus,t,2.2,{lp:320,lpTo:60,vol:0.6,atk:0.05,rel:0.4});
+    tone(sfxBus,t,60,2.4,{to:25,vol:0.55,atk:0.03,rel:0.4});
+    for(let i=0;i<8;i++)noise(sfxBus,t+0.3+i*0.2,0.06,{hp:2500,vol:0.08});
+  },
+  shield(t){[880,1320,1760].forEach((f,i)=>tone(sfxBus,t+i*0.03,f,0.35,{type:'triangle',vol:0.1,rel:0.2}));noise(sfxBus,t,0.3,{hp:7000,vol:0.04,atk:0.05});},
+  angel(t){[523,659,784,1047].forEach((f,i)=>tone(sfxBus,t+i*0.04,f,0.9,{vol:0.09,atk:0.25,rel:0.6}));},
+  future(t){tone(sfxBus,t,1000,0.5,{type:'sawtooth',to:90,vol:0.11,lp:2000});noise(sfxBus,t,0.5,{bp:2500,bpTo:300,q:1,vol:0.08});},
+  chaos(t){for(let i=0;i<6;i++)tone(sfxBus,t+i*0.045,rnd(200,1600),0.04,{type:'square',vol:0.08,rel:0.02});noise(sfxBus,t,0.3,{hp:3000,vol:0.05});},
+  extra(t){[660,880,1320].forEach((f,i)=>tone(sfxBus,t+i*0.08,f,0.07,{type:'square',vol:0.09,rel:0.03}));},
+  check(t){tone(sfxBus,t,880,0.12,{type:'square',vol:0.09});tone(sfxBus,t+0.15,660,0.16,{type:'square',vol:0.09});},
+  error(t){tone(sfxBus,t,130,0.12,{type:'square',vol:0.15,lp:600});},
+  boss(t){
+    tone(sfxBus,t,55,1.4,{type:'sawtooth',to:40,vol:0.4,lp:400,lpTo:120,atk:0.05,rel:0.3});
+    tone(sfxBus,t,58,1.4,{type:'sawtooth',to:42,vol:0.3,lp:400,lpTo:120,det:25,atk:0.05,rel:0.3});
+    noise(sfxBus,t,1.2,{lp:500,vol:0.25,atk:0.05,rel:0.3});kick(sfxBus,t,0.7);
+  },
+  bosshit(t){tone(sfxBus,t,320,0.18,{type:'square',to:110,vol:0.2,lp:2500});noise(sfxBus,t,0.1,{bp:2200,q:1.2,vol:0.2});kick(sfxBus,t,0.5);},
+  win(t){
+    [523,659,784,1047].forEach((f,i)=>tone(sfxBus,t+i*0.12,f,0.2,{type:'triangle',vol:0.2}));
+    [523,659,784,1047].forEach(f=>tone(sfxBus,t+0.55,f,1.2,{type:'triangle',vol:0.1,atk:0.02,rel:0.5}));
+  },
+  lose(t){
+    [392,370,330,262].forEach((f,i)=>tone(sfxBus,t+i*0.22,f,0.3,{type:'sawtooth',vol:0.14,lp:1200}));
+    tone(sfxBus,t+0.95,131,1.0,{type:'sawtooth',vol:0.2,lp:500,rel:0.4});
+  }
+};
+const last={};
+function sfx(name){
+  if(!sfxOn||!SFX[name])return;
+  if(!ensure())return;
+  const now=performance.now();
+  if(last[name]&&now-last[name]<35)return;
+  last[name]=now;
+  if(!unlocked)return;                      // до первого касания браузер всё равно не даст играть
+  if(ctx.state!=='running'){try{ctx.resume();}catch(e){}}
+  try{SFX[name](ctx.currentTime+0.005);}catch(e){}
+}
+function endGame(win){
+  stopMusic(false);
+  sfx(win?'win':'lose');
+}
+
+/* ---------- кнопки интерфейса ---------- */
+document.addEventListener('click',e=>{
+  const tg=e.target;if(!tg||!tg.closest)return;
+  if(tg.closest('.card.player'))sfx('select');
+  else if(tg.closest('button'))sfx('ui');
+},true);
+
+/* ---------- публичный API ---------- */
+function applyGains(){
+  if(!ctx)return;
+  musicBus.gain.setTargetAtTime(musicOn?MUSIC_LEVEL:0,ctx.currentTime,0.05);
+  sfxBus.gain.setTargetAtTime(sfxOn?1:0,ctx.currentTime,0.02);
+  master.gain.setTargetAtTime(vol,ctx.currentTime,0.05);
+}
+window.CCAudio={
+  sfx,playMusic,stopMusic:()=>stopMusic(false),endGame,unlock,
+  setDiff(name){wantTrack=name;playMusic(name);},
+  setSfx(on){sfxOn=!!on;LS.set('chaos_snd_sfx',sfxOn?'1':'0');applyGains();},
+  setMusic(on){musicOn=!!on;LS.set('chaos_snd_music',musicOn?'1':'0');applyGains();if(musicOn&&wantTrack&&unlocked&&!timer)startMusic(wantTrack);},
+  setVolume(v){vol=Math.max(0,Math.min(1,v));LS.set('chaos_snd_vol',String(vol));applyGains();},
+  isSfx:()=>sfxOn,isMusic:()=>musicOn,getVolume:()=>vol
+};
+})();
+</script>
+
 <script src="accounts.js"></script>
 <script>
 /* ===== Режим «Плюс»: поле-крест из 5 частей, меняющее форму ===== */
@@ -4717,7 +5044,11 @@ const VALS={E:8,C:4,H:5,T:5,Y:2,G:4,P:1,N:3,B:3,R:5,Q:9,K:100,m:1,d:5,X:8};
 const O=[[1,0],[-1,0],[0,1],[0,-1]],D=[[1,1],[1,-1],[-1,1],[-1,-1]];
 const KN=[[1,2],[2,1],[-1,2],[-2,1],[1,-2],[2,-1],[-1,-2],[-2,-1]];
 let CFG={shape:'p',army:'mixed',teams:4,craft:true,boss:true},grave=[],RULE,FW,ARMY,SL,B,G,ti,over,sel,moves,round,extra,skipT,selSlot,CS,fut,R,fresh,busy=false,chain=false,hl=[],undoSt=[],undos=0,ritual=null,bossSt=null,pile=[],craftRound=0,nukeDone=false;
-window.AI_DIFF=(function(){try{return localStorage.getItem('chaos_ai_diff')||'normal';}catch(e){return 'normal';}})();
+window.AI_DIFF=(function(){
+  let d='normal';try{d=localStorage.getItem('chaos_ai_diff')||'normal';}catch(e){}
+  if(d==='boss'&&!(window.CCProgress&&CCProgress.bossUnlocked())){d='normal';try{localStorage.setItem('chaos_ai_diff','normal');}catch(e){}}   // 0.boss.ai — только после 1-й победы
+  return d;
+})();
 function getAIDiff(){return window.AI_DIFF||'normal';}
 window.TEX_SITE='https://darkstalke5r.github.io/Slugebniy-TexturesCore-ChessRandom/';
 function texPackValid(p){return !!(p&&typeof p.base==='string'&&/^https?:\/\//i.test(p.base));}
@@ -5520,6 +5851,9 @@ function aiEvalCard(t,type,c){
   }
   return null;
 }
+// «Сложная»: ИИ не может спамить карту «Спавн» — после использования (и в самом начале партии) должен пройти 1 полный ход
+let AISP={};                                    // сторона → круг, в котором ИИ последний раз спавнил
+function spawnReady(t){return round>=(AISP[t]||0)+2;}
 function aiCard(t,cont){
   const d=(typeof getAIDiff==='function'?getAIDiff():'normal');
   if(d==='easy')return aiCardLegacy(t,cont);
@@ -5536,6 +5870,7 @@ function aiCard(t,cont){
   CS[t].forEach((type,i)=>{if(!type)return;const r=aiEvalCard(t,type,c);opts.push({where:i,type,x:r?r.x:null,y:r?r.y:null,score:r?r.score:-1});});
   const rs=R[t];
   if(rs&&rs.ready<=round){const r=aiEvalCard(t,rs.type,c);if(r)opts.push({where:'reserve',type:rs.type,x:r.x,y:r.y,score:r.score-0.5});}
+  if(d==='hard'&&!spawnReady(t)){for(let i=opts.length-1;i>=0;i--)if(opts[i].type==='spawn')opts.splice(i,1);}
   opts.sort((a,b)=>b.score-a.score);
   let top=opts[0];
   if(d==='normal'&&opts.length>1&&Math.random()<0.25)top=opts[1];                  // обычный игрок не всегда видит лучший вариант
@@ -8109,6 +8444,76 @@ let myMoves=0;            // сколько ходов сделали белые
   };
 }
 
+/* ===== Звук, музыка, кулдаун спавна ИИ, открытие 0.boss.ai ===== */
+{
+  const A=window.CCAudio||{sfx(){},playMusic(){},endGame(){}};
+  const CARDSFX={spawn:'spawn',support:'spawn',airstrike:'airstrike',nuclear:'nuke',shield:'shield',angel:'angel',future:'future',chaos:'chaos',err:'chaos',extra:'extra',reset:'future',bid:'draw',rez:'angel',trump:'shield'};
+  const _doMove3=doMove;
+  doMove=function(fx,fy,m,cb){
+    let land='move',first='slide';
+    try{
+      const p=B[fy]&&B[fy][fx],tg=valid(m.x,m.y)&&B[m.y]&&B[m.y][m.x];
+      if(m.merge&&tg)land='merge';
+      else if(m.cap||(tg&&p&&tg.t!==p.t))land='capture';
+      if(m.shoot||m.steal){first='shoot';if(land==='move')land=null;}
+    }catch(e){}
+    A.sfx(first);
+    return _doMove3(fx,fy,m,function(){if(land)A.sfx(land);return cb&&cb.apply(this,arguments);});
+  };
+  const _playCard3=playCard;
+  playCard=function(t,type,x,y){
+    const r=_playCard3.apply(this,arguments);
+    if(r===false){if(t==='white')A.sfx('error');}
+    else{
+      A.sfx(CARDSFX[type]||'card');
+      if(type==='spawn'&&t!=='white'&&getAIDiff()==='hard')AISP[t]=round;   // запускаем кулдаун спавна
+    }
+    return r;
+  };
+  const _click3=click;
+  click=function(x,y){
+    const b=sel;const r=_click3.apply(this,arguments);
+    try{if(sel&&sel!==b)A.sfx('select');}catch(e){}
+    return r;
+  };
+  const _give3=giveCard;
+  giveCard=function(t){const r=_give3.apply(this,arguments);if(r&&t==='white')A.sfx('draw');return r;};
+  const _chk3=announceCheck;
+  announceCheck=function(t){
+    try{const kp=kingPos(t);if(kp&&attacked(kp.x,kp.y,t))A.sfx('check');}catch(e){}
+    return _chk3.apply(this,arguments);
+  };
+  const _sb3=spawnBoss;
+  spawnBoss=function(){A.sfx('boss');return _sb3.apply(this,arguments);};
+  const _hb3=hitBoss;
+  hitBoss=function(){A.sfx('bosshit');return _hb3.apply(this,arguments);};
+  const _end3=end;
+  end=function(win,why){
+    const was=over;
+    const r=_end3.apply(this,arguments);
+    if(!was){
+      A.endGame(!!win);
+      if(win&&!(typeof onlineMode!=='undefined'&&onlineMode)&&myMoves>0&&window.CCProgress){
+        const before=CCProgress.wins();CCProgress.addWin();
+        if(before===0){
+          log('🔓 Открыта сложность 0.boss.ai');
+          const g=document.getElementById('go-reason');
+          if(g)g.textContent+=(g.textContent?'\n':'')+'🔓 Открыта сложность 0.boss.ai (Настройки → Сложность ИИ)';
+        }
+        try{if(window.refreshDiffUI)window.refreshDiffUI();}catch(e){}
+      }
+    }
+    return r;
+  };
+  const _start3=start;
+  start=function(){
+    AISP={};
+    const r=_start3.apply(this,arguments);
+    try{A.playMusic(getAIDiff());}catch(e){}
+    return r;
+  };
+}
+
 const had=loadCfg();
 start();
 const rs=netLoadSession();
@@ -8127,11 +8532,31 @@ if(rs)showResumeDialog(rs,had);else if(!had)openSetup(true);
     try{el('dbg-panel').classList.remove('show');}catch(e){}
     const ts=el('tab-settings'); if(ts) ts.classList.remove('active');
   }
+  function bossOpen(){ return !window.CCProgress || CCProgress.bossUnlocked(); }
   function refreshDiffUI(){
     const sub=el('sp-diff-sub'), note=el('sp-diff-note'), cur=window.AI_DIFF||'normal';
-    if(sub) sub.querySelectorAll('[data-diff]').forEach(b=>b.classList.toggle('on', b.getAttribute('data-diff')===cur));
-    if(note) note.textContent='Сложность: '+(DIFF_LABELS[cur]||cur);
+    if(sub) sub.querySelectorAll('[data-diff]').forEach(b=>{
+      const d=b.getAttribute('data-diff');
+      b.classList.toggle('on', d===cur);
+      if(d==='boss'){ const lk=!bossOpen(); b.classList.toggle('locked',lk); b.textContent=(lk?'🔒 ':'')+'0.boss.ai'; }
+    });
+    if(note){
+      let s='Сложность: '+(DIFF_LABELS[cur]||cur);
+      if(cur==='hard') s+=' · ИИ спавнит не чаще 1 раза в 2 хода';
+      if(!bossOpen()) s+=' · 0.boss.ai откроется после первой победы над ИИ';
+      note.textContent=s;
+    }
   }
+  window.refreshDiffUI=refreshDiffUI;
+  function refreshSndUI(){
+    const A=window.CCAudio; if(!A) return;
+    if(el('sp-sfx')) el('sp-sfx').textContent='🔊 Звуки: '+(A.isSfx()?'вкл':'выкл');
+    if(el('sp-music')) el('sp-music').textContent='🎵 Музыка: '+(A.isMusic()?'вкл':'выкл');
+    if(el('sp-vol')) el('sp-vol').value=Math.round(A.getVolume()*100);
+  }
+  if(el('sp-sfx')) el('sp-sfx').onclick=()=>{ const A=window.CCAudio; if(A){A.setSfx(!A.isSfx()); refreshSndUI(); A.sfx('select');} };
+  if(el('sp-music')) el('sp-music').onclick=()=>{ const A=window.CCAudio; if(A){A.setMusic(!A.isMusic()); refreshSndUI();} };
+  if(el('sp-vol')) el('sp-vol').oninput=function(){ const A=window.CCAudio; if(A) A.setVolume(this.value/100); };
   function refreshTexUI(){
     const note=el('sp-tex-note'); if(!note) return;
     const p=window.TEX_PACK;
@@ -8139,7 +8564,15 @@ if(rs)showResumeDialog(rs,had);else if(!had)openSetup(true);
   }
   window.refreshTexUI=refreshTexUI;
   function setDiff(level){
+    if(level==='boss' && !bossOpen()){
+      try{ if(window.CCAudio) CCAudio.sfx('error'); }catch(e){}
+      try{ if(typeof log==='function') log('🔒 0.boss.ai откроется после первой победы над ИИ'); }catch(e){}
+      refreshDiffUI();
+      const n=el('sp-diff-note'); if(n) n.textContent='🔒 0.boss.ai откроется после первой победы над ИИ';
+      return;
+    }
     window.AI_DIFF=level;
+    try{ if(window.CCAudio) CCAudio.setDiff(level); }catch(e){}
     try{localStorage.setItem('chaos_ai_diff',level);}catch(e){}
     refreshDiffUI();
     try{if(typeof log==='function')log('Сложность ИИ: '+(DIFF_LABELS[level]||level));}catch(e){}
@@ -8148,7 +8581,7 @@ if(rs)showResumeDialog(rs,had);else if(!had)openSetup(true);
   if(tabS) tabS.onclick=function(){
     const sp=el('settings-panel'); const open=!sp.classList.contains('show');
     closePanels();
-    if(open){sp.classList.add('show');this.classList.add('active');refreshDiffUI();refreshTexUI();}
+    if(open){sp.classList.add('show');this.classList.add('active');refreshDiffUI();refreshTexUI();refreshSndUI();}
   };
   if(tabA) tabA.onclick=function(){
     closePanels();
@@ -8159,7 +8592,7 @@ if(rs)showResumeDialog(rs,had);else if(!had)openSetup(true);
   if(el('sp-codes')) el('sp-codes').onclick=()=>{closePanels(); const p=el('cmd-panel'); if(p){p.classList.add('show'); const inp=el('cmd-input'); if(inp) setTimeout(()=>inp.focus(),40);} };
   if(el('sp-debug')) el('sp-debug').onclick=()=>{closePanels(); const p=el('dbg-panel'); if(p){p.classList.add('show'); const inp=el('debug-input'); if(inp) setTimeout(()=>inp.focus(),40);} };
   if(el('sp-inspect')) el('sp-inspect').onclick=function(){ const insp=el('inspect-btn'); if(insp) insp.click(); this.textContent=window.inspectMode?'🔍 Осмотр ВКЛ':'🔍 Осмотр фигур'; };
-  if(el('sp-diff')) el('sp-diff').onclick=()=>{ const sub=el('sp-diff-sub'); if(sub) sub.classList.toggle('show'); refreshDiffUI(); };
+  if(el('sp-diff')) el('sp-diff').onclick=()=>{ const sub=el('sp-diff-sub'); if(sub) sub.classList.toggle('show'); refreshDiffUI(); refreshSndUI(); };
   document.querySelectorAll('#sp-diff-sub [data-diff]').forEach(b=>{ b.onclick=function(e){ e.stopPropagation(); setDiff(this.getAttribute('data-diff')); }; });
   if(el('sp-textures')) el('sp-textures').onclick=()=>{
     const ret=encodeURIComponent(location.origin+location.pathname);
@@ -8175,7 +8608,7 @@ if(rs)showResumeDialog(rs,had);else if(!had)openSetup(true);
     closePanels();
   });
   if(window.TEX_PACK){ try{ if(typeof figReloadPack==='function') figReloadPack(); }catch(e){} }
-  setTimeout(function(){ refreshDiffUI(); refreshTexUI(); }, 200);
+  setTimeout(function(){ refreshDiffUI(); refreshTexUI(); refreshSndUI(); }, 200);
 })();
 </script>
 
