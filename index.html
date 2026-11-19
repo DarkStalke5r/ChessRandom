@@ -4782,7 +4782,7 @@ function configure(){
   const a=CFG.army,nt=CFG.teams||4;
   ORDER=nt===2?['white','black']:nt===3?['white','blue','black']:ALL4.slice();
   RULE=a==='chess'?{white:'chess',black:'chess',pink:'chess',blue:'chess'}:a==='eur'?{white:'eur',black:'eur',pink:'eur',blue:'eur'}:a==='arm'?{white:'arm',black:'arm',pink:'arm',blue:'arm'}:{white:'chess',black:'chess',pink:'eur',blue:'arm'};
-  FW={white:[0,-1],black:[0,1],pink:[-1,0],blue:[1,0],neutral:[0,-1]};RULE.neutral='chess';
+  FW={white:[0,-1],black:[0,1],pink:[-1,0],blue:[1,0],neutral:[0,-1],boss:[0,1]};RULE.neutral='chess';RULE.boss='chess';
   if(CFG.shape==='m'){
     // Мёбиус ∞: лента 16×4 (8 секторов на кольцо × 4 дорожки) — сплошная восьмёрка
     G={shape:'m',x0:14,x1:26,y0:17,y1:22};
@@ -5033,7 +5033,7 @@ function reviveAround(cx,cy){
   for(let i=grave.length-1;i>=0;i--){   // сначала самые «свежие» погибшие
     const g=grave[i];
     if(Math.abs(g.x-cx)<=2&&Math.abs(g.y-cy)<=2&&valid(g.x,g.y)&&!B[g.y][g.x]){
-      B[g.y][g.x]=g.minion?{t:'boss',k:'m',red:true,minion:true}:{t:g.t,k:g.k,st:0};n++;
+      B[g.y][g.x]=g.minion?{t:'boss',k:('NBRQ'.indexOf(g.k)>=0?g.k:'N'),red:true,minion:true}:{t:g.t,k:g.k,st:0};n++;
     }else keep.unshift(g);
   }
   grave=keep;return n;
@@ -5188,7 +5188,7 @@ function attackers(x,y,team){
   const res=[];
   each((q,qx,qy)=>{
     if(q.t===team||q.boss||!valid(qx,qy)||q.frozen>0||q.lying>0)return;
-    if(q.t==='boss'){if(Math.abs(qx-x)<=1&&Math.abs(qy-y)<=1)res.push({x:qx,y:qy,k:'m'});return;}
+    if(q.t==='boss'){RULE.boss='chess';if(!FW.boss)FW.boss=[0,1];}
     if(!RULE[q.t])return;
     const ms=gen(qx,qy);
     for(let i=0;i<ms.length;i++){const m=ms[i];if(m.cap&&m.cap.x===x&&m.cap.y===y){res.push({x:qx,y:qy,k:q.k});break;}}
@@ -5522,7 +5522,13 @@ function hitBoss(){
   bossSt.hp--;log('Удар по боссу! HP '+bossSt.hp+'/'+bossSt.max);
   if(!bossSt.p2&&bossSt.hp>0&&bossSt.hp<=5){bossSt.p2=true;bossSt.elite=1;log('2-я фаза! Каждая карта призывает по 2 приспешника, плюс каждый ход 3-я карта — «Призыв элиты»');forceTetoSay('Босс в ярости! Теперь его карты призывают вдвое больше приспешников, а каждый ход он получает ещё одну карту — призыв элитной фигуры.',()=>{});}
   if(bossSt.hp<=0){
-    each((q,x,y)=>{if(q.t==='boss')B[y][x]=null;});bossSt=null;
+    {const dq={t:Date.now(),moves:[],spawns:[],deaths:[]},bs0=bossSt;
+      each((q,x,y)=>{if(q.t!=='boss')return;
+        if(q.boss){if(q.center)dq.deaths.push({x,y,body:{x:bs0.x,y:bs0.y}});}
+        else dq.deaths.push({x,y,p:Object.assign({},q)});
+        B[y][x]=null;});
+      bossAnimQ=dq;}
+    bossSt=null;
     over=true;
     document.getElementById('go-text').textContent='Примирение';
     const g=document.getElementById('go-reason');if(g)g.textContent='Босс уничтожен. Война окончена миром.';
@@ -5534,33 +5540,59 @@ function nearestEnemy(x,y){
   each((q,a,b)=>{if(q.t!=='boss'&&q.k!=='J'&&!q.wall&&valid(a,b)){const d=Math.abs(a-x)+Math.abs(b-y);if(d<bd){bd=d;best={x:a,y:b,d};}}});
   return best;
 }
+// ===== Приспешники босса (v3) =====
+// Это обычные шахматные фигуры (конь/слон/ладья, элита — ферзь) команды «boss». Ходят по тем же правилам gen()/apply(),
+// что и нейтралы, и выбирают ход так же (ценная добыча + немного случайности), плюс тянутся к ближайшему врагу.
+// Ничего не возникает и не пропадает «само»: новые выходят от края босса, съеденные остаются на экране до удара.
+function ensureBossRules(){RULE.boss='chess';if(!FW.boss)FW.boss=[0,1];}
+function bossSpawnCell(){
+  const bx=bossSt.x,by=bossSt.y,ring=[];
+  for(let y=by-1;y<=by+3;y++)for(let x=bx-1;x<=bx+3;x++){
+    if(x>=bx&&x<=bx+2&&y>=by&&y<=by+2)continue;          // само тело босса
+    if(valid(x,y)&&!B[y][x])ring.push([x,y]);
+  }
+  if(ring.length)return pick(ring);                       // кольцо вплотную к боссу
+  const cx=bx+1,cy=by+1,dist=z=>Math.abs(z[0]-cx)+Math.abs(z[1]-cy);
+  const near=freeCells().sort((a,b)=>dist(a)-dist(b)).slice(0,6);
+  return near.length?pick(near):null;
+}
+function bossMinionMove(x,y){
+  const p=B[y][x];if(!p)return null;
+  const tg=nearestEnemy(x,y);
+  let best=null,bs=-1e9;
+  gen(x,y).forEach(m=>{
+    if(m.merge||m.steal||m.shoot||m.castle)return;
+    const cp=m.cap&&B[m.cap.y][m.cap.x];
+    let sc=Math.random()*1.5;
+    if(cp)sc+=cp.k==='K'?1000:(VALS[cp.k]||1)*10;                                  // как у нейтралов: чем ценнее добыча, тем лучше
+    if(tg)sc+=(Math.abs(tg.x-x)+Math.abs(tg.y-y)-Math.abs(tg.x-m.x)-Math.abs(tg.y-m.y))*1.2;   // идут к врагу
+    if(sc>bs){bs=sc;best=m;}
+  });
+  return best;
+}
 function bossTurn(){
   if(!bossSt||over)return;
-  // босс не двигается; ходят только его приспешники
+  ensureBossRules();
+  const aq={t:Date.now(),moves:[],spawns:[],deaths:[]};   // для плавной анимации (см. bossAnimFlush)
+  // 1) каждый приспешник делает ОДИН ход фигурой (по очереди — каждый видит доску после предыдущего)
   const mins=[];each((q,x,y)=>{if(q.minion&&valid(x,y))mins.push({q,x,y});});
-  const stepMin=(q,x,y)=>{
-    const tg=nearestEnemy(x,y);if(!tg)return null;
-    const dx=Math.sign(tg.x-x),dy=Math.sign(tg.y-y);
-    for(const [sx,sy] of (Math.abs(tg.x-x)>=Math.abs(tg.y-y)?[[dx,0],[0,dy]]:[[0,dy],[dx,0]])){
-      if(!sx&&!sy)continue;const nx=x+sx,ny=y+sy;if(!valid(nx,ny))continue;const o=B[ny][nx];
-      if(o&&(o.t==='boss'||o.prot))continue;
-      if(o){burry(o,nx,ny);log('Фиолетовый '+(q.elite?'элитный ':'')+'приспешник съел фигуру ('+(NAME[o.t]||'приспешник')+')');}
-      B[y][x]=null;B[ny][nx]=q;return [nx,ny];
+  mins.sort(()=>Math.random()-0.5);
+  let ate=0;
+  mins.forEach(({q,x,y})=>{
+    if(B[y][x]!==q)return;                                  // уже съеден/сдвинут другим ходом
+    const m=bossMinionMove(x,y);if(!m)return;
+    const victim=m.cap&&B[m.cap.y][m.cap.x],vcopy=victim?Object.assign({},victim):null;
+    apply(x,y,m);
+    if(B[m.y][m.x]===q){                                    // реально сходил (удар мог быть отражён щитом/ангелом)
+      aq.moves.push({path:[[x,y],[m.x,m.y]],p:q,victim:vcopy?{p:vcopy,x:m.cap.x,y:m.cap.y}:null});
+      if(vcopy){ate++;log('Приспешник босса ('+(SYM2[q.k]||'')+') съел фигуру ('+(NAME[vcopy.t]||'приспешник')+')');}
     }
-    return null;
-  };
-  const aq={t:Date.now(),moves:[],spawns:[]};   // для плавной анимации (см. bossAnimFlush)
-  mins.forEach(({q,x,y})=>{let c=[x,y];const path=[[x,y]];for(let s=0;s<(q.elite?2:1)&&c;s++){c=stepMin(q,c[0],c[1]);if(c)path.push(c);}if(path.length>1)aq.moves.push({path,p:q});});
-  // карты босса разыгрываются в его ход, потом выдаются новые
-  const near=()=>freeCells().filter(c=>Math.abs(c[0]-bossSt.x-1)+Math.abs(c[1]-bossSt.y-1)<=5);
+  });
+  // 2) карты босса: новые приспешники выходят из-под края босса и сразу занимают место рядом
   const per=bossSt.p2?2:1;let spawned=0,elite=0;
-  for(let i=0;i<(bossSt.hand||0);i++){
-    for(let j=0;j<per;j++){const n=near();if(!n.length)break;const c=pick(n);const mn={t:'boss',k:'m',red:true,minion:true};B[c[1]][c[0]]=mn;aq.spawns.push({x:c[0],y:c[1],p:mn});spawned++;}
-  }
-  if(bossSt.elite){
-    const n=near();
-    if(n.length){const c=pick(n);const mn={t:'boss',k:'Q',red:true,minion:true,elite:true};B[c[1]][c[0]]=mn;aq.spawns.push({x:c[0],y:c[1],p:mn});elite++;}
-  }
+  const mk=(k,extra)=>{const c=bossSpawnCell();if(!c)return false;const mn=Object.assign({t:'boss',k,minion:true,red:true},extra||{});B[c[1]][c[0]]=mn;aq.spawns.push({x:c[0],y:c[1],p:mn});return true;};
+  for(let i=0;i<(bossSt.hand||0);i++)for(let j=0;j<per;j++)if(mk(pick(['N','B','R','N','B'])))spawned++;
+  if(bossSt.elite&&mk('Q',{elite:true}))elite++;
   bossSt.hand=2;bossSt.elite=bossSt.p2?1:0;
   bossAnimQ=aq;
   if(spawned||elite)log('Босс разыграл карты: приспешников '+spawned+(elite?', элитная фигура ×1':''));
@@ -6870,6 +6902,23 @@ figTinted=function(k,team){
     return bossPurple[k]=cv.toDataURL('image/png');
   }catch(e){bossPurple[k]=null;return null;}
 };
+// ===== текстура босса: boss.png =====
+const BOSS_TEX={state:'idle',url:null};
+function bossTex(){
+  if(BOSS_TEX.state==='ok')return BOSS_TEX.url;
+  if(BOSS_TEX.state!=='idle')return null;
+  BOSS_TEX.state='loading';
+  let base='';try{base=(typeof texPackBase==='function'&&texPackBase())||'';}catch(e){}
+  const c=[];[base+'boss.png','boss.png','figures/boss.png','textures/boss.png','assets/boss.png','Boss.png','figures/Boss.png'].forEach(u=>{if(c.indexOf(u)<0)c.push(u);});
+  let i=0;
+  (function next(){
+    if(i>=c.length){BOSS_TEX.state='none';return;}
+    const u=c[i++],im=new Image();
+    im.onload=()=>{BOSS_TEX.state='ok';BOSS_TEX.url=u;try{figSchedule();}catch(e){}};
+    im.onerror=next;im.src=u;
+  })();
+  return null;
+}
 function inspectCardType(tp){
   if(!window.inspectMode||!tp)return;
   const def=PC[tp]||{n:tp,desc:''};
@@ -7080,7 +7129,26 @@ function draw(){
       if(moves&&moves.some(z=>z.x===x&&z.y===y)){c.classList.add('possible');if(p)c.classList.add('has-enemy');if(moves.some(z=>z.shoot&&z.x===x&&z.y===y))c.classList.add('shoot-target');}
       c.dataset.vx=x;c.dataset.vy=y;
     }
-    if(p&&p.boss){c.style.background='#4a0d1a';if(p.center){const s=document.createElement('div');s.className='piece';s.textContent='☠';s.style.cssText='font-size:30px;color:#f55;position:absolute;left:-40px;top:-40px;width:120px;height:120px;display:flex;align-items:center;justify-content:center;pointer-events:none;z-index:2';c.appendChild(s);}}
+    if(p&&p.boss){
+      const tex=bossTex();
+      c.style.background=tex?'transparent':'#4a0d1a';
+      if(p.center){
+        c.style.zIndex=40;                                   // тело босса выше всех соседних клеток и их подсветок
+        if(tex){
+          const im=document.createElement('img');im.className='boss-tex';im.src=tex;im.alt='';im.draggable=false;
+          im.style.cssText='position:absolute;left:-40px;top:-40px;width:120px;height:120px;object-fit:contain;pointer-events:none;z-index:40';
+          c.appendChild(im);
+          // подсветка «босса можно бить» — рамкой СНАРУЖИ текстуры, чтобы ничего не лежало поверх неё
+          if(bossSt&&moves&&moves.some(z=>z.x>=bossSt.x&&z.x<bossSt.x+3&&z.y>=bossSt.y&&z.y<bossSt.y+3)){
+            const ring=document.createElement('div');
+            ring.style.cssText='position:absolute;left:-44px;top:-44px;width:128px;height:128px;box-sizing:border-box;border:3px solid #ffd24a;border-radius:12px;box-shadow:0 0 12px rgba(255,210,74,.85);pointer-events:none;z-index:41';
+            c.appendChild(ring);
+          }
+        } else {
+          const s=document.createElement('div');s.className='piece';s.textContent='☠';s.style.cssText='font-size:30px;color:#f55;position:absolute;left:-40px;top:-40px;width:120px;height:120px;display:flex;align-items:center;justify-content:center;pointer-events:none;z-index:2';c.appendChild(s);
+        }
+      }
+    }
     else if(p){const s=document.createElement('div');s.className='piece';fillPiece(s,p);
       if(p.shield)s.classList.add('shielded');
       if(p.dbl)s.style.outline='2px solid #f55';
@@ -7097,12 +7165,10 @@ function draw(){
   document.getElementById('info').textContent=bossSt?'☠ Босс '+bossSt.hp+'/'+bossSt.max+(bossSt.p2?' (офицер)':''):(G.shape==='m'?'∞ Мёбиус '+(G.x1-G.x0)+'×'+(G.y1-G.y0):G.shape==='s'?'■ поле '+(G.ax1-G.ax0)+'×'+(G.ay1-G.ay0):G.shape==='x'?'× ширина '+(2*G.w+1):'✚ поле '+(G.x1-G.x0)+'×'+(G.y1-G.y0));
   decorate();drawCards();
 }
-// ===== плавные ходы приспешников босса (v2) =====
-// Что было не так: bossTurn меняет доску МГНОВЕННО (все фиолетовые встают на новые клетки за один тик),
-// а «призраки» для анимации считали координаты один раз в начале. Любая перерисовка поля или сдвиг камеры
-// за эти ~0.4 с — и настоящая фигура уже стоит на новой клетке, а призрак едет мимо → «телепорт» и дубли.
-// Теперь: призрак стоит на СТАРОЙ клетке, пока не начнётся ход, едет по ЖИВЫМ координатам клеток (каждый кадр),
-// а настоящая фигура на целевой клетке остаётся спрятанной всё время полёта, даже если поле перерисовали.
+// ===== плавные ходы приспешников босса (v3) =====
+// Состояние игры меняется мгновенно, поэтому анимация — «кино поверх»: призрак стоит на старой клетке, пока не придёт его
+// очередь, едет по ЖИВЫМ координатам клеток (зум/перерисовка не ломают), а настоящая фигура на целевой клетке прячется
+// до прибытия. Съеденная фигура остаётся на клетке, пока приспешник не доедет. Новые выходят от края босса.
 let bossAnimQ=null;
 const bossHold=new Map();   // "x,y" → до какого момента (мс) прятать настоящую фигуру на этой клетке
 const _drawBase=draw;
@@ -7117,45 +7183,61 @@ function bossHideHeld(){
 }
 function bossAnimFlush(){
   const q=bossAnimQ; bossAnimQ=null;
-  if(!q||Date.now()-q.t>4000||(!q.moves.length&&!q.spawns.length))return;
+  if(!q||Date.now()-q.t>4000)return;
+  const moves=q.moves||[],spawns=q.spawns||[],deaths=q.deaths||[];
+  if(!moves.length&&!spawns.length&&!deaths.length)return;
   const fly=document.getElementById('fly'),vp=document.getElementById('viewport');
   if(!vp)return;
-  const SEG=360, SPAWN=480;
-  const clamp=(v)=>Math.max(0,Math.min(1,v)), ease=(f)=>0.5-0.5*Math.cos(Math.PI*f), outc=(f)=>1-Math.pow(1-f,3);
-  // живой центр клетки в координатах экрана
+  const STEP=380,SPAWN=520,DIE=700;
+  const clamp=v=>Math.max(0,Math.min(1,v)),ease=f=>0.5-0.5*Math.cos(Math.PI*f),outc=f=>1-Math.pow(1-f,3);
   const ctr=(x,y)=>{const e=cellEl(x,y);if(!e)return null;const r=e.getBoundingClientRect();if(!r.width)return null;return {x:r.left+r.width/2,y:r.top+r.height/2,w:r.width};};
-  function mkGhost(p,w){
+  function mkGhost(p,w,glow){
     const g=document.createElement('div');g.className='piece boss-ghost';fillPiece(g,p);
     g.style.cssText='position:fixed;left:0;top:0;z-index:50;pointer-events:none;display:flex;align-items:center;justify-content:center;will-change:transform;opacity:0;'
       +'width:'+w+'px;height:'+w+'px;margin:'+(-w/2)+'px 0 0 '+(-w/2)+'px;font-size:'+Math.round(w*0.7)+'px;'
-      +'color:'+COL[p.t]+';text-shadow:0 0 2px #000,0 0 1px #000;filter:drop-shadow(0 0 7px #b45cff) drop-shadow(0 3px 5px rgba(0,0,0,.45))';
+      +'color:'+(COL[p.t]||'#fff')+';text-shadow:'+(p.t==='black'?'0 0 2px #fff,0 0 1px #fff':'0 0 2px #000,0 0 1px #000')+';'
+      +'filter:'+(glow?'drop-shadow(0 0 7px #b45cff) ':'')+'drop-shadow(0 3px 5px rgba(0,0,0,.45))';
     document.body.appendChild(g);return g;
   }
+  const put=(g,c,sc,al,lift)=>{
+    const v=vp.getBoundingClientRect();
+    const inside=c.x>=v.left&&c.x<=v.right&&c.y>=v.top&&c.y<=v.bottom;   // за краем поля — не рисуем поверх интерфейса
+    g.style.transform='translate('+c.x+'px,'+(c.y-(lift||0))+'px) scale('+sc+')';
+    g.style.opacity=inside?al:0;
+  };
   const jobs=[];
-  q.moves.forEach((m,i)=>{
-    const first=ctr(m.path[0][0],m.path[0][1]),last=m.path[m.path.length-1],key=last[0]+','+last[1];
-    bossHold.set(key,performance.now()+12000);
-    if(!first){bossHold.delete(key);return;}
-    jobs.push({kind:'move',p:m.p,path:m.path,key,delay:Math.min(i*70,490),dur:SEG*(m.path.length-1),g:mkGhost(m.p,first.w),last:first});
+  const movesEnd=moves.length?Math.min(moves.length*190,1500)+STEP:0;
+  moves.forEach((m,i)=>{
+    const o=ctr(m.path[0][0],m.path[0][1]),last=m.path[m.path.length-1],key=last[0]+','+last[1];
+    bossHold.set(key,performance.now()+15000);
+    if(!o){bossHold.delete(key);return;}
+    const vg=m.victim?mkGhost(m.victim.p,o.w,false):null;
+    jobs.push({kind:'move',path:m.path,key,delay:Math.min(i*190,1500),dur:STEP,g:mkGhost(m.p,o.w,true),vg,vx:m.victim&&m.victim.x,vy:m.victim&&m.victim.y,last:o});
   });
-  const movesEnd=q.moves.length?Math.min(q.moves.length*70,490)+SEG*2:0;
-  q.spawns.forEach((m,j)=>{
+  spawns.forEach((m,j)=>{
     const to=ctr(m.x,m.y),key=m.x+','+m.y;
-    bossHold.set(key,performance.now()+12000);
+    bossHold.set(key,performance.now()+15000);
     if(!to){bossHold.delete(key);return;}
-    jobs.push({kind:'spawn',p:m.p,to:[m.x,m.y],key,delay:(q.moves.length?movesEnd*0.5:0)+Math.min(j*110,800),dur:SPAWN,g:mkGhost(m.p,to.w),last:to});
+    jobs.push({kind:'spawn',to:[m.x,m.y],key,delay:(moves.length?movesEnd*0.7:0)+Math.min(j*170,1200),dur:SPAWN,g:mkGhost(m.p,to.w,true),last:to});
+  });
+  deaths.forEach((m,j)=>{
+    const c=m.body?ctr(m.body.x+1,m.body.y+1):ctr(m.x,m.y);if(!c)return;
+    let g;
+    if(m.body){
+      g=document.createElement('div');const t=bossTex();
+      if(t){const im=document.createElement('img');im.src=t;im.alt='';im.style.cssText='width:100%;height:100%;object-fit:contain';g.appendChild(im);}else g.textContent='☠';
+      const w=c.w*3;g.className='boss-ghost';
+      g.style.cssText='position:fixed;left:0;top:0;z-index:50;pointer-events:none;display:flex;align-items:center;justify-content:center;will-change:transform;opacity:0;font-size:'+Math.round(w*0.5)+'px;color:#f55;'
+        +'width:'+w+'px;height:'+w+'px;margin:'+(-w/2)+'px 0 0 '+(-w/2)+'px;filter:drop-shadow(0 0 14px #b45cff)';
+      document.body.appendChild(g);
+    } else g=mkGhost(m.p,c.w,true);
+    jobs.push({kind:'die',body:!!m.body,delay:m.body?0:Math.min(j*60,500),dur:m.body?DIE*1.3:DIE,g,last:c,at:c});
   });
   if(!jobs.length)return;
   const t0=performance.now();let baseT=null;
   function finish(j){
-    j.done=true;j.g.remove();bossHold.delete(j.key);
-    const xy=j.key.split(','),e=cellEl(+xy[0],+xy[1]),pc=e&&e.querySelector('.piece');if(pc)pc.style.opacity='';
-  }
-  function put(j,c,sc,al,lift){
-    const v=vp.getBoundingClientRect();
-    const inside=c.x>=v.left&&c.x<=v.right&&c.y>=v.top&&c.y<=v.bottom;   // за краем поля — не рисуем поверх интерфейса
-    j.g.style.transform='translate('+c.x+'px,'+(c.y-(lift||0))+'px) scale('+sc+')';
-    j.g.style.opacity=inside?al:0;
+    j.done=true;j.g.remove();if(j.vg)j.vg.remove();
+    if(j.key){bossHold.delete(j.key);const xy=j.key.split(','),e=cellEl(+xy[0],+xy[1]),pc=e&&e.querySelector('.piece');if(pc)pc.style.opacity='';}
   }
   function frame(){
     const now=performance.now();
@@ -7165,22 +7247,29 @@ function bossAnimFlush(){
       if(j.done)return;alive++;
       const u=baseT===null?0:(now-baseT-j.delay)/j.dur;
       if(j.kind==='move'){
-        const pts=j.path.map(c=>ctr(c[0],c[1]));
-        pts.forEach((z,i)=>{if(!z)pts[i]=(i?pts[i-1]:j.last)||j.last;});
+        const a=ctr(j.path[0][0],j.path[0][1])||j.last,bq=ctr(j.path[1][0],j.path[1][1])||a;
+        if(j.vg){                                              // съеденная фигура стоит, пока приспешник не доедет
+          const vc=ctr(j.vx,j.vy)||bq,k=u<0.78?1:Math.max(0,(1-u)/0.22);
+          put(j.vg,vc,0.6+0.4*k,k,0);
+        }
         if(u>=1){finish(j);return;}
-        if(u<=0){put(j,pts[0],1,1,0);j.last=pts[0];return;}
-        const n=pts.length-1,sp=clamp(u)*n,i=Math.min(Math.floor(sp),n-1),f=sp-i,e=ease(f);
-        const c={x:pts[i].x+(pts[i+1].x-pts[i].x)*e,y:pts[i].y+(pts[i+1].y-pts[i].y)*e,w:pts[i].w};
-        const hop=Math.sin(Math.PI*f);
-        put(j,c,1+hop*0.1,1,hop*c.w*0.12);j.last=c;
+        if(u<=0){put(j.g,a,1,1,0);j.last=a;return;}
+        const e=ease(u),c={x:a.x+(bq.x-a.x)*e,y:a.y+(bq.y-a.y)*e,w:a.w},hop=Math.sin(Math.PI*u);
+        put(j.g,c,1+hop*0.1,1,hop*c.w*0.12);j.last=c;
+      } else if(j.kind==='spawn'){
+        const to=ctr(j.to[0],j.to[1])||j.last,bc=bossSt&&ctr(bossSt.x+1,bossSt.y+1);
+        if(u>=1){finish(j);return;}
+        if(u<=0){j.g.style.opacity=0;return;}                  // ещё не его очередь: клетка пока пустая (фигура спрятана)
+        let sx=to.x,sy=to.y;
+        if(bc){const vx=bc.x-to.x,vy=bc.y-to.y,L=Math.hypot(vx,vy)||1;sx=to.x+vx/L*to.w*0.65;sy=to.y+vy/L*to.w*0.65;}   // старт — край босса
+        const e=outc(u);
+        put(j.g,{x:sx+(to.x-sx)*e,y:sy+(to.y-sy)*e,w:to.w},0.6+0.4*e,Math.min(1,u*4),0);
       } else {
-        const to=ctr(j.to[0],j.to[1])||j.last;
-        const from=(bossSt&&ctr(bossSt.x+1,bossSt.y+1))||to;
         if(u>=1){finish(j);return;}
-        if(u<=0){j.g.style.opacity=0;return;}
-        const e=outc(clamp(u));
-        const c={x:from.x+(to.x-from.x)*e,y:from.y+(to.y-from.y)*e,w:to.w};
-        put(j,c,0.25+0.75*Math.min(1,u*3)+Math.sin(Math.PI*u)*0.08,Math.min(1,u*5),Math.sin(Math.PI*u)*to.w*0.8);j.last=c;
+        if(u<=0){put(j.g,j.at,1,1,0);return;}
+        const e=ease(u);
+        if(j.body)put(j.g,j.at,1+0.12*e,1-e,0);
+        else put(j.g,j.at,1-0.5*e,1-e,j.at.w*0.4*e);
       }
     });
     if(alive)requestAnimationFrame(frame);
