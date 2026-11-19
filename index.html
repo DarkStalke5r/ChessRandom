@@ -851,6 +851,19 @@
 
     /* подсказка-обучение не должна «запирать» игру: фон кликабелен, кнопки выше системной панели */
     #tutorial { padding-bottom: max(24px, calc(env(safe-area-inset-bottom, 0px) + 20px)) !important; }
+
+    /* «Мигание»: лицо карты постоянно меняется + переливается; летящая карта подсвечивается, когда показан выпавший эффект */
+    .card.chaos-flick { animation: chaosShimmer 1.4s linear infinite; }
+    @keyframes chaosShimmer { 0% { filter: hue-rotate(0deg) brightness(1); } 50% { filter: hue-rotate(180deg) brightness(1.25); } 100% { filter: hue-rotate(360deg) brightness(1); } }
+    #fly-card.locked { box-shadow: 0 0 16px 4px #ffd24a; }
+
+    #vt-bubble.glitch {
+      background: #0b0610; color: #9dffb0; border-color: #ff2bd6;
+      font: 600 12px/1.3 ui-monospace, Menlo, Consolas, monospace;
+      text-shadow: 1px 0 #f0f, -1px 0 #0ff;
+      animation: vtShake .2s steps(2) infinite;
+    }
+    @keyframes vtShake { 0% { transform: translate(0,0); } 50% { transform: translate(-1.5px,1px); } 100% { transform: translate(1.5px,-1px); } }
   </style>
 </head>
 <body>
@@ -871,6 +884,7 @@
         <button type="button" data-diff="easy">Лёгкая</button>
         <button type="button" data-diff="normal">Средняя</button>
         <button type="button" data-diff="hard">Сложная</button>
+        <button type="button" data-diff="boss" style="font-family:ui-monospace,Menlo,Consolas,monospace;color:#9dffb0">0.boss.ai</button>
       </div>
       <button type="button" class="sp-btn sec" id="sp-textures">🎨 Текстуры</button>
       <div class="sp-note" id="sp-diff-note"></div>
@@ -5142,8 +5156,14 @@ function softReset(){
   sel=null;moves=null;
   return 'Сброс! Фигуры вернулись на места, лишних → щиты: '+extra;
 }
-function chaosEffect(t,x,y){
-  const eff=pick(['bang','bang','demon','airstrike','spawn','shield','ice']);
+const CHAOS_EFF=['bang','bang','demon','airstrike','spawn','shield','ice'];
+let chaosPre=null;     // заранее выбранный эффект «Мигания» {x,y,eff}: чтобы анимация показала нужную карту, а ИИ мог целиться
+function rollChaos(t){
+  const cells=[];for(let yy=0;yy<WN;yy++)for(let xx=0;xx<WN;xx++)if(valid(xx,yy))cells.push([xx,yy]);
+  const c=pick(cells);return {x:c[0],y:c[1],eff:pick(CHAOS_EFF)};
+}
+function chaosEffect(t,x,y,forced){
+  const eff=forced||pick(CHAOS_EFF);
   addHl(x,y,'effect-hl');
   const q=B[y][x];if(q&&(q.k==='J'||q.wall))return 'шут увернулся';
   if(eff==='ice'){if(q&&!q.boss){q.frozen=3;return 'лёд! фигура заморожена на 3 хода';}if(!q){spawnNeutralAt(x,y);return 'нейтральная фигура';}return 'ничего';}
@@ -5260,7 +5280,7 @@ function aiPickMove(t,ms){
     for(let i=snap.length-1;i>=0;i--)B[snap[i][1]][snap[i][0]]=snap[i][2];
     const fw=(m.x-m.fx)*FW[t][0]+(m.y-m.fy)*FW[t][1];
     const _diff=(typeof getAIDiff==='function'?getAIDiff():'normal');
-    const rndScale=_diff==='easy'?6.0:(_diff==='hard'?0.12:0.7);
+    const rndScale=_diff==='easy'?6.0:((_diff==='hard'||_diff==='boss')?0.12:0.7);
     let sc=Math.random()*rndScale;
     if(_diff==='easy'&&Math.random()<0.35){sc+=(Math.random()-0.5)*40;}
     if(!safe)sc-=4000;                 // оставить короля под ударом нельзя
@@ -5328,18 +5348,28 @@ function cardAnim0(t,where,type,tx,ty,then){
   const W=fly.offsetWidth||44,H=fly.offsetHeight||62;
   // цель пересчитывается каждый кадр: карта «прикреплена» к клетке и едет вместе с полем, а не с экраном
   const target=()=>{const c=tx!=null?cellEl(tx,ty):null,r=(c||boardEl).getBoundingClientRect();return {x:r.left+r.width/2-W/2,y:r.top+r.height/2-H/2};};
-  fly.querySelector('.fc-icon').textContent=PC[type].i;fly.querySelector('.fc-name').textContent=PC[type].n;
+  // «Мигание»: пока летит — перебирает лица карт, при посадке показывает карту, ЧЕЙ ЭФФЕКТ действительно сработает
+  const FACE_X={bang:['💥','Бах'],demon:['😈','Демон'],ice:['❄','Лёд']};
+  const faceOf=k=>FACE_X[k]||(PC[k]?[PC[k].i,PC[k].n]:['?','…']);
+  const flickPool=['future','spawn','airstrike','support','shield','extra','angel','reset','trump','dummy','bid','slam','double','bang','demon','ice'];
+  const preEff=(type==='chaos'&&chaosPre)?chaosPre.eff:null;
+  const setFace=f=>{fly.querySelector('.fc-icon').textContent=f[0];fly.querySelector('.fc-name').textContent=f[1];};
+  setFace(type==='chaos'?faceOf(pick(flickPool)):faceOf(type));
+  let lastF=0,locked=false;fly.classList.remove('locked');
   fly.style.transition='none';fly.style.display='flex';fly.style.opacity='1';
   const t0=performance.now();let done=false;
   (function step(){
     const el=performance.now()-t0,tg=target();
     const u=Math.min(1,el/FM),e=1-Math.pow(1-u,3);
     fly.style.left=(sr.left+(tg.x-sr.left)*e)+'px';fly.style.top=(sr.top+(tg.y-sr.top)*e)+'px';
+    if(type==='chaos'){const nt=performance.now();
+      if(el<FM*0.7){if(nt-lastF>75){lastF=nt;setFace(faceOf(pick(flickPool)));}}
+      else if(!locked){locked=true;setFace(faceOf(preEff||'chaos'));fly.classList.add('locked');}}
     if(el<FM)fly.style.transform='scale('+(1+0.25*e)+') rotate('+(-8*e)+'deg)';
     else{const v=Math.min(1,(el-FM)/400);fly.style.opacity=String(1-v);fly.style.transform='scale('+(1.25-0.7*v)+') rotate('+(-8+18*v)+'deg)';}
     if(el<FM+1000){requestAnimationFrame(step);return;}
     if(done)return;done=true;
-    fly.style.display='none';fly.style.opacity='1';
+    fly.style.display='none';fly.style.opacity='1';fly.classList.remove('locked');
     if(tx!=null)addHl(tx,ty,'target-hl');
     fin();
   })();
@@ -5390,7 +5420,7 @@ function playCard(t,type,x,y){
   if(type==='airstrike'){if(!valid(x,y)){log('Выбери клетку поля');return false;}const n=scatterArea(x,y);log(NAME[t]+': авиаудар — разлетелось фигур: '+n);showTip('airstrike');return true;}
   if(type==='angel'){const q=valid(x,y)&&B[y][x];if(!q||q.t!==t||q.demon){log('Выбери свою фигуру');return false;}q.angel=true;log(NAME[t]+': ангел — фигура под защитой света');showTip('angel');return true;}
   if(type==='reset'){log(softReset());showTip('reset');return true;}
-  if(type==='chaos'){const cells=[];for(let yy=0;yy<WN;yy++)for(let xx=0;xx<WN;xx++)if(valid(xx,yy))cells.push([xx,yy]);const c=pick(cells);log(NAME[t]+': Мигание → '+chaosEffect(t,c[0],c[1]));showTip('chaos');return true;}
+  if(type==='chaos'){let c,eff=null;if(chaosPre){c=[chaosPre.x,chaosPre.y];eff=chaosPre.eff;chaosPre=null;}else{const pr=rollChaos(t);c=[pr.x,pr.y];eff=pr.eff;}log(NAME[t]+': Мигание → '+chaosEffect(t,c[0],c[1],eff));showTip('chaos');return true;}
   if(type==='rez'){const n=reviveAround(x,y);if(!n){log('Некого воскрешать');return false;}log(NAME[t]+': Fh:DebugTest1Q — воскрешено фигур: '+n);return true;}
   if(type==='trump'){if(!own(x,y)){log('Выбери свою фигуру');return false;}const q=B[y][x];if(!q.prot){q.prot=true;q.tmp=round+3;}log(NAME[t]+': козырь — фигура неуязвима 3 круга');return true;}
   if(type==='dummy'){const q=valid(x,y)&&B[y][x];if(!q||q.t===t||q.t==='boss'||q.k==='K'||q.prot||(RULE[q.t]==='chess')!==(RULE[t]==='chess')){log('Выбери чужую фигуру того же типа (не короля)');return false;}q.loan={t:q.t,until:round+2};q.t=t;log(NAME[t]+': болван — чужая фигура играет за них 2 круга');return true;}
@@ -5401,7 +5431,7 @@ function playCard(t,type,x,y){
   if(type==='err'){log('Err.MDXphrzVPLAJ ('+NAME[t]+'): '+errEffect(t));return true;}
   return false;
 }
-function aiCard(t,cont){
+function aiCardLegacy(t,cont){
   {const kp=kingPos(t);if(kp&&attacked(kp.x,kp.y,t)){const i=CS[t].indexOf('shield');if(i>=0&&!B[kp.y][kp.x].shield){aiForce=kp;return aiUse(t,i,'shield',cont);}}}
   if(CFG.craft!==false&&!bossSt&&!nukeDone){
     const h=CS[t].filter(Boolean);
@@ -5417,9 +5447,147 @@ function aiCard(t,cont){
   if(!idx.length||Math.random()>0.5)return cont();
   const i=pick(idx);aiUse(t,i,CS[t][i],cont);
 }
-function aiUse(t,where,type,cont){
+// ===== ИИ и карты (v2): осмысленный выбор, зависит от сложности =====
+//  лёгкая  — как раньше: карта наугад, цель наугад (aiCardLegacy)
+//  средняя — оценивает каждую карту и цель, играет только выгодное (порог 8), в 25% случаев берёт не лучший вариант
+//  сложная — то же без ошибок, порог ниже (5), активнее держит карты в резерве
+//  0.boss.ai — три «Мигания» каждый ход, эффект и клетку выбирает сама (bossAiCard)
+function aiHang(t,x,y,p){const at=attackers(x,y,t);if(!at.length)return 0;if(!isDefended(x,y,t))return VALS[p.k]||1;return Math.max(0,(VALS[p.k]||1)-Math.min(...at.map(a=>VALS[a.k]||1)));}
+function aiCardCtx(t){
+  const mine=pcsOf(q=>q.t===t),foes=pcsOf(q=>q.t!==t&&q.t!=='neutral'&&q.t!=='boss'&&q.k!=='J'&&!q.wall);
+  const kp=kingPos(t),ms=teamMoves(t);
+  let capVal=0;ms.forEach(m=>{const q=m.cap&&B[m.cap.y][m.cap.x];if(q&&!q.boss)capVal=Math.max(capVal,q.k==='K'?50:(VALS[q.k]||1));});
+  const sum=a=>a.reduce((n,z)=>n+(z.p.k==='K'?0:(VALS[z.p.k]||1)),0);
+  return {mine,foes,kp,kingHit:!!(kp&&attacked(kp.x,kp.y,t)),ms,capVal,ownMat:sum(mine),foeMat:sum(foes),ekings:foes.filter(z=>z.p.k==='K')};
+}
+function aiSpawnScore(t,x,y,c){
+  if(!spawnKindFor(t,x,y))return null;
+  const old=B[y][x];B[y][x]={t,k:'P',st:0};const safe=attackers(x,y,t).length===0;B[y][x]=old;   // безопасна ли клетка
+  const kd=c.ekings.length?Math.min(...c.ekings.map(k=>Math.max(Math.abs(k.x-x),Math.abs(k.y-y)))):6;
+  return (safe?9:3)+Math.max(0,6-kd)*0.7+(c.ownMat<c.foeMat?2:0);
+}
+// оценка карты: лучшая цель и «польза» в очках (нет цели у карты — x,y = null); null — играть нечем
+function aiEvalCard(t,type,c){
+  const own=c.mine.filter(z=>z.p.k!=='K');
+  const best=(arr,f)=>{let b=null;arr.forEach(z=>{const s=f(z);if(s!=null&&(!b||s>b.score))b={x:z.x,y:z.y,score:s};});return b;};
+  const behind=c.ownMat<c.foeMat;
+  switch(type){
+    case 'shield':{
+      if(c.kingHit&&c.kp&&!B[c.kp.y][c.kp.x].shield)return {x:c.kp.x,y:c.kp.y,score:1000};          // король под боем — щит на короля
+      return best(own,z=>{if(z.p.shield)return null;const h=aiHang(t,z.x,z.y,z.p);return h>0?h*9:((VALS[z.p.k]||1)>=5?2.5:null);});
+    }
+    case 'trump':{
+      if(c.kingHit&&c.kp&&!B[c.kp.y][c.kp.x].prot)return {x:c.kp.x,y:c.kp.y,score:900};
+      return best(own,z=>{if(z.p.prot)return null;const h=aiHang(t,z.x,z.y,z.p);return h>0?h*8+2:null;});
+    }
+    case 'future':   return best(own,z=>{if(z.p.prot)return null;const h=aiHang(t,z.x,z.y,z.p);return h>0?h*7-2:null;});   // уводит фигуру из-под боя
+    case 'angel':    return best(own,z=>(z.p.angel||z.p.demon)?null:(VALS[z.p.k]||1)*1.1);
+    case 'spawn':{
+      let b=null;freeCells().sort(()=>Math.random()-0.5).slice(0,36).forEach(f=>{const sc=aiSpawnScore(t,f[0],f[1],c);if(sc!=null&&(!b||sc>b.score))b={x:f[0],y:f[1],score:sc};});
+      return b;
+    }
+    case 'support':  return freeCells().length>=2?{x:null,y:null,score:9+(behind?2:0)}:null;
+    case 'extra':    return {x:null,y:null,score:5+Math.min(8,c.capVal*1.2)};                       // второй ход ценен, когда есть что бить
+    case 'slam':     return {x:null,y:null,score:c.capVal>0?5+c.capVal*0.8:1.5};
+    case 'bid':{const h=CS[t].filter(Boolean).length;return {x:null,y:null,score:h<=1?9:(h===2?4:1)};}
+    case 'reset':    return {x:null,y:null,score:c.foeMat/Math.max(1,c.ownMat)>1.7?12:0};            // только когда сильно проигрываем
+    case 'chaos':    return {x:null,y:null,score:4+(behind?3:0)};
+    case 'err':      return {x:null,y:null,score:2.5};
+    case 'airstrike':{
+      let b=null;
+      for(let y=0;y<WN;y++)for(let x=0;x<WN;x++){
+        if(!valid(x,y))continue;let sc=0,n=0,ownK=false,foeK=false;
+        for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++){
+          const nx=x+dx,ny=y+dy;if(!valid(nx,ny))continue;const q=B[ny][nx];if(!q||q.boss||q.k==='J'||q.wall)continue;
+          const v=q.k==='K'?0:(VALS[q.k]||1);
+          if(q.t===t){sc-=v*1.5;if(q.k==='K')ownK=true;}else if(q.t==='neutral')sc+=v*0.3;else{sc+=v;n++;if(q.k==='K')foeK=true;}
+        }
+        if(ownK||n<2)continue;if(foeK)sc+=4;sc+=1;
+        if(!b||sc>b.score)b={x,y,score:sc};
+      }
+      return b;
+    }
+    case 'dummy':    return best(c.foes,z=>(z.p.k==='K'||z.p.prot||z.p.boss||(RULE[z.p.t]==='chess')!==(RULE[t]==='chess'))?null:(VALS[z.p.k]||1)*6);
+    case 'double':   return best(c.foes,z=>{if(z.p.k==='K'||z.p.boss)return null;const hit=c.ms.some(m=>m.cap&&m.cap.x===z.x&&m.cap.y===z.y);return hit?12+(VALS[z.p.k]||1):2;});
+    case 'rez':{
+      let b=null;grave.forEach(g=>{
+        const list=graveIn(g.x,g.y).filter(z=>!B[z.y][z.x]);if(!list.length)return;
+        let sc=0;list.forEach(z=>{const v=z.k==='K'?0:(VALS[z.k]||1);sc+=(z.t===t?v:-v*0.8);});
+        if(!b||sc>b.score)b={x:g.x,y:g.y,score:sc};
+      });
+      return b&&b.score>=3?b:null;
+    }
+  }
+  return null;
+}
+function aiCard(t,cont){
+  const d=(typeof getAIDiff==='function'?getAIDiff():'normal');
+  if(d==='easy')return aiCardLegacy(t,cont);
+  if(d==='boss')return bossAiCard(t,cont);
+  // ядерка — как раньше: редкая и эффектная
+  if(CFG.craft!==false&&!bossSt&&!nukeDone){
+    const h=CS[t].filter(Boolean);
+    if(h.length===3&&h.some((x,i)=>h.indexOf(x)!==i)&&Math.random()<(d==='hard'?0.5:0.4)){
+      CS[t]=[null,null,null];giveCard(t,'nuclear');nukeDone=true;log(NAME[t]+' собрали ЯДЕРКУ!');showTip('nuclear');
+      return aiUse(t,CS[t].indexOf('nuclear'),'nuclear',cont);
+    }
+  }
+  const c=aiCardCtx(t),opts=[];
+  CS[t].forEach((type,i)=>{if(!type)return;const r=aiEvalCard(t,type,c);opts.push({where:i,type,x:r?r.x:null,y:r?r.y:null,score:r?r.score:-1});});
+  const rs=R[t];
+  if(rs&&rs.ready<=round){const r=aiEvalCard(t,rs.type,c);if(r)opts.push({where:'reserve',type:rs.type,x:r.x,y:r.y,score:r.score-0.5});}
+  opts.sort((a,b)=>b.score-a.score);
+  let top=opts[0];
+  if(d==='normal'&&opts.length>1&&Math.random()<0.25)top=opts[1];                  // обычный игрок не всегда видит лучший вариант
+  const thr=d==='hard'?5:8;
+  if(top&&top.score>=thr)return aiUse(t,top.where,top.type,cont,{x:top.x,y:top.y});
+  // ничего выгодного: если рука полная и резерв свободен — убираем самую слабую карту «на потом»
+  const hand=opts.filter(o=>o.where!=='reserve');
+  if(!R[t]&&hand.length>=3&&Math.random()<(d==='hard'?0.6:0.3)){
+    const w=hand[hand.length-1];R[t]={type:w.type,ready:round+3};CS[t][w.where]=null;
+  }
+  cont();
+}
+// ===== 0.boss.ai: у ИИ всегда 3 «Мигания» (каждый ход восстанавливаются) и он сам выбирает эффект и клетку =====
+function bossChaosPlan(t){
+  const foes=ORDER.filter(u=>u!==t&&alive(u));
+  const isFoe=q=>q&&q.t!==t&&q.t!=='neutral'&&q.t!=='boss'&&foes.indexOf(q.t)>=0;
+  const c=aiCardCtx(t);
+  let best=null;const upd=(x,y,eff,sc)=>{if(!best||sc>best.score)best={x,y,eff,score:sc};};
+  for(let y=0;y<WN;y++)for(let x=0;x<WN;x++){
+    if(!valid(x,y))continue;const q=B[y][x];
+    if(q&&(q.k==='J'||q.wall||q.boss))continue;
+    if(q&&isFoe(q)){
+      const v=q.k==='K'?25:(VALS[q.k]||1);
+      if(!q.prot){if(!(q.frozen>0))upd(x,y,'ice',v*2.4);if(!(q.lying>0)&&!(q.frozen>0))upd(x,y,'bang',v*1.6);}   // заморозить / сбить с ног сильную чужую фигуру (уже замороженную не трогает)
+      if(q.angel)upd(x,y,'demon',7);                                 // демон гасит ангелов
+    }
+    if(q&&q.t===t&&!q.shield){const h=aiHang(t,x,y,q);if(h>0)upd(x,y,'shield',h*9+2);else if(q.k==='K'&&c.kingHit)upd(x,y,'shield',900);}
+  }
+  freeCells().sort(()=>Math.random()-0.5).slice(0,36).forEach(f=>{const sc=aiSpawnScore(t,f[0],f[1],c);if(sc!=null)upd(f[0],f[1],'spawn',sc);});
+  const a=aiEvalCard(t,'airstrike',c);if(a)upd(a.x,a.y,'airstrike',a.score);
+  return best;
+}
+function bossAiCard(t,cont){
+  CS[t]=['chaos','chaos','chaos'];fresh[t]=[1,1,1];       // карты восстанавливаются каждый ход
+  drawCards();
+  let left=3;
+  const step=()=>{
+    if(over||check())return;
+    const idx=CS[t].indexOf('chaos');
+    if(left<=0||idx<0)return cont();
+    const plan=bossChaosPlan(t);
+    if(!plan||plan.score<3)return cont();                    // улучшать нечего — карты всё равно вернутся
+    chaosPre={x:plan.x,y:plan.y,eff:plan.eff};left--;
+    aiUse(t,idx,'chaos',step);
+  };
+  step();
+}
+
+function aiUse(t,where,type,cont,pre){
   let x,y;
-  if(type==='rez'){let best=null,bn=0;grave.forEach(g=>{const n=graveIn(g.x,g.y).length;if(n>bn){bn=n;best=g;}});if(!best)return cont();x=best.x;y=best.y;}
+  if(pre&&pre.x!=null){x=pre.x;y=pre.y;}
+  else if(type==='rez'){let best=null,bn=0;grave.forEach(g=>{const n=graveIn(g.x,g.y).length;if(n>bn){bn=n;best=g;}});if(!best)return cont();x=best.x;y=best.y;}
   else if(PC[type].target){
     if(type==='spawn'){const c=pick(freeCells().filter(f=>spawnKindFor(t,f[0],f[1])));if(!c)return cont();x=c[0];y=c[1];}
     else if(type==='airstrike'){const o=pcsOf(q=>q.t!==t&&q.t!=='boss');if(!o.length)return cont();const z=pick(o);x=z.x;y=z.y;}
@@ -5514,7 +5682,11 @@ function fireNuke0(t,cx,cy){
 
 // --- обёртки: при онлайн-игре действие рассылается, чтобы у всех проигралась та же анимация ---
 function animMove(fx,fy,tx,ty,done){onlineSendAnim({k:'move',fx,fy,tx,ty});return animMove0(fx,fy,tx,ty,done);}
-function cardAnim(t,where,type,tx,ty,then){onlineSendAnim({k:'card',t,where,type,tx,ty});return cardAnim0(t,where,type,tx,ty,then);}
+function cardAnim(t,where,type,tx,ty,then){
+  if(type==='chaos'){if(!chaosPre)chaosPre=rollChaos(t);tx=chaosPre.x;ty=chaosPre.y;}   // карта летит ровно в ту клетку, где сработает эффект
+  onlineSendAnim({k:'card',t,where,type,tx,ty});
+  return cardAnim0(t,where,type,tx,ty,then);
+}
 function fireNuke(t,cx,cy){onlineSendAnim({k:'nuke',t,cx,cy});return fireNuke0(t,cx,cy);}
 function bossFits(x,y){for(let j=0;j<3;j++)for(let i=0;i<3;i++){if(!valid(x+i,y+j))return false;const q=B[y+j][x+i];if(q&&q.prot)return false;}return true;}
 function placeBoss(x,y){
@@ -6753,11 +6925,21 @@ function deadEl(cls){
 function cardEl(type,cls,fn){
   const d=document.createElement('div');
   if(!type){d.className='card empty '+cls;d.textContent='—';return d;}
-  const c=PC[type];d.className='card '+cls;
+  const c=PC[type];d.className='card '+cls+(type==='chaos'?' chaos-flick':'');
   d.innerHTML='<div class="corner">'+c.c+'</div><div class="icon">'+c.i+'</div><div class="cname"'+(type==='err'||type==='rez'?' style="font-size:6px;word-break:break-all"':'')+'>'+c.n+'</div>';
   if(fn)d.onclick=fn;return d;
 }
 
+// «Мигание»: лицо карты постоянно меняется (в движке «Плюс» оно было статичным — мерцание жило только в старом движке)
+const CHAOS_FACES=['future','spawn','airstrike','support','shield','extra','angel','reset','nuclear','trump','dummy','bid','slam','double'];
+setInterval(()=>{
+  document.querySelectorAll('.card.chaos-flick').forEach(d=>{
+    if(Math.random()<0.3)return;                               // иногда задерживается подольше — живее
+    const c=PC[pick(CHAOS_FACES)];if(!c)return;
+    const ic=d.querySelector('.icon'),nm=d.querySelector('.cname'),co=d.querySelector('.corner');
+    if(ic)ic.textContent=c.i;if(nm)nm.textContent=c.n;if(co)co.textContent=c.c;
+  });
+},120);
 /* ===== Фигуры из папки figures/ (белые PNG с чёрной обводкой), окрашиваются в цвет команды ===== */
 // Если файлы названы иначе — впиши точные пути здесь, например: FIGURE_FILES.K='figures/MyKing.png'
 const FIGURE_FILES=window.FIGURE_FILES||{};
@@ -6983,7 +7165,7 @@ function drawCards(){drawBossHand();
     if(!r){re.className='card reserve empty '+cls;re.textContent=mine||w?'+':'—';}
     else{
       const c=PC[r.type],lock=r.ready>round;
-      re.className='card reserve '+cls+(lock?' locked':'')+(mine&&selSlot==='reserve'?' active':'');
+      re.className='card reserve '+cls+(r.type==='chaos'?' chaos-flick':'')+(lock?' locked':'')+(mine&&selSlot==='reserve'?' active':'');
       re.innerHTML='<div class="corner">'+c.c+'</div><div class="icon">'+c.i+'</div><div class="cname">'+c.n+'</div>';
       if(lock)re.setAttribute('data-lock','через '+(r.ready-round));
     }
@@ -7504,6 +7686,7 @@ function gen(x,y,capOnly){
 }
 function apply(fx,fy,m){
   let r;
+  const _hp=B[fy]&&B[fy][fx],_hc=(m&&m.cap&&B[m.cap.y])?B[m.cap.y][m.cap.x]:null,_hi={t:_hp&&_hp.t,k:_hp&&_hp.k,fx,fy,x:m&&m.x,y:m&&m.y,cap:_hc?{t:_hc.t,k:_hc.k}:null};
   lastFrom={x:fx,y:fy};
   if(m&&m.shoot)r=shootApply(fx,fy,m);
   else if(m&&m.steal)r=stealApply(fx,fy,m);
@@ -7515,6 +7698,7 @@ function apply(fx,fy,m){
   }
   try{settleGuns();resolveFalls();}catch(e){console.warn(e);}
   lastFrom=null;
+  try{if(window.__onMove&&_hi.t)window.__onMove(_hi);}catch(e){}
   return r;
 }
 // выстрел: фигура не двигается, цель падает (лежит)
@@ -7935,7 +8119,7 @@ if(rs)showResumeDialog(rs,had);else if(!had)openSetup(true);
 <script>
 (function(){
   const TEXTURES_URL = window.TEX_SITE || 'https://darkstalke5r.github.io/Slugebniy-TexturesCore-ChessRandom/';
-  const DIFF_LABELS = { easy:'Лёгкая', normal:'Средняя', hard:'Сложная' };
+  const DIFF_LABELS = { easy:'Лёгкая', normal:'Средняя', hard:'Сложная', boss:'0.boss.ai' };
   function el(id){return document.getElementById(id);}
   function closePanels(){
     const sp=el('settings-panel'); if(sp) sp.classList.remove('show');
@@ -8163,6 +8347,56 @@ if(rs)showResumeDialog(rs,had);else if(!had)openSetup(true);
     }
     prevCnt=c; lastLog=logNow;
   }
+  /* ---------------- 1b2. РЕЖИМ 0.boss.ai: модель «ломается», смотрит на игрока и бормочет ходы ---------------- */
+  function bossMode(){ return window.AI_DIFF==='boss'; }
+  const PN={K:'король',Q:'ферзь',R:'ладья',B:'слон',N:'конь',P:'пешка',m:'шашка',d:'дамка',E:'слонь',C:'конница',H:'хтонь',T:'тура',Y:'пони',G:'цыган',J:'шут',X:'фигура'};
+  const hist=[]; let nextHistAt=0, lastDiff=null;
+  const nm=k=>PN[k]||'фигура';
+  const sq=(x,y)=>String.fromCharCode(97+(((x%26)+26)%26))+((y|0)+1);
+  const rnd=a=>a[Math.floor(Math.random()*a.length)];
+  // почти бессмыслица: часть букв заменяется мусором, часть дублируется / орёт заглавными
+  function garble(str,p){
+    const S='▒░▓#@%?/\\§¤◊'; let o='';
+    for(const ch of str){
+      if(/[\s.,:;…→×]/.test(ch)){ o+=ch; continue; }
+      const r=Math.random();
+      if(r<p) o+=S[Math.floor(Math.random()*S.length)];
+      else if(r<p+0.04) o+=ch+ch;
+      else if(r<p+0.08) o+=ch.toUpperCase();
+      else o+=ch;
+    }
+    return o;
+  }
+  function moveLine(ev){
+    const a=sq(ev.fx,ev.fy), b=sq(ev.x,ev.y), pc=nm(ev.k), cap=ev.cap?nm(ev.cap.k):null;
+    const b2=sq(ev.x+((Math.random()*5)|0)-2, ev.y+((Math.random()*5)|0)-2), n=hist.length;
+    const T=[
+      pc+' '+a+'→'+b+'. до этого '+b2+'? нет. '+a+'.',
+      'я ходила: '+pc+'. ты видел? ты видел.',
+      b+' '+b+' '+b+'. ход записан. ход не записан.',
+      cap ? ('съела '+cap+' на '+b+'. вкусно? вкусно.') : ('тихо ушла на '+b+'. никто не заметил. ты заметил.'),
+      a+'… '+b+'… кто здесь? это ты.',
+      'ход '+n+': '+pc+' '+b+'. ход '+(n-1)+': '+pc+' '+b2+'. ход '+n+'.'
+    ];
+    return garble(rnd(T),0.1);
+  }
+  function histLine(){
+    const pool=hist.slice(), out=[];
+    for(let i=0;i<3&&pool.length;i++){ const e=pool.splice(Math.floor(Math.random()*pool.length),1)[0]; out.push(nm(e.k)+' '+sq(e.fx,e.fy)+(e.cap?'×':'→')+sq(e.x,e.y)); }
+    return garble(rnd(['история: ','я помню: ','записано: '])+out.join(' / ')+rnd(['… повтор.','… это всё было.','… дальше стёрто.']),0.14);
+  }
+  // ходы приходят из игры (apply → window.__onMove)
+  window.__onMove=function(ev){
+    if(!ev||!ev.t||ev.t==='boss'||ev.t==='neutral'||ev.x==null) return;
+    hist.push(ev); if(hist.length>16) hist.shift();
+    if(!bossMode()||ev.t==='white') return;                      // говорит про ходы ИИ
+    if(Math.random()<0.8) vtSay('boss',{text:moveLine(ev),glitch:true,gap:1200,force:true});
+  };
+  function bossTick(now){
+    if(lastDiff!=='boss'){ if(vtSay('boss',{text:garble('0.boss.ai… загрузка… я вижу тебя',0.12),glitch:true,gap:0,force:true})){ lastDiff='boss'; nextHistAt=now+9000; } }
+    if(now>nextHistAt && hist.length>1){ nextHistAt=now+9000+Math.random()*8000; vtSay('boss',{text:histLine(),glitch:true,gap:3000,force:true}); }
+  }
+
   /* ---------------- 1c. РЕПЛИКИ (бабл над/под моделью) ---------------- */
   // Говорит негромко и по делу, без «ура!» и восклицаний: пара слов в тишине и редкие реакции на события.
   const SAY = {
@@ -8207,15 +8441,16 @@ if(rs)showResumeDialog(rs,had);else if(!had)openSetup(true);
   // force=true — реплика на важное событие (но всё равно не чаще, чем раз в несколько секунд)
   function vtSay(kind, opts){
     opts=opts||{};
+    if(bossMode() && !opts.text) return false;                  // в режиме 0.boss.ai обычных реплик нет — только «сбойные»
     if(!allowedToSpeak()) return false;
     const now=performance.now();
-    const gap = opts.force ? 4500 : 9000;
+    const gap = opts.gap!=null ? opts.gap : (opts.force ? 4500 : 9000);
     if(now-lastSayAt<gap) return false;
     if(opts.chance!=null && Math.random()>opts.chance) return false;
-    const text=pickLine(kind);
-    bubbleEl.textContent=text; placeBubble();
+    const text=opts.text||pickLine(kind);
+    bubbleEl.textContent=text; bubbleEl.classList.toggle('glitch',!!opts.glitch); placeBubble();
     bubbleEl.classList.add('show');
-    const dur=Math.min(6500, 2200+text.length*55);
+    const dur=Math.min(opts.glitch?8000:6500, 2200+text.length*55);
     speakUntil=now+Math.min(dur-300, 400+text.length*65);      // рот двигается, пока «говорит»
     clearTimeout(bubbleHide); bubbleHide=setTimeout(()=>bubbleEl&&bubbleEl.classList.remove('show'),dur);
     lastSayAt=now; lastKind=kind;
@@ -8238,6 +8473,7 @@ if(rs)showResumeDialog(rs,had);else if(!had)openSetup(true);
   let cardSeen=false, overSaid=false;
   function talkTick(now){
     if(!bubbleEl) return;
+    if(bossMode()) bossTick(now); else if(lastDiff==='boss'){ lastDiff=null; bubbleEl.classList.remove('glitch'); }
     if(!nextIdleAt) scheduleIdle(now);
     // карта в полёте (применили карту)
     const fc=$('fly-card'), flying=fc && getComputedStyle(fc).display!=='none';
@@ -8361,13 +8597,20 @@ if(rs)showResumeDialog(rs,had);else if(!had)openSetup(true);
     // ---- взгляд: каждый кадр наводим голову/глаза на текущую цель ----
     const fc = model.internalModel && model.internalModel.focusController;
     let sx=0, sy=0;                                   // сглаженный взгляд
+    const bossJerk={x:0,y:0,until:0};
     app.ticker.add(()=>{
-      const t=pick(); if(!t||!t.p) return;
+      const bm=bossMode();
+      const t=bm?{p:{x:0,y:0},k:'boss'}:pick(); if(!t||!t.p) return;
       const r=canvas.getBoundingClientRect();
       const hx=r.left+r.width/2, hy=r.top+r.height*CFG.headY;
       const R=Math.max(140, Math.min(innerWidth,innerHeight)*0.5);   // на каком расстоянии поворот максимальный
       const fast = (t.k==='piece-fly'||t.k==='card-fly') ? 0.35 : 0.12;
-      const tx=Math.max(-1,Math.min(1,(t.p.x-hx)/R)), ty=Math.max(-1,Math.min(1,-(t.p.y-hy)/R));
+      let tx=Math.max(-1,Math.min(1,(t.p.x-hx)/R)), ty=Math.max(-1,Math.min(1,-(t.p.y-hy)/R));
+      if(bm){                                           // прямо на игрока (перед экраном); иногда резкий «сбой» взгляда
+        const nw=performance.now();
+        if(nw>bossJerk.until){ bossJerk.until=nw+(Math.random()<0.15?120:500+Math.random()*700); bossJerk.x=Math.random()<0.15?(Math.random()-0.5)*1.2:0; bossJerk.y=Math.random()<0.15?(Math.random()-0.5)*0.8:0; }
+        tx=bossJerk.x; ty=bossJerk.y;
+      }
       sx+=(tx-sx)*fast; sy+=(ty-sy)*fast;
       if(fc && fc.focus) fc.focus(sx,sy);
       else model.focus(t.p.x-r.left, t.p.y-r.top);
@@ -8378,15 +8621,35 @@ if(rs)showResumeDialog(rs,had);else if(!had)openSetup(true);
     let want=null, shown=null, lastEval=0, jacketOn=Math.random()<CFG.jacketChance, wasOver=false;
     const setP=(id,v)=>{ try{ core.setParameterValueById(id,v); }catch(e){} };
     let mouthOn=false;
+    // 0.boss.ai: модель «ломается» — слои/текстуры (одежда, волосы, уши, глаза) меняются каждые 70–220 мс, картинка дёргается и меняет цвета
+    const GL={t:0,v:{},dirty:false}; let wasBoss=false;
+    function glitchStep(now){
+      if(now<GL.t) return; GL.t=now+70+Math.random()*150; GL.dirty=true;
+      const r=p=>Math.random()<p?1:0, v={};
+      v[P.jacket]=r(.5); v[P.hair]=r(.5); v[P.braids]=r(.5); v[P.ears]=r(.5); v[P.empty]=r(.3); v[P.hearts]=r(.25); v[P.sparkle]=r(.25);
+      v.Param48=Math.floor(Math.random()*4); v.Param70=Math.floor(Math.random()*5);
+      GL.v=v;
+      const j=()=>Math.random()-.5;
+      wrap.style.transform='translate('+(j()*9)+'px,'+(j()*5)+'px) skewX('+(j()*9)+'deg)';
+      wrap.style.filter='hue-rotate('+((Math.random()*360)|0)+'deg) saturate('+(1.2+Math.random()*2)+') contrast(1.3) drop-shadow('+(j()*7)+'px 0 #f0f) drop-shadow('+(j()*7)+'px 0 #0ff)';
+      wrap.style.clipPath=Math.random()<0.25?('inset('+((Math.random()*35)|0)+'% 0 '+((Math.random()*35)|0)+'% 0)'):'none';
+      wrap.style.opacity=Math.random()<0.1?'0.55':'1';
+    }
+    function glitchClear(){ wrap.style.transform=''; wrap.style.filter=''; wrap.style.clipPath=''; wrap.style.opacity=''; }
     const apply=()=>{
-      setP(P.empty,val.empty); setP(P.hearts,val.hearts); setP(P.sparkle,val.sparkle);
-      setP(P.jacket,jacketOn?1:0);
-      setP(P.braids,CFG.braidsValue);     // косички — всегда выкл
-      setP(P.hair,CFG.hairValue);         // длинные волосы — всегда вкл
+      if(bossMode()){
+        Object.keys(GL.v).forEach(k=>setP(k,GL.v[k]));
+      } else {
+        if(GL.dirty){ setP('Param48',0); setP('Param70',0); GL.dirty=false; }   // после сбоев вернуть слои на место
+        setP(P.empty,val.empty); setP(P.hearts,val.hearts); setP(P.sparkle,val.sparkle);
+        setP(P.jacket,jacketOn?1:0);
+        setP(P.braids,CFG.braidsValue);     // косички — всегда выкл
+        setP(P.hair,CFG.hairValue);         // длинные волосы — всегда вкл
+        setP(P.ears,CFG.earsValue);         // заячьи уши — всегда видны
+      }
       const nt=performance.now();
       if(nt<speakUntil){ mouthOn=true; setP('ParamMouthOpenY', 0.12+0.5*Math.abs(Math.sin(nt/95)*Math.sin(nt/260+1))); }   // говорит
       else if(mouthOn){ mouthOn=false; setP('ParamMouthOpenY',0); }                                                         // закрыть рот один раз
-      setP(P.ears,CFG.earsValue);         // заячьи уши — всегда видны
     };
     try{ model.internalModel.on('beforeMotionUpdate',apply); model.internalModel.on('beforeModelUpdate',apply); }
     catch(e){ app.ticker.add(apply); }
@@ -8398,6 +8661,7 @@ if(rs)showResumeDialog(rs,had);else if(!had)openSetup(true);
       wasOver=over;
       watchCaptures(now);
       talkTick(now);
+      if(bossMode()){ glitchStep(now); wasBoss=true; } else if(wasBoss){ wasBoss=false; glitchClear(); }
       if(now-lastEval>100){ lastEval=now; want=decideEmotion(now); }
       // эмоции не накладываются: сначала старая плавно гаснет, потом новая плавно включается
       if(shown!==want){
