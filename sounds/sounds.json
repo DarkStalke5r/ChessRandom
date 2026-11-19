@@ -1,0 +1,138 @@
+{
+  "auto": false,
+  "sfx": {
+    "ui": {
+      "file": "sfx/ui.wav",
+      "volume": 1.0,
+      "rate": 1.0
+    },
+    "select": {
+      "file": "sfx/select.wav",
+      "volume": 1.0,
+      "rate": 1.0
+    },
+    "slide": {
+      "file": "sfx/slide.wav",
+      "volume": 1.0,
+      "rate": 1.0
+    },
+    "move": {
+      "file": "sfx/move.wav",
+      "volume": 1.0,
+      "rate": 1.0
+    },
+    "capture": {
+      "file": "sfx/capture.wav",
+      "volume": 1.0,
+      "rate": 1.0
+    },
+    "merge": {
+      "file": "sfx/merge.wav",
+      "volume": 1.0,
+      "rate": 1.0
+    },
+    "shoot": {
+      "file": "sfx/shoot.wav",
+      "volume": 1.0,
+      "rate": 1.0
+    },
+    "draw": {
+      "file": "sfx/draw.wav",
+      "volume": 1.0,
+      "rate": 1.0
+    },
+    "card": {
+      "file": "sfx/card.wav",
+      "volume": 1.0,
+      "rate": 1.0
+    },
+    "spawn": {
+      "file": "sfx/spawn.wav",
+      "volume": 1.0,
+      "rate": 1.0
+    },
+    "airstrike": {
+      "file": "sfx/airstrike.wav",
+      "volume": 1.0,
+      "rate": 1.0
+    },
+    "nuke": {
+      "file": "sfx/nuke.wav",
+      "volume": 1.0,
+      "rate": 1.0
+    },
+    "shield": {
+      "file": "sfx/shield.wav",
+      "volume": 1.0,
+      "rate": 1.0
+    },
+    "angel": {
+      "file": "sfx/angel.wav",
+      "volume": 1.0,
+      "rate": 1.0
+    },
+    "future": {
+      "file": "sfx/future.wav",
+      "volume": 1.0,
+      "rate": 1.0
+    },
+    "chaos": {
+      "file": "sfx/chaos.wav",
+      "volume": 1.0,
+      "rate": 1.0
+    },
+    "extra": {
+      "file": "sfx/extra.wav",
+      "volume": 1.0,
+      "rate": 1.0
+    },
+    "check": {
+      "file": "sfx/check.wav",
+      "volume": 1.0,
+      "rate": 1.0
+    },
+    "error": {
+      "file": "sfx/error.wav",
+      "volume": 1.0,
+      "rate": 1.0
+    },
+    "boss": {
+      "file": "sfx/boss.wav",
+      "volume": 1.0,
+      "rate": 1.0
+    },
+    "bosshit": {
+      "file": "sfx/bosshit.wav",
+      "volume": 1.0,
+      "rate": 1.0
+    },
+    "win": {
+      "file": "sfx/win.wav",
+      "volume": 1.0,
+      "rate": 1.0
+    },
+    "lose": {
+      "file": "sfx/lose.wav",
+      "volume": 1.0,
+      "rate": 1.0
+    }
+  },
+  "music": {
+    "easy": {
+      "file": "music/easy.wav",
+      "volume": 1.0
+    },
+    "normal": {
+      "file": "music/normal.wav",
+      "volume": 1.0
+    },
+    "hard": {
+      "file": "music/hard.wav",
+      "volume": 1.0
+    },
+    "boss": {
+      "file": "music/boss.wav",
+      "volume": 1.0
+    }
+  }
+}
