@@ -868,6 +868,52 @@
   </style>
 </head>
 <body>
+<style id="cc-loader-css">
+#cc-loader{position:fixed;inset:0;z-index:2147483000;display:flex;align-items:center;justify-content:center;
+  background:radial-gradient(ellipse at 50% 28%,#1b2740 0%,#0a0d14 72%);color:#e8eefc;
+  font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;transition:opacity .35s ease;
+  padding:max(16px,env(safe-area-inset-top)) 16px max(16px,env(safe-area-inset-bottom))}
+#cc-loader.out{opacity:0;pointer-events:none}
+#cc-loader .cl-box{width:min(340px,86vw);text-align:center}
+#cc-loader .cl-logo{font-size:56px;line-height:1;margin-bottom:8px;animation:clf 2.4s ease-in-out infinite}
+@keyframes clf{50%{transform:translateY(-7px) rotate(-5deg)}}
+#cc-loader .cl-title{font-size:23px;font-weight:700;letter-spacing:.5px}
+#cc-loader .cl-sub{opacity:.55;font-size:12px;margin:3px 0 20px}
+#cc-loader .cl-bar{height:10px;border-radius:99px;background:rgba(255,255,255,.1);overflow:hidden}
+#cc-loader .cl-fill{height:100%;width:0;border-radius:99px;background:linear-gradient(90deg,#2ea6ff,#7c5cff);transition:width .2s ease}
+#cc-loader .cl-row{display:flex;justify-content:space-between;gap:10px;font-size:12px;opacity:.78;margin-top:9px}
+#cc-loader button{font:inherit;cursor:pointer;border:0;border-radius:12px;color:#fff}
+#cc-loader #cl-play{display:none;width:100%;margin-top:20px;padding:13px 0;font-size:17px;font-weight:700;
+  background:linear-gradient(90deg,#2ea6ff,#7c5cff);box-shadow:0 6px 22px rgba(46,166,255,.35)}
+#cc-loader #cl-play:active{transform:scale(.98)}
+#cc-loader #cl-skip{display:none;margin:16px auto 0;padding:6px 12px;font-size:12px;background:transparent;color:#9fb0d0;text-decoration:underline}
+#cc-loader .cl-note{margin-top:12px;font-size:11px;opacity:.55;min-height:14px}
+body.cc-loading{overflow:hidden}
+</style>
+<div id="cc-loader" role="status" aria-live="polite">
+  <div class="cl-box">
+    <div class="cl-logo">♟</div>
+    <div class="cl-title">Chaos Chess</div>
+    <div class="cl-sub">загружаем фигуры, звуки и модель…</div>
+    <div class="cl-bar"><div class="cl-fill" id="cl-fill"></div></div>
+    <div class="cl-row"><span id="cl-label">Подготовка…</span><span id="cl-pct">0%</span></div>
+    <button type="button" id="cl-play">▶ Играть</button>
+    <button type="button" id="cl-skip">Пропустить загрузку</button>
+    <div class="cl-note" id="cl-note"></div>
+  </div>
+</div>
+<script>
+/* Кэш найденных путей к картинкам/модели: в следующий раз берём сразу нужный файл, а не перебираем десятки вариантов (каждый промах = лишний запрос) */
+window.CCCache=(function(){
+  var K='cc_asset_cache_v1',m=null;
+  function ld(){if(m)return m;try{m=JSON.parse(localStorage.getItem(K)||'{}')||{};}catch(e){m={};}return m;}
+  return {
+    get:function(k){return ld()[k]||null;},
+    set:function(k,v){var o=ld();if(v==null){if(!(k in o))return;delete o[k];}else{if(o[k]===v)return;o[k]=v;}try{localStorage.setItem(K,JSON.stringify(o));}catch(e){}}
+  };
+})();
+document.body.classList.add('cc-loading');
+</script>
   <div id="main-tabs">
     <button type="button" id="tab-settings" title="Настройки">⚙</button>
     <button type="button" id="tab-account" title="Аккаунт и лидеры">👤</button>
@@ -4817,7 +4863,6 @@ function ensure(){
   sfxBus=ctx.createGain();sfxBus.gain.value=sfxOn?1:0;sfxBus.connect(master);
   const len=ctx.sampleRate;noiseBuf=ctx.createBuffer(1,len,ctx.sampleRate);
   const d=noiseBuf.getChannelData(0);for(let i=0;i<len;i++)d[i]=Math.random()*2-1;
-  setTimeout(loadAll,0);
   return ctx;
 }
 function unlock(){
@@ -4856,21 +4901,29 @@ function norm(v){
 }
 function decode(ab){return new Promise((res,rej)=>{const p=ctx.decodeAudioData(ab,res,rej);if(p&&p.catch)p.catch(rej);});}
 // Где искать файл: путь из манифеста → то же имя файла в sounds/sfx|music, sounds/ и корне → автопоиск sounds/<sfx|music>/<имя>.<расширение>
+let manifestHasEntries=false;      // есть ли в sounds.json настоящие записи; если да — он главный и по папкам вслепую не лазим
 function candidates(kind,name){
   const d=files[kind][name],c=[];
   if(d&&d.decl){
     c.push(d.url);
     const raw=d.file||d.url,f=String(raw).split('/').pop();
-    if(f&&!/^([a-z]+:|\/)/i.test(raw))c.push(SOUND_DIR+kind+'/'+f,SOUND_DIR+f,f);
+    if(f&&!/^([a-z]+:|\/)/i.test(raw))c.push(SOUND_DIR+kind+'/'+f);          // файл лежит в sfx/ или music/, а в манифесте указан без папки
+  }else if(!manifestHasEntries){
+    ['wav','ogg','mp3'].forEach(e=>c.push(SOUND_DIR+kind+'/'+name+'.'+e));      // манифеста нет — ищем по имени (3 запроса максимум на звук)
   }
-  EXTS.forEach(e=>c.push(SOUND_DIR+kind+'/'+name+'.'+e));
   return c.filter((u,i)=>c.indexOf(u)===i);
 }
-function load(kind,name){
+// очередь: не больше 4 загрузок одновременно, чтобы звуки не душили картинки и игру
+const Q={run:0,max:4,list:[]};
+function qpush(fn,pri){return new Promise(res=>{Q.list.push({fn,res,pri:pri||0});Q.list.sort((a,b)=>b.pri-a.pri);qpump();});}
+function qpump(){while(Q.run<Q.max&&Q.list.length){const j=Q.list.shift();Q.run++;Promise.resolve().then(j.fn).catch(()=>{}).then(()=>{Q.run--;j.res();qpump();});}}
+function load(kind,name,pri){
   const key=kind+':'+name;
-  if(!ctx||bufs[kind][name]||loading[key])return;
+  if(!ctx||bufs[kind][name])return loading[key]||Promise.resolve();
+  if(loading[key])return loading[key];
   const t=tok[key]||0,list=candidates(kind,name),why=[];
-  loading[key]=(async()=>{
+  if(!list.length)return Promise.resolve();
+  return loading[key]=qpush(async()=>{
     for(const u of list){
       try{
         const r=await fetch(u);
@@ -4881,12 +4934,12 @@ function load(kind,name){
         bufs[kind][name]=buf;
         files[kind][name]=Object.assign({},files[kind][name]||{},{url:u});
         delete fails[key];
-        if(kind==='music'&&wantTrack===name&&unlocked)startMusic(name);      // файл догрузился — переключаем с синтеза на файл
+        if(kind==='music'&&wantTrack===name&&unlocked&&!fileSrc)startMusic(name);   // догрузился уже во время игры — переключаем синтез на файл
         return;
       }catch(e){why.push(u+' → '+(e&&e.message||'ошибка сети'));}
     }
     if((tok[key]||0)===t&&files[kind][name]&&files[kind][name].decl)fails[key]=why.slice(0,3);   // сообщаем только о заявленных в манифесте
-  })();
+  },pri||0);
 }
 function declare(kind,name,v){
   const key=kind+':'+name;
@@ -4894,16 +4947,15 @@ function declare(kind,name,v){
   const d=norm(v);if(d)files[kind][name]=d;else delete files[kind][name];
   if(ctx)load(kind,name);
 }
-function loadAll(){SFX_NAMES.forEach(n=>load('sfx',n));MUSIC_NAMES.forEach(n=>load('music',n));}
+function loadAll(){SFX_NAMES.forEach(n=>load('sfx',n,2));MUSIC_NAMES.forEach(n=>load('music',n,0));}
 function applyConfig(m){
   if(!m||typeof m!=='object')return;
-  ['sfx','music'].forEach(k=>{const o=m[k]||{};Object.keys(o).forEach(n=>{if(n.charAt(0)!=='_')declare(k,n,o[n]);});});
-  loadAll();
+  ['sfx','music'].forEach(k=>{const o=m[k]||{};Object.keys(o).forEach(n=>{if(n.charAt(0)!=='_'){declare(k,n,o[n]);manifestHasEntries=true;}});});
 }
-let mState='загружается…';
+let mState='загружается…',manifestP=Promise.resolve();
 function loadManifest(){
   try{
-    fetch(SOUND_DIR+'sounds.json',{cache:'no-cache'})
+    manifestP=fetch(SOUND_DIR+'sounds.json',{cache:'no-cache'})
       .then(r=>{if(!r.ok){mState='sounds.json не найден ('+r.status+') — играет встроенный синтез';return null;}
                return r.json().then(j=>{mState='ок';return j;});})
       .then(m=>{applyConfig(m);applyConfig(window.CC_SOUNDS);})
@@ -5201,6 +5253,28 @@ window.CCAudio={
   setMusicFile(name,v){declare('music',name,v);if(unlocked&&wantTrack===name&&v==null)startMusic(name);},
   names:()=>({sfx:SFX_NAMES.slice(),music:MUSIC_NAMES.slice()}),
   status:statusText,
+  // Экран загрузки: manifest → все эффекты → музыка ТЕКУЩЕЙ сложности (остальные 3 трека догружаются потом, в фоне).
+  // onProgress(done,total,label). Всегда завершается (таймаут), чтобы игра не зависла из-за звука.
+  preload(diff,onProgress,timeoutMs){
+    return new Promise(resolve=>{
+      let fin=false;const done_=()=>{if(!fin){fin=true;resolve();}};
+      setTimeout(done_,timeoutMs||20000);
+      (async()=>{
+        try{
+          await manifestP;applyConfig(window.CC_SOUNDS);
+          if(!ensure()){done_();return;}
+          const want=[];
+          SFX_NAMES.forEach(n=>want.push(['sfx',n]));
+          want.push(['music',diff&&MUSIC_NAMES.indexOf(diff)>=0?diff:'normal']);
+          let d=0;const tot=want.length;
+          if(onProgress)onProgress(0,tot,'звуки');
+          await Promise.all(want.map(w=>load(w[0],w[1],w[0]==='music'?3:2).then(()=>{d++;if(onProgress)onProgress(d,tot,w[0]==='music'?'музыка':'звуки');})));
+        }catch(e){}
+        done_();
+        setTimeout(()=>{MUSIC_NAMES.forEach(n=>load('music',n,0));},1500);     // остальные треки — в фоне, когда игра уже идёт
+      })();
+    });
+  },
   setSfx(on){sfxOn=!!on;LS.set('chaos_snd_sfx',sfxOn?'1':'0');applyGains();},
   setMusic(on){musicOn=!!on;LS.set('chaos_snd_music',musicOn?'1':'0');applyGains();if(musicOn&&wantTrack&&unlocked&&!timer)startMusic(wantTrack);},
   setVolume(v){vol=Math.max(0,Math.min(1,v));LS.set('chaos_snd_vol',String(vol));applyGains();},
@@ -7505,12 +7579,17 @@ function figLoad(k){
   }
   // 2) запасной вариант: текстуры из репозитория самой игры
   if(FIGURE_FILES[k])add(FIGURE_FILES[k]);
-  names.forEach(n=>FIG_EXTS.forEach(e=>{add(FIG_DIR+n+'.'+e);add(n+'.'+e);}));
+  names.forEach(n=>add(FIG_DIR+n+'.png'));                                   // сначала самое вероятное: figures/<имя>.png
+  names.forEach(n=>FIG_EXTS.forEach(e=>add(FIG_DIR+n+'.'+e)));
+  names.forEach(n=>FIG_EXTS.forEach(e=>add(n+'.'+e)));
+  // найденный в прошлый раз путь пробуем первым — 1 запрос вместо десятков 404
+  const ck='fig|'+(base||'')+'|'+k,cu=window.CCCache&&CCCache.get(ck);
+  if(cu){const ix=c.indexOf(cu);if(ix>0)c.splice(ix,1);if(ix!==0)c.unshift(cu);}
   let i=0;
   const next=()=>{
     if(i>=c.length){st.status='none';return;}
     const src=c[i++],im=figMkImg(src);
-    im.onload=()=>{st.img=im;st.status='ok';figSchedule();};
+    im.onload=()=>{st.img=im;st.status='ok';try{if(window.CCCache)CCCache.set(ck,src);}catch(e){}try{if(im.decode)im.decode().catch(()=>{});}catch(e){}figSchedule();};
     im.onerror=next;im.src=src;
   };
   next();return st;
@@ -7621,11 +7700,13 @@ function bossTex(){
   BOSS_TEX.state='loading';
   let base='';try{base=(typeof texPackBase==='function'&&texPackBase())||'';}catch(e){}
   const c=[];[base+'boss.png','boss.png','figures/boss.png','textures/boss.png','assets/boss.png','Boss.png','figures/Boss.png'].forEach(u=>{if(c.indexOf(u)<0)c.push(u);});
+  const bck='boss|'+base,bcu=window.CCCache&&CCCache.get(bck);
+  if(bcu){const ix=c.indexOf(bcu);if(ix>0)c.splice(ix,1);if(ix!==0)c.unshift(bcu);}
   let i=0;
   (function next(){
     if(i>=c.length){BOSS_TEX.state='none';return;}
     const u=c[i++],im=new Image();
-    im.onload=()=>{BOSS_TEX.state='ok';BOSS_TEX.url=u;try{figSchedule();}catch(e){}};
+    im.onload=()=>{BOSS_TEX.state='ok';BOSS_TEX.url=u;try{if(window.CCCache)CCCache.set(bck,u);}catch(e){}try{figSchedule();}catch(e){}};
     im.onerror=next;im.src=u;
   })();
   return null;
@@ -8105,11 +8186,13 @@ const ASSET={};
 const ASSET_DIRS=['figures/','','textures/','images/','img/','assets/'];
 function assetProbe(key,names){
   const c=[];names.forEach(n=>ASSET_DIRS.forEach(d=>c.push(d+n)));
+  const ck='asset|'+key,cu=window.CCCache&&CCCache.get(ck);
+  if(cu){const ix=c.indexOf(cu);if(ix>0)c.splice(ix,1);if(ix!==0)c.unshift(cu);}
   let i=0;
   const next=()=>{
     if(i>=c.length){ASSET[key]=false;return;}
     const u=c[i++],im=new Image();
-    im.onload=()=>{ASSET[key]=u;try{figSchedule();}catch(e){}};
+    im.onload=()=>{ASSET[key]=u;try{if(window.CCCache)CCCache.set(ck,u);}catch(e){}try{figSchedule();}catch(e){}};
     im.onerror=next;im.src=u;
   };
   next();
@@ -8688,6 +8771,45 @@ let myMoves=0;            // сколько ходов сделали белые
   };
 }
 
+/* ===== Предзагрузка спрайтов/текстур для экрана загрузки ===== */
+window.CCAssets=window.CCAssets||{};
+window.CCAssets.preloadGame=async function(prog){
+  const P=(a,b,l)=>{try{if(prog)prog(a,b,l);}catch(e){}};
+  const wait=(cond,ms)=>new Promise(r=>{const t0=performance.now();(function tk(){if(cond()||performance.now()-t0>ms)return r();setTimeout(tk,60);})();});
+  const tick0=()=>new Promise(r=>setTimeout(r,0));
+  const keep=(window.__ccKeep=window.__ccKeep||[]);
+  const warm=(u,ms)=>new Promise(r=>{try{const im=new Image();const to=setTimeout(r,ms||5000);im.onload=im.onerror=()=>{clearTimeout(to);r();};im.src=u;keep.push(im);if(im.decode)im.decode().then(()=>{clearTimeout(to);r();},()=>{});}catch(e){r();}});
+  // 1) картинки фигур
+  P(0,1,'фигуры');
+  try{figPreload();}catch(e){}
+  await wait(()=>figReady,8000);
+  const kinds=[];Object.keys(FIG_NAMES).concat(Object.keys(FIGURE_FILES).filter(k=>k.indexOf(':')<0)).forEach(k=>{if(kinds.indexOf(k)<0)kinds.push(k);});
+  await wait(()=>kinds.every(k=>!figState[k]||figState[k].status!=='loading'),12000);
+  // 2) окраска под цвета команд заранее (иначе это делается прямо во время партии и подтормаживает)
+  const teams=Object.keys(FIG_FILL);try{Object.keys(COL).forEach(t=>{if(teams.indexOf(t)<0)teams.push(t);});}catch(e){}
+  const okKinds=kinds.filter(k=>figState[k]&&figState[k].status==='ok');
+  const jobs=[];okKinds.forEach(k=>teams.forEach(t=>jobs.push([k,t])));
+  const urls=[];
+  for(let i=0;i<jobs.length;i++){
+    try{const u=figTinted(jobs[i][0],jobs[i][1]);if(u&&urls.indexOf(u)<0)urls.push(u);}catch(e){}
+    if(i%4===3){P(i+1,jobs.length,'фигуры');await tick0();}
+  }
+  P(jobs.length,jobs.length||1,'фигуры');
+  // отдельные картинки «вид:команда» из figures.json
+  try{[FIGURE_FILES,PACK_FILES].forEach(m=>Object.keys(m).forEach(k=>{if(k.indexOf(':')>0){const a=k.split(':');try{figTeamFile(a[0],a[1]);}catch(e){}const path=m[k];if(path&&urls.indexOf(path)<0)urls.push(path);}}));}catch(e){}
+  // 3) разовое «прогревание» декодирования, чтобы первый кадр не рисовался с задержкой
+  await Promise.all(urls.slice(0,160).map(u=>warm(u,4000)));
+  // 4) прочие текстуры: босс, шут, пистолет
+  P(0,1,'текстуры');
+  try{bossTex();}catch(e){}
+  await wait(()=>BOSS_TEX.state!=='loading'&&ASSET.buffoon!==undefined&&ASSET.pistol!==undefined&&ASSET.pistolinarm!==undefined,6000);
+  const more=['teto-layers/Teto.png','teto-layers/EyesBottom.png','teto-layers/EyeLeft.png','teto-layers/EyeRight.png','teto-layers/BrowsBottom.png','teto-layers/Brows.png','teto-layers/Rocket.png'];
+  if(BOSS_TEX.url)more.push(BOSS_TEX.url);['buffoon','pistol','pistolinarm'].forEach(k=>{if(ASSET[k])more.push(ASSET[k]);});
+  try{if(typeof rocketTexture!=='undefined'&&rocketTexture)more.push(rocketTexture);}catch(e){}
+  let d=0;await Promise.all(more.map(u=>warm(u,5000).then(()=>{d++;P(d,more.length,'текстуры');})));
+  try{figSchedule();}catch(e){}
+};
+
 const had=loadCfg();
 start();
 const rs=netLoadSession();
@@ -9150,7 +9272,8 @@ if(rs)showResumeDialog(rs,had);else if(!had)openSetup(true);
   }
   async function findModel(){
     if(CFG.url) return new URL(CFG.url, location.href).href;
-    for(const d of CFG.dirs){ const u=await findInDir(d); if(u) return u; }
+    const cu=window.CCCache&&CCCache.get('vt.model'); if(cu) return cu;                 // нашли в прошлый раз — не обшариваем папки заново
+    for(const d of CFG.dirs){ const u=await findInDir(d); if(u){ try{ if(window.CCCache) CCCache.set('vt.model',u); }catch(e){} return u; } }
     return null;
   }
   // model3.json ссылается на текстуры в подпапке («…4096/texture_00.png»). Если файлы выложены плоско,
@@ -9158,7 +9281,9 @@ if(rs)showResumeDialog(rs,had);else if(!had)openSetup(true);
   async function buildSettings(url){
     const j=await tryJSON(url); if(!j||!j.FileReferences) return url;
     const base=url.slice(0,url.lastIndexOf('/')+1);
-    const probe=src=>new Promise(r=>{ const im=new Image(); im.onload=()=>r(true); im.onerror=()=>r(false); im.src=src; });
+    // раньше для проверки скачивалась и декодировалась вся текстура 4096×4096 (дважды!) — теперь лёгкий HEAD-запрос
+    const imgProbe=src=>new Promise(r=>{ const im=new Image(); im.onload=()=>r(true); im.onerror=()=>r(false); im.src=src; });
+    const probe=src=>fetch(src,{method:'HEAD'}).then(r=>(r.status===405||r.status===501)?imgProbe(src):r.ok).catch(()=>imgProbe(src));
     const tex=j.FileReferences.Textures||[];
     for(let i=0;i<tex.length;i++){
       const full=tex[i], enc=new URL(full.split('/').map(encodeURIComponent).join('/'), base).href;
@@ -9191,9 +9316,13 @@ if(rs)showResumeDialog(rs,had);else if(!had)openSetup(true);
     if(!url){ say('VTuber: не нашёл модель ('+CFG.dirs[0]+' … *.model3.json). Задай window.CUB_MODEL_URL = \'cubmodel/ИМЯ.model3.json\'.'); return; }
     if(/\.model\.json(\?|$)/i.test(url) && !/model3/i.test(url)){ say('VTuber: это Cubism 2 (.model.json); нужна модель Cubism 4/5 (.model3.json).'); return; }
     try{
-      if(!window.Live2DCubismCore) await loadScript(CFG.libs.core);
-      if(!window.PIXI)             await loadScript(CFG.libs.pixi);
-      if(!(window.PIXI && PIXI.live2d)) await loadScript(CFG.libs.live2d);
+      // Библиотеки: сначала СВОИ файлы из папки libs/ (быстрее, кэшируются, работают без интернета), если их нет — CDN как раньше.
+      // core и pixi качаются одновременно, плагин live2d — после них (ему нужны оба).
+      const LD=window.CC_LIBS_DIR||'libs/';
+      const LOCAL={core:LD+'live2dcubismcore.min.js', pixi:LD+'pixi.min.js', live2d:LD+'cubism4.min.js'};
+      const anyOf=k=>loadScript(LOCAL[k]).catch(()=>loadScript(CFG.libs[k]));
+      await Promise.all([ window.Live2DCubismCore?null:anyOf('core'), window.PIXI?null:anyOf('pixi') ]);
+      if(!(window.PIXI && PIXI.live2d)) await anyOf('live2d');
     }catch(e){ say('VTuber: '+e.message); return; }
 
     const wrap=document.createElement('div'); wrap.id='vt-wrap';
@@ -9205,7 +9334,7 @@ if(rs)showResumeDialog(rs,had);else if(!had)openSetup(true);
       try{ PIXI.live2d.Live2DModel.registerTicker(PIXI.Ticker); }catch(e){}
       model=await PIXI.live2d.Live2DModel.from(await buildSettings(url),{ autoInteract:false });   // свою мышь не слушаем — смотрим на игру
       app.stage.addChild(model);
-    }catch(e){ console.error(e); say('VTuber: модель не загрузилась ('+(e&&e.message||e)+')'); wrap.remove(); return; }
+    }catch(e){ console.error(e); try{ if(window.CCCache) CCCache.set('vt.model',null); }catch(_){} say('VTuber: модель не загрузилась ('+(e&&e.message||e)+')'); wrap.remove(); return; }
 
     // модель = кнопка «Т»: нажатие делает то же самое (окно Тето: режим, поле, армия)
     const hit=document.createElement('button'); hit.type='button'; hit.id='vt-hit';
@@ -9298,7 +9427,10 @@ if(rs)showResumeDialog(rs,had);else if(!had)openSetup(true);
     console.log('[VTuber] ok:', url);
   }
 
-  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',boot); else boot();
+  window.CCVTuberReady=new Promise(res=>{                       // экран загрузки ждёт эту «готовность»
+    const go=()=>{ let p=null; try{ p=boot(); }catch(e){} Promise.resolve(p).then(()=>res(),()=>res()); };
+    if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',go); else go();
+  });
 })();
 </script>
 
@@ -9318,5 +9450,66 @@ if(rs)showResumeDialog(rs,had);else if(!had)openSetup(true);
 })();
 </script>
 
+<script id="cc-loader-run">
+/* =====================================================================
+   ЭКРАН ЗАГРУЗКИ: звуки + музыка → фигуры/текстуры → модель VTuber.
+   Игра стартует только когда всё готово (с таймаутом, чтобы не зависнуть), а кнопка «Играть» заодно
+   «разблокирует» звук в браузере — музыка идёт сразу из файла, без подмены синтеза через минуту.
+   ===================================================================== */
+(function(){
+  var $=function(id){return document.getElementById(id);};
+  var box=$('cc-loader'); if(!box) return;
+  if(window.__VT_TEST){box.remove();document.body.classList.remove('cc-loading');return;}
+  var t0=performance.now();
+  var W={audio:3,game:5,vt:3}, pr={audio:0,game:0,vt:0}, fin={audio:false,game:false,vt:false}, shown=0, closed=false;
+  var LABEL={audio:'Звуки и музыка',game:'Фигуры и текстуры',vt:'Модель VTuber'};
+  var cur={audio:'',game:''};
+  function real(){var tw=0,v=0;for(var k in W){tw+=W[k];v+=W[k]*pr[k];}return v/tw;}
+  function label(){
+    if(cur.game&&!fin.game)return (cur.game==='фигуры'?'Фигуры':'Текстуры')+'…';
+    if(!fin.audio)return 'Звуки и музыка…';
+    if(!fin.vt)return 'Модель VTuber…';
+    return 'Готово';
+  }
+  function paint(){
+    var r=real(); if(r>shown)shown=r; else if(shown<Math.min(0.96,r+0.1))shown+=0.004;      // чтобы полоса не «замирала»
+    var v=(fin.audio&&fin.game&&fin.vt)?1:Math.min(shown,0.97);
+    $('cl-fill').style.width=(v*100).toFixed(1)+'%'; $('cl-pct').textContent=Math.round(v*100)+'%'; $('cl-label').textContent=label();
+  }
+  var iv=setInterval(paint,120);
+  function race(p,ms){return Promise.race([Promise.resolve(p).catch(function(){}),new Promise(function(r){setTimeout(r,ms);})]);}
+  function done(k){fin[k]=true;pr[k]=1;paint();check();}
+
+  var diff=window.AI_DIFF||'normal';
+  // 1) звук
+  var pa=race(window.CCAudio&&CCAudio.preload?CCAudio.preload(diff,function(d,t){pr.audio=t?d/t:1;paint();},22000):null,24000).then(function(){done('audio');});
+  // 2) спрайты/текстуры
+  var pg=race(window.CCAssets&&CCAssets.preloadGame?CCAssets.preloadGame(function(a,b,l){cur.game=l;var f=b?a/b:1;pr.game=l==='фигуры'?0.7*f:0.7+0.3*f;paint();}):null,28000).then(function(){done('game');});
+  // 3) VTuber (скрипты Live2D + модель)
+  var vtT=setInterval(function(){if(!fin.vt)pr.vt=Math.min(0.9,(performance.now()-t0)/16000);},200);
+  var pv=race(window.CCVTuberReady,28000).then(function(){clearInterval(vtT);done('vt');});
+
+  function check(){
+    if(!(fin.audio&&fin.game&&fin.vt)||closed)return;
+    clearInterval(iv);paint();
+    var A=window.CCAudio, needTap=!!(A&&(A.isMusic()||A.isSfx()));
+    var secs=((performance.now()-t0)/1000).toFixed(1);
+    $('cl-note').textContent='Загружено за '+secs+' с';
+    $('cl-skip').style.display='none';
+    if(needTap){ var b=$('cl-play'); b.style.display='block'; try{b.focus();}catch(e){} }
+    else close();
+  }
+  function close(){
+    if(closed)return; closed=true; clearInterval(iv);
+    try{ if(window.CCAudio){ CCAudio.unlock(); CCAudio.playMusic(window.AI_DIFF||'normal'); } }catch(e){}
+    box.classList.add('out'); document.body.classList.remove('cc-loading');
+    setTimeout(function(){ if(box.parentNode)box.parentNode.removeChild(box); },450);
+  }
+  $('cl-play').addEventListener('click',close);
+  $('cl-skip').addEventListener('click',close);
+  setTimeout(function(){ if(!closed)$('cl-skip').style.display='block'; },7000);   // если что-то грузится слишком долго — можно пропустить
+  paint();
+})();
+</script>
 </body>
 </html>
