@@ -96,7 +96,7 @@
       "rate": 1.0
     },
     "boss": {
-      "file": "sfx/boss.wav",
+      "file": "sfx/failed-creation.wav",
       "volume": 1.0,
       "rate": 1.0
     },
