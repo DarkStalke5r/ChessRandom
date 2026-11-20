@@ -890,6 +890,8 @@
       <button type="button" class="sp-btn sec" id="sp-sfx">🔊 Звуки: вкл</button>
       <button type="button" class="sp-btn sec" id="sp-music">🎵 Музыка: вкл</button>
       <input type="range" id="sp-vol" min="0" max="100" step="5" value="80" aria-label="Громкость" style="width:100%;accent-color:#2ea6ff">
+      <button type="button" class="sp-btn sec" id="sp-sndtest">🔔 Проверка звука</button>
+      <div id="sp-sndinfo" style="font-size:11px;opacity:.8;white-space:pre-line;line-height:1.35;display:none"></div>
       <button type="button" class="sp-btn sec" id="sp-textures">🎨 Текстуры</button>
       <div class="sp-note" id="sp-diff-note"></div>
       <div class="sp-note" id="sp-tex-note"></div>
@@ -4724,13 +4726,76 @@ const LS={
   set(k,v){try{localStorage.setItem(k,v);}catch(e){}}
 };
 
-/* ---------- прогресс: победы над ИИ ---------- */
+/* ---------- прогресс: победы над ИИ — ПО АККАУНТУ ----------
+   Кто «аккаунт»: window.CC_ACCOUNT_ID (ручная задача) → вошедший пользователь из accounts.js (Accounts.user / currentUser / me / profile / session …)
+   → если accounts.js нет вообще: Telegram-пользователь → иначе «это устройство».
+   Победы хранятся отдельно для каждого аккаунта. Серверное хранилище подключается через window.CCProgressBackend = {load(id)→Promise<число>, save(id,число)→Promise}
+   (или accounts.js слушает GameEvents 'progress:wins' {account,wins} и вызывает CCProgress.applyServer(число)). */
 const WIN_KEY='chaos_wins_vs_ai';
-window.CCProgress={
-  wins(){return parseInt(LS.get(WIN_KEY,'0'),10)||0;},
-  addWin(){const n=this.wins()+1;LS.set(WIN_KEY,String(n));return n;},
-  bossUnlocked(){return this.wins()>=1;}      // ← сколько побед нужно для 0.boss.ai
+const T0=performance.now();
+function pickId(o){
+  if(o==null)return null;
+  if(typeof o==='string'||typeof o==='number')return String(o);
+  if(typeof o!=='object'||typeof o.then==='function')return null;
+  const u=o.user&&typeof o.user==='object'?o.user:o;
+  const v=u.id||u.user_id||u.uid||u.username||u.email||u.name;
+  return v?String(v):null;
+}
+function detectAccount(){
+  if(window.CC_ACCOUNT_ID)return {raw:String(window.CC_ACCOUNT_ID),id:'acc:'+window.CC_ACCOUNT_ID};
+  const A=window.Accounts;
+  if(A){
+    let known=false;
+    for(const k of ['user','currentUser','me','profile','session','getUser','getCurrentUser','getProfile','getSession']){
+      if(!(k in A))continue;
+      known=true;let v=A[k];
+      try{if(typeof v==='function')v=v.call(A);}catch(e){v=null;}
+      const id=pickId(v);if(id)return {raw:id,id:'acc:'+id};
+    }
+    for(const k of ['loggedIn','isLoggedIn','authorized'])if(k in A)known=true;
+    return known?{raw:null,id:null}:{raw:'device',id:'device'};        // не смогли определить поле аккаунта → хотя бы по устройству
+  }
+  try{const u=window.Telegram&&Telegram.WebApp&&Telegram.WebApp.initDataUnsafe&&Telegram.WebApp.initDataUnsafe.user;
+    if(u&&u.id)return {raw:'tg'+u.id,id:'tg:'+u.id};}catch(e){}
+  return {raw:'device',id:'device'};
+}
+const PR={
+  _id:null,_raw:null,_cbs:[],
+  _key(id){return id==='device'?WIN_KEY:WIN_KEY+':'+id;},
+  id(){return this._id;},
+  loggedIn(){return !!this._id;},
+  settled(){return this._id!==null||performance.now()-T0>3000;},
+  wins(){return this._id?(parseInt(LS.get(this._key(this._id),'0'),10)||0):0;},
+  addWin(){                                         // → новое число побед, либо null (аккаунта нет — победа не копится)
+    if(!this._id)return null;
+    const n=this.wins()+1;LS.set(this._key(this._id),String(n));
+    this._save(n);
+    try{if(window.GameEvents)GameEvents.emit('progress:wins',{account:this._raw,wins:n});}catch(e){}
+    return n;
+  },
+  applyServer(n,id){                                 // серверное значение побед (берём большее)
+    n=parseInt(n,10)||0;
+    if(id!=null&&String(id)!==String(this._raw))return;
+    if(this._id&&n>this.wins()){LS.set(this._key(this._id),String(n));this._fire();}
+  },
+  bossUnlocked(){return this.wins()>=1;},            // ← сколько побед нужно для 0.boss.ai
+  lockReason(){return this._id?'победи ИИ хотя бы раз на этом аккаунте':'войди в аккаунт и победи ИИ';},
+  onChange(fn){this._cbs.push(fn);},
+  setAccount(raw){window.CC_ACCOUNT_ID=raw||null;this.refresh();},
+  _fire(){this._cbs.forEach(f=>{try{f();}catch(e){}});},
+  _save(n){const B=window.CCProgressBackend;if(B&&B.save&&this._raw){try{const r=B.save(this._raw,n);if(r&&r.catch)r.catch(()=>{});}catch(e){}}},
+  _pull(){
+    const B=window.CCProgressBackend,raw=this._raw;
+    if(!(B&&B.load&&raw))return;
+    try{const r=B.load(raw);if(r&&r.then)r.then(n=>{if(raw===this._raw)this.applyServer(n);}).catch(()=>{});}catch(e){}
+  },
+  refresh(){
+    const d=detectAccount();
+    if(d.id!==this._id){this._id=d.id;this._raw=d.raw;this._pull();this._fire();}
+  }
 };
+window.CCProgress=PR;
+PR.refresh();setInterval(()=>PR.refresh(),1500);
 
 /* ---------- состояние ---------- */
 let ctx=null,master=null,musicBus=null,sfxBus=null,noiseBuf=null;
@@ -4752,6 +4817,7 @@ function ensure(){
   sfxBus=ctx.createGain();sfxBus.gain.value=sfxOn?1:0;sfxBus.connect(master);
   const len=ctx.sampleRate;noiseBuf=ctx.createBuffer(1,len,ctx.sampleRate);
   const d=noiseBuf.getChannelData(0);for(let i=0;i<len;i++)d[i]=Math.random()*2-1;
+  setTimeout(loadAll,0);
   return ctx;
 }
 function unlock(){
@@ -4769,6 +4835,100 @@ document.addEventListener('visibilitychange',()=>{
   if(document.hidden){try{ctx.suspend();}catch(e){}}
   else if(unlocked){try{ctx.resume();}catch(e){}}
 });
+
+/* ---------- замена звуков файлами (.ogg .wav .mp3 .m4a .flac …) ----------
+   Манифест  sounds/sounds.json :
+     { "sfx":   { "move":"move.ogg", "capture":{"file":"hit.wav","volume":0.8,"rate":1} },
+       "music": { "easy":"easy.ogg", "boss":{"file":"boss.mp3","volume":0.7,"loopStart":4.0,"loopEnd":60.5} },
+       "auto": false }
+   Пути — относительно папки sounds/ (или полный URL / data: / blob:). Не указанные звуки остаются синтезированными.
+   Манифест НЕ обязателен: файл sounds/sfx/<имя>.(wav|ogg|mp3|m4a|flac|opus) или sounds/music/<трек>.(…) подхватывается сам.
+   Можно и из кода: CCAudio.setSoundFile('move','sounds/my.ogg'),  CCAudio.setMusicFile('hard','sounds/hard.ogg'),  window.CC_SOUNDS={sfx:{…},music:{…}} */
+const SOUND_DIR='sounds/',EXTS=['wav','ogg','mp3','m4a','flac','opus'];
+const SFX_NAMES=['ui','select','slide','move','capture','merge','shoot','draw','card','spawn','airstrike','nuke','shield','angel','future','chaos','extra','check','error','boss','bosshit','win','lose'];
+const MUSIC_NAMES=['easy','normal','hard','boss'];
+const files={sfx:{},music:{}},bufs={sfx:{},music:{}},loading={},tok={},fails={};
+let fileSrc=null;
+function norm(v){
+  if(!v)return null;if(typeof v==='string')v={file:v};
+  const u=v.url||v.file;if(!u)return null;
+  return Object.assign({},v,{decl:true,url:/^([a-z]+:|\/)/i.test(u)?u:SOUND_DIR+u});
+}
+function decode(ab){return new Promise((res,rej)=>{const p=ctx.decodeAudioData(ab,res,rej);if(p&&p.catch)p.catch(rej);});}
+// Где искать файл: путь из манифеста → то же имя файла в sounds/sfx|music, sounds/ и корне → автопоиск sounds/<sfx|music>/<имя>.<расширение>
+function candidates(kind,name){
+  const d=files[kind][name],c=[];
+  if(d&&d.decl){
+    c.push(d.url);
+    const raw=d.file||d.url,f=String(raw).split('/').pop();
+    if(f&&!/^([a-z]+:|\/)/i.test(raw))c.push(SOUND_DIR+kind+'/'+f,SOUND_DIR+f,f);
+  }
+  EXTS.forEach(e=>c.push(SOUND_DIR+kind+'/'+name+'.'+e));
+  return c.filter((u,i)=>c.indexOf(u)===i);
+}
+function load(kind,name){
+  const key=kind+':'+name;
+  if(!ctx||bufs[kind][name]||loading[key])return;
+  const t=tok[key]||0,list=candidates(kind,name),why=[];
+  loading[key]=(async()=>{
+    for(const u of list){
+      try{
+        const r=await fetch(u);
+        if(!r.ok){why.push(u+' → HTTP '+r.status);continue;}
+        let buf;
+        try{buf=await decode(await r.arrayBuffer());}catch(e){why.push(u+' → файл найден, но не декодируется (формат/битый файл)');continue;}
+        if((tok[key]||0)!==t)return;
+        bufs[kind][name]=buf;
+        files[kind][name]=Object.assign({},files[kind][name]||{},{url:u});
+        delete fails[key];
+        if(kind==='music'&&wantTrack===name&&unlocked)startMusic(name);      // файл догрузился — переключаем с синтеза на файл
+        return;
+      }catch(e){why.push(u+' → '+(e&&e.message||'ошибка сети'));}
+    }
+    if((tok[key]||0)===t&&files[kind][name]&&files[kind][name].decl)fails[key]=why.slice(0,3);   // сообщаем только о заявленных в манифесте
+  })();
+}
+function declare(kind,name,v){
+  const key=kind+':'+name;
+  tok[key]=(tok[key]||0)+1;delete bufs[kind][name];delete loading[key];delete fails[key];
+  const d=norm(v);if(d)files[kind][name]=d;else delete files[kind][name];
+  if(ctx)load(kind,name);
+}
+function loadAll(){SFX_NAMES.forEach(n=>load('sfx',n));MUSIC_NAMES.forEach(n=>load('music',n));}
+function applyConfig(m){
+  if(!m||typeof m!=='object')return;
+  ['sfx','music'].forEach(k=>{const o=m[k]||{};Object.keys(o).forEach(n=>{if(n.charAt(0)!=='_')declare(k,n,o[n]);});});
+  loadAll();
+}
+let mState='загружается…';
+function loadManifest(){
+  try{
+    fetch(SOUND_DIR+'sounds.json',{cache:'no-cache'})
+      .then(r=>{if(!r.ok){mState='sounds.json не найден ('+r.status+') — играет встроенный синтез';return null;}
+               return r.json().then(j=>{mState='ок';return j;});})
+      .then(m=>{applyConfig(m);applyConfig(window.CC_SOUNDS);})
+      .catch(()=>{mState='sounds.json не прочитан (ошибка JSON/сети) — играет встроенный синтез';});
+  }catch(e){mState='fetch недоступен';}
+}
+function statusText(){
+  const rep=[],bad=[];
+  ['sfx','music'].forEach(k=>Object.keys(bufs[k]).forEach(n=>rep.push((k==='music'?'музыка ':'')+n)));
+  const fk=Object.keys(fails);
+  fk.slice(0,4).forEach(k=>bad.push(k.replace(':','/')+' ← '+fails[k][0]));
+  if(fk.length>4)bad.push('…и ещё '+(fk.length-4)+' (файлов из манифеста нет на сервере — для них играет синтез)');
+  return 'AudioContext: '+(ctx?ctx.state:'не создан (нужно касание экрана)')+
+    ' · звуки '+(sfxOn?'вкл':'выкл')+' · музыка '+(musicOn?'вкл':'выкл')+' · громкость '+Math.round(vol*100)+'%'+
+    '\nманифест sounds/sounds.json: '+mState+
+    '\nзаменено файлами ('+rep.length+'): '+(rep.join(', ')||'ничего — всё играет синтезом')+
+    (bad.length?'\nНЕ ЗАГРУЗИЛИСЬ (указаны в манифесте):\n'+bad.join('\n'):'')+
+    '\nмузыка сейчас: '+(fileSrc?'файл':(timer?'синтез':'не играет'))+(curName?' ('+curName+')':'');
+}
+function playBuf(buf,t,d){
+  const s=ctx.createBufferSource(),g=ctx.createGain();
+  s.buffer=buf;if(d&&d.rate)s.playbackRate.value=d.rate;
+  g.gain.value=d&&d.volume!=null?d.volume:1;
+  s.connect(g);g.connect(sfxBus);s.start(t);
+}
 
 /* ---------- примитивы ---------- */
 const mf=n=>440*Math.pow(2,(n-69)/12);
@@ -4912,6 +5072,16 @@ function startMusic(name){
   const crush=mkShaper(x=>Math.round(x*5)/5,0.07),dist=mkShaper(x=>Math.tanh(x*4)*0.8,0.3);
   crush.out.connect(trackBus);dist.out.connect(trackBus);
   trackFx={out:trackBus,crush:crush.inp,dist:dist.inp};
+  const md=files.music[name],mb=bufs.music[name];
+  if(mb){                                                   // музыка-файл вместо синтеза
+    const s=ctx.createBufferSource(),g=ctx.createGain();
+    s.buffer=mb;s.loop=true;
+    if(md.loopStart!=null){s.loopStart=md.loopStart;s.loopEnd=md.loopEnd||mb.duration;}
+    g.gain.value=md.volume!=null?md.volume:1;
+    s.connect(g);g.connect(trackBus);s.start();fileSrc=s;curTrack=null;
+    return;
+  }
+  if(md)load('music',name);
   nextTime=ctx.currentTime+0.08;
   timer=setInterval(tick,25);
 }
@@ -4922,6 +5092,7 @@ function stopMusic(quick){
     try{b.gain.cancelScheduledValues(ctx.currentTime);b.gain.setTargetAtTime(0.0001,ctx.currentTime,quick?0.08:0.35);}catch(e){}
     setTimeout(()=>{try{b.disconnect();}catch(e){}},quick?700:2000);
   }
+  if(fileSrc){const s=fileSrc;setTimeout(()=>{try{s.stop();}catch(e){}},quick?700:2000);fileSrc=null;}
   trackBus=null;trackFx=null;curTrack=null;curName=null;
 }
 function tick(){
@@ -4936,7 +5107,7 @@ function tick(){
 function playMusic(name){
   wantTrack=name;
   if(!unlocked)return;
-  if(curName===name&&timer)return;
+  if(curName===name&&(timer||fileSrc))return;
   startMusic(name);
 }
 
@@ -5000,6 +5171,8 @@ function sfx(name){
   last[name]=now;
   if(!unlocked)return;                      // до первого касания браузер всё равно не даст играть
   if(ctx.state!=='running'){try{ctx.resume();}catch(e){}}
+  const fb=bufs.sfx[name];
+  if(fb){try{playBuf(fb,ctx.currentTime+0.005,files.sfx[name]);}catch(e){}return;}   // файл-замена
   try{SFX[name](ctx.currentTime+0.005);}catch(e){}
 }
 function endGame(win){
@@ -5024,11 +5197,16 @@ function applyGains(){
 window.CCAudio={
   sfx,playMusic,stopMusic:()=>stopMusic(false),endGame,unlock,
   setDiff(name){wantTrack=name;playMusic(name);},
+  setSoundFile(name,v){declare('sfx',name,v);},              // CCAudio.setSoundFile('move','sounds/my.ogg')  /  (…, null) — вернуть синтез
+  setMusicFile(name,v){declare('music',name,v);if(unlocked&&wantTrack===name&&v==null)startMusic(name);},
+  names:()=>({sfx:SFX_NAMES.slice(),music:MUSIC_NAMES.slice()}),
+  status:statusText,
   setSfx(on){sfxOn=!!on;LS.set('chaos_snd_sfx',sfxOn?'1':'0');applyGains();},
   setMusic(on){musicOn=!!on;LS.set('chaos_snd_music',musicOn?'1':'0');applyGains();if(musicOn&&wantTrack&&unlocked&&!timer)startMusic(wantTrack);},
   setVolume(v){vol=Math.max(0,Math.min(1,v));LS.set('chaos_snd_vol',String(vol));applyGains();},
   isSfx:()=>sfxOn,isMusic:()=>musicOn,getVolume:()=>vol
 };
+loadManifest();applyConfig(window.CC_SOUNDS);
 })();
 </script>
 
@@ -5044,11 +5222,7 @@ const VALS={E:8,C:4,H:5,T:5,Y:2,G:4,P:1,N:3,B:3,R:5,Q:9,K:100,m:1,d:5,X:8};
 const O=[[1,0],[-1,0],[0,1],[0,-1]],D=[[1,1],[1,-1],[-1,1],[-1,-1]];
 const KN=[[1,2],[2,1],[-1,2],[-2,1],[1,-2],[2,-1],[-1,-2],[-2,-1]];
 let CFG={shape:'p',army:'mixed',teams:4,craft:true,boss:true},grave=[],RULE,FW,ARMY,SL,B,G,ti,over,sel,moves,round,extra,skipT,selSlot,CS,fut,R,fresh,busy=false,chain=false,hl=[],undoSt=[],undos=0,ritual=null,bossSt=null,pile=[],craftRound=0,nukeDone=false;
-window.AI_DIFF=(function(){
-  let d='normal';try{d=localStorage.getItem('chaos_ai_diff')||'normal';}catch(e){}
-  if(d==='boss'&&!(window.CCProgress&&CCProgress.bossUnlocked())){d='normal';try{localStorage.setItem('chaos_ai_diff','normal');}catch(e){}}   // 0.boss.ai — только после 1-й победы
-  return d;
-})();
+window.AI_DIFF=(function(){try{return localStorage.getItem('chaos_ai_diff')||'normal';}catch(e){return 'normal';}})();   // замок boss.ai проверяется в CCEnforceDiff()
 function getAIDiff(){return window.AI_DIFF||'normal';}
 window.TEX_SITE='https://darkstalke5r.github.io/Slugebniy-TexturesCore-ChessRandom/';
 function texPackValid(p){return !!(p&&typeof p.base==='string'&&/^https?:\/\//i.test(p.base));}
@@ -8432,7 +8606,7 @@ let myMoves=0;            // сколько ходов сделали белые
     const r=_end2(win,why);
     // победа в одиночной игре (не по сети) → сообщаем accounts.js
     if(win&&!(typeof onlineMode!=='undefined'&&onlineMode)&&myMoves>0)
-      GameEvents.emit('game:win',{moves:myMoves,teams:(CFG&&CFG.teams)||2,shape:(CFG&&CFG.shape)||'p'});   // ◄► → accounts.js
+      GameEvents.emit('game:win',{moves:myMoves,teams:(CFG&&CFG.teams)||2,shape:(CFG&&CFG.shape)||'p',diff:getAIDiff()});   // ◄► → accounts.js
     return r;
   };
   const _start2=start;
@@ -8494,12 +8668,11 @@ let myMoves=0;            // сколько ходов сделали белые
     if(!was){
       A.endGame(!!win);
       if(win&&!(typeof onlineMode!=='undefined'&&onlineMode)&&myMoves>0&&window.CCProgress){
-        const before=CCProgress.wins();CCProgress.addWin();
-        if(before===0){
-          log('🔓 Открыта сложность 0.boss.ai');
-          const g=document.getElementById('go-reason');
-          if(g)g.textContent+=(g.textContent?'\n':'')+'🔓 Открыта сложность 0.boss.ai (Настройки → Сложность ИИ)';
-        }
+        const n=CCProgress.addWin();
+        const g=document.getElementById('go-reason');
+        const note=t=>{log(t);if(g)g.textContent+=(g.textContent?'\n':'')+t;};
+        if(n===null)note('🔒 Победа не записана: войди в аккаунт, чтобы открыть 0.boss.ai');
+        else if(n===1)note('🔓 Открыта сложность 0.boss.ai (Настройки → Сложность ИИ)');
         try{if(window.refreshDiffUI)window.refreshDiffUI();}catch(e){}
       }
     }
@@ -8508,6 +8681,7 @@ let myMoves=0;            // сколько ходов сделали белые
   const _start3=start;
   start=function(){
     AISP={};
+    try{if(window.CCEnforceDiff)CCEnforceDiff();}catch(e){}
     const r=_start3.apply(this,arguments);
     try{A.playMusic(getAIDiff());}catch(e){}
     return r;
@@ -8543,11 +8717,22 @@ if(rs)showResumeDialog(rs,had);else if(!had)openSetup(true);
     if(note){
       let s='Сложность: '+(DIFF_LABELS[cur]||cur);
       if(cur==='hard') s+=' · ИИ спавнит не чаще 1 раза в 2 хода';
-      if(!bossOpen()) s+=' · 0.boss.ai откроется после первой победы над ИИ';
+      if(!bossOpen()) s+=' · 0.boss.ai: '+CCProgress.lockReason();
       note.textContent=s;
     }
   }
   window.refreshDiffUI=refreshDiffUI;
+  // если аккаунт сменился / победы не набраны — boss.ai сбрасывается на «Среднюю»
+  window.CCEnforceDiff=function(){
+    if(window.AI_DIFF==='boss' && !bossOpen() && (!window.CCProgress || CCProgress.settled())){
+      window.AI_DIFF='normal';
+      try{localStorage.setItem('chaos_ai_diff','normal');}catch(e){}
+      try{if(window.CCAudio)CCAudio.setDiff('normal');}catch(e){}
+      try{if(typeof log==='function')log('🔒 0.boss.ai закрыт для этого аккаунта — сложность «Средняя»');}catch(e){}
+    }
+    refreshDiffUI();
+  };
+  if(window.CCProgress){ CCProgress.onChange(window.CCEnforceDiff); setInterval(window.CCEnforceDiff,2000); }
   function refreshSndUI(){
     const A=window.CCAudio; if(!A) return;
     if(el('sp-sfx')) el('sp-sfx').textContent='🔊 Звуки: '+(A.isSfx()?'вкл':'выкл');
@@ -8557,6 +8742,13 @@ if(rs)showResumeDialog(rs,had);else if(!had)openSetup(true);
   if(el('sp-sfx')) el('sp-sfx').onclick=()=>{ const A=window.CCAudio; if(A){A.setSfx(!A.isSfx()); refreshSndUI(); A.sfx('select');} };
   if(el('sp-music')) el('sp-music').onclick=()=>{ const A=window.CCAudio; if(A){A.setMusic(!A.isMusic()); refreshSndUI();} };
   if(el('sp-vol')) el('sp-vol').oninput=function(){ const A=window.CCAudio; if(A) A.setVolume(this.value/100); };
+  if(el('sp-sndtest')) el('sp-sndtest').onclick=function(){
+    const A=window.CCAudio, box=el('sp-sndinfo'); if(!A||!box) return;
+    box.style.display='block';
+    try{ A.unlock(); A.sfx('win'); }catch(e){}
+    const show=()=>{ let t=A.status(); t+='\n\nЕсли «running», а звука нет: проверь громкость МЕДИА на телефоне (не звонка) и что режим «без звука» выключен.'; box.textContent=t; };
+    show(); setTimeout(show,700); setTimeout(show,2500);
+  };
   function refreshTexUI(){
     const note=el('sp-tex-note'); if(!note) return;
     const p=window.TEX_PACK;
@@ -8566,9 +8758,9 @@ if(rs)showResumeDialog(rs,had);else if(!had)openSetup(true);
   function setDiff(level){
     if(level==='boss' && !bossOpen()){
       try{ if(window.CCAudio) CCAudio.sfx('error'); }catch(e){}
-      try{ if(typeof log==='function') log('🔒 0.boss.ai откроется после первой победы над ИИ'); }catch(e){}
+      try{ if(typeof log==='function') log('🔒 0.boss.ai закрыт: '+(window.CCProgress?CCProgress.lockReason():'нужна победа')); }catch(e){}
       refreshDiffUI();
-      const n=el('sp-diff-note'); if(n) n.textContent='🔒 0.boss.ai откроется после первой победы над ИИ';
+      const n=el('sp-diff-note'); if(n) n.textContent='🔒 0.boss.ai закрыт: '+(window.CCProgress?CCProgress.lockReason():'нужна победа');
       return;
     }
     window.AI_DIFF=level;
