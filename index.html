@@ -931,7 +931,7 @@ document.body.classList.add('cc-loading');
         <button type="button" data-diff="easy">Лёгкая</button>
         <button type="button" data-diff="normal">Средняя</button>
         <button type="button" data-diff="hard">Сложная</button>
-        <button type="button" data-diff="boss" style="font-family:ui-monospace,Menlo,Consolas,monospace;color:#9dffb0">0.boss.ai</button>
+        <button type="button" data-diff="boss" style="font-family:ui-monospace,Menlo,Consolas,monospace;color:#9dffb0">storage/teto/Failed-Creation.pkl</button>
       </div>
       <button type="button" class="sp-btn sec" id="sp-sfx">🔊 Звуки: вкл</button>
       <button type="button" class="sp-btn sec" id="sp-music">🎵 Музыка: вкл</button>
@@ -4762,7 +4762,7 @@ window.GameAPI={
    ЗВУК И МУЗЫКА (всё синтезируется WebAudio — внешних файлов нет)
    • 4 фоновых трека: easy / normal / hard / boss (меняются вместе со сложностью ИИ)
    • эффекты: ход, взятие, слияние, выстрел, карты, спавн, авиаудар, ядерка, босс, победа, поражение…
-   • прогресс: счётчик побед над ИИ (localStorage) — открывает 0.boss.ai после 1-й победы
+   • прогресс: счётчик побед над ИИ (localStorage) — открывает storage/teto/Failed-Creation.pkl после 1-й победы
    Консоль: CCAudio.setMusic(false) / CCAudio.setSfx(false) / CCProgress.addWin()
    ===================================================================== */
 (function(){
@@ -4824,7 +4824,7 @@ const PR={
     if(id!=null&&String(id)!==String(this._raw))return;
     if(this._id&&n>this.wins()){LS.set(this._key(this._id),String(n));this._fire();}
   },
-  bossUnlocked(){return this.wins()>=1;},            // ← сколько побед нужно для 0.boss.ai
+  bossUnlocked(){return this.wins()>=1;},            // ← сколько побед нужно для storage/teto/Failed-Creation.pkl
   lockReason(){return this._id?'победи ИИ хотя бы раз на этом аккаунте':'войди в аккаунт и победи ИИ';},
   onChange(fn){this._cbs.push(fn);},
   setAccount(raw){window.CC_ACCOUNT_ID=raw||null;this.refresh();},
@@ -5086,7 +5086,7 @@ const TRACKS={
       if(bar===3&&i>=8)noise(B.out,t,sd,{hp:1800+(i-8)*700,vol:0.035+(i-8)*0.006});   // нарастающий «райзер»
     }},
 
-  /* 0.boss.ai — «сломанный» C#-фригийский, тритон, перегруз и случайные глитчи */
+  /* storage/teto/Failed-Creation.pkl — «сломанный» C#-фригийский, тритон, перегруз и случайные глитчи */
   boss:{bpm:148,
     roots:[37,37,38,43],
     scale:[61,62,64,66,67,69,73,74],
@@ -6030,7 +6030,7 @@ function aiCardLegacy(t,cont){
 //  лёгкая  — как раньше: карта наугад, цель наугад (aiCardLegacy)
 //  средняя — оценивает каждую карту и цель, играет только выгодное (порог 8), в 25% случаев берёт не лучший вариант
 //  сложная — то же без ошибок, порог ниже (5), активнее держит карты в резерве
-//  0.boss.ai — три «Мигания» каждый ход, эффект и клетку выбирает сама (bossAiCard)
+//  storage/teto/Failed-Creation.pkl — три «Мигания» каждый ход, эффект и клетку выбирает сама (bossAiCard)
 function aiHang(t,x,y,p){const at=attackers(x,y,t);if(!at.length)return 0;if(!isDefended(x,y,t))return VALS[p.k]||1;return Math.max(0,(VALS[p.k]||1)-Math.min(...at.map(a=>VALS[a.k]||1)));}
 function aiCardCtx(t){
   const mine=pcsOf(q=>q.t===t),foes=pcsOf(q=>q.t!==t&&q.t!=='neutral'&&q.t!=='boss'&&q.k!=='J'&&!q.wall);
@@ -6131,7 +6131,7 @@ function aiCard(t,cont){
   }
   cont();
 }
-// ===== 0.boss.ai: у ИИ всегда 3 «Мигания» (каждый ход восстанавливаются) и он сам выбирает эффект и клетку =====
+// ===== storage/teto/Failed-Creation.pkl: у ИИ всегда 3 «Мигания» (каждый ход восстанавливаются) и он сам выбирает эффект и клетку =====
 function bossChaosPlan(t){
   const foes=ORDER.filter(u=>u!==t&&alive(u));
   const isFoe=q=>q&&q.t!==t&&q.t!=='neutral'&&q.t!=='boss'&&foes.indexOf(q.t)>=0;
@@ -8701,7 +8701,7 @@ let myMoves=0;            // сколько ходов сделали белые
   };
 }
 
-/* ===== Звук, музыка, кулдаун спавна ИИ, открытие 0.boss.ai ===== */
+/* ===== Звук, музыка, кулдаун спавна ИИ, открытие storage/teto/Failed-Creation.pkl ===== */
 {
   const A=window.CCAudio||{sfx(){},playMusic(){},endGame(){}};
   const CARDSFX={spawn:'spawn',support:'spawn',airstrike:'airstrike',nuclear:'nuke',shield:'shield',angel:'angel',future:'future',chaos:'chaos',err:'chaos',extra:'extra',reset:'future',bid:'draw',rez:'angel',trump:'shield'};
@@ -8754,8 +8754,8 @@ let myMoves=0;            // сколько ходов сделали белые
         const n=CCProgress.addWin();
         const g=document.getElementById('go-reason');
         const note=t=>{log(t);if(g)g.textContent+=(g.textContent?'\n':'')+t;};
-        if(n===null)note('🔒 Победа не записана: войди в аккаунт, чтобы открыть 0.boss.ai');
-        else if(n===1)note('🔓 Открыта сложность 0.boss.ai (Настройки → Сложность ИИ)');
+        if(n===null)note('🔒 Победа не записана: войди в аккаунт, чтобы открыть storage/teto/boss.css');
+        else if(n===1)note('🔓 Открыта сложность storage/teto/Failed-Creation.pkl (Настройки → Сложность ИИ)');
         try{if(window.refreshDiffUI)window.refreshDiffUI();}catch(e){}
       }
     }
@@ -8820,7 +8820,7 @@ if(rs)showResumeDialog(rs,had);else if(!had)openSetup(true);
 <script>
 (function(){
   const TEXTURES_URL = window.TEX_SITE || 'https://darkstalke5r.github.io/Slugebniy-TexturesCore-ChessRandom/';
-  const DIFF_LABELS = { easy:'Лёгкая', normal:'Средняя', hard:'Сложная', boss:'0.boss.ai' };
+  const DIFF_LABELS = { easy:'Лёгкая', normal:'Средняя', hard:'Сложная', boss:'storage/teto/Failed-Creation.pkl' };
   function el(id){return document.getElementById(id);}
   function closePanels(){
     const sp=el('settings-panel'); if(sp) sp.classList.remove('show');
@@ -8834,12 +8834,12 @@ if(rs)showResumeDialog(rs,had);else if(!had)openSetup(true);
     if(sub) sub.querySelectorAll('[data-diff]').forEach(b=>{
       const d=b.getAttribute('data-diff');
       b.classList.toggle('on', d===cur);
-      if(d==='boss'){ const lk=!bossOpen(); b.classList.toggle('locked',lk); b.textContent=(lk?'🔒 ':'')+'0.boss.ai'; }
+      if(d==='boss'){ const lk=!bossOpen(); b.classList.toggle('locked',lk); b.textContent=(lk?'🔒 ':'')+'storage/teto/Failed-Creation.pkl'; }
     });
     if(note){
       let s='Сложность: '+(DIFF_LABELS[cur]||cur);
       if(cur==='hard') s+=' · ИИ спавнит не чаще 1 раза в 2 хода';
-      if(!bossOpen()) s+=' · 0.boss.ai: '+CCProgress.lockReason();
+      if(!bossOpen()) s+=' · storage/teto/Failed-Creation.pkl: '+CCProgress.lockReason();
       note.textContent=s;
     }
   }
@@ -8850,7 +8850,7 @@ if(rs)showResumeDialog(rs,had);else if(!had)openSetup(true);
       window.AI_DIFF='normal';
       try{localStorage.setItem('chaos_ai_diff','normal');}catch(e){}
       try{if(window.CCAudio)CCAudio.setDiff('normal');}catch(e){}
-      try{if(typeof log==='function')log('🔒 0.boss.ai закрыт для этого аккаунта — сложность «Средняя»');}catch(e){}
+      try{if(typeof log==='function')log('🔒 storage/teto/Failed-Creation.pkl закрыт для этого аккаунта — сложность «Средняя»');}catch(e){}
     }
     refreshDiffUI();
   };
@@ -8880,9 +8880,9 @@ if(rs)showResumeDialog(rs,had);else if(!had)openSetup(true);
   function setDiff(level){
     if(level==='boss' && !bossOpen()){
       try{ if(window.CCAudio) CCAudio.sfx('error'); }catch(e){}
-      try{ if(typeof log==='function') log('🔒 0.boss.ai закрыт: '+(window.CCProgress?CCProgress.lockReason():'нужна победа')); }catch(e){}
+      try{ if(typeof log==='function') log('🔒 storage/teto/Failed-Creation.pkl закрыт: '+(window.CCProgress?CCProgress.lockReason():'нужна победа')); }catch(e){}
       refreshDiffUI();
-      const n=el('sp-diff-note'); if(n) n.textContent='🔒 0.boss.ai закрыт: '+(window.CCProgress?CCProgress.lockReason():'нужна победа');
+      const n=el('sp-diff-note'); if(n) n.textContent='🔒 storage/teto/Failed-Creation.pkl закрыт: '+(window.CCProgress?CCProgress.lockReason():'нужна победа');
       return;
     }
     window.AI_DIFF=level;
@@ -9094,7 +9094,7 @@ if(rs)showResumeDialog(rs,had);else if(!had)openSetup(true);
     }
     prevCnt=c; lastLog=logNow;
   }
-  /* ---------------- 1b2. РЕЖИМ 0.boss.ai: модель «ломается», смотрит на игрока и бормочет ходы ---------------- */
+  /* ---------------- 1b2. РЕЖИМ storage/teto/Failed-Creation.pkl: модель «ломается», смотрит на игрока и бормочет ходы ---------------- */
   function bossMode(){ return window.AI_DIFF==='boss'; }
   const PN={K:'король',Q:'ферзь',R:'ладья',B:'слон',N:'конь',P:'пешка',m:'шашка',d:'дамка',E:'слонь',C:'конница',H:'хтонь',T:'тура',Y:'пони',G:'цыган',J:'шут',X:'фигура'};
   const hist=[]; let nextHistAt=0, lastDiff=null;
@@ -9140,7 +9140,7 @@ if(rs)showResumeDialog(rs,had);else if(!had)openSetup(true);
     if(Math.random()<0.8) vtSay('boss',{text:moveLine(ev),glitch:true,gap:1200,force:true});
   };
   function bossTick(now){
-    if(lastDiff!=='boss'){ if(vtSay('boss',{text:garble('0.boss.ai… загрузка… я вижу тебя',0.12),glitch:true,gap:0,force:true})){ lastDiff='boss'; nextHistAt=now+9000; } }
+    if(lastDiff!=='boss'){ if(vtSay('boss',{text:garble('storage/teto/Failed-Creation.pkl… загрузка… я вижу тебя',0.12),glitch:true,gap:0,force:true})){ lastDiff='boss'; nextHistAt=now+9000; } }
     if(now>nextHistAt && hist.length>1){ nextHistAt=now+9000+Math.random()*8000; vtSay('boss',{text:histLine(),glitch:true,gap:3000,force:true}); }
   }
 
@@ -9188,7 +9188,7 @@ if(rs)showResumeDialog(rs,had);else if(!had)openSetup(true);
   // force=true — реплика на важное событие (но всё равно не чаще, чем раз в несколько секунд)
   function vtSay(kind, opts){
     opts=opts||{};
-    if(bossMode() && !opts.text) return false;                  // в режиме 0.boss.ai обычных реплик нет — только «сбойные»
+    if(bossMode() && !opts.text) return false;                  // в режиме storage/teto/Failed-Creation.pkl обычных реплик нет — только «сбойные»
     if(!allowedToSpeak()) return false;
     const now=performance.now();
     const gap = opts.gap!=null ? opts.gap : (opts.force ? 4500 : 9000);
@@ -9375,7 +9375,7 @@ if(rs)showResumeDialog(rs,had);else if(!had)openSetup(true);
     let want=null, shown=null, lastEval=0, jacketOn=Math.random()<CFG.jacketChance, wasOver=false;
     const setP=(id,v)=>{ try{ core.setParameterValueById(id,v); }catch(e){} };
     let mouthOn=false;
-    // 0.boss.ai: модель «ломается» — слои/текстуры (одежда, волосы, уши, глаза) меняются каждые 70–220 мс, картинка дёргается и меняет цвета
+    // storage/teto/Failed-Creation.pkl: модель «ломается» — слои/текстуры (одежда, волосы, уши, глаза) меняются каждые 70–220 мс, картинка дёргается и меняет цвета
     const GL={t:0,v:{},dirty:false}; let wasBoss=false;
     function glitchStep(now){
       if(now<GL.t) return; GL.t=now+70+Math.random()*150; GL.dirty=true;
